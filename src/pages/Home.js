@@ -40,6 +40,7 @@ const Content = styled.div`
     -ms-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
   }
 `
 
