@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build && mv -f build/* . && rm -f build",
+    "build": "react-scripts build && cp -rf build/* . && rm -rf build",
     "test": "react-scripts test --env=jsdom"
   },
   "devDependencies": {
