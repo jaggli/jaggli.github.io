@@ -30,7 +30,6 @@ const Container = styled.h1`
 
 const LeftFlag = Flag.extend`
   left:-80px;
-  border-color: #fbeed0 #849092 #fbeed0 #75b6b6;
   background:
     linear-gradient(to top right, transparent 50%, #fbeed0 50%),
     linear-gradient(to bottom right, transparent 50%, #fbeed0 50%)
@@ -42,7 +41,6 @@ const LeftFlag = Flag.extend`
 `
 const RightFlag = Flag.extend`
   right:-80px;
-  border-color: #fbeed0 #75b6b6 #fbeed0 #849092;
   background:
     linear-gradient(to top left, transparent 50%, #fbeed0 50%),
     linear-gradient(to bottom left, transparent 50%, #fbeed0 50%)
