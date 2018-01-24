@@ -1,0 +1,40 @@
+{
+  "version": "0.1.0",
+  "name": "groomer",
+  "description": "Helper for grooming and create storypoints",
+  "private": true,
+  "dependencies": {
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
+    "react-scripts": "1.1.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --env=jsdom",
+    "lint": "standard",
+    "lint:fix": "standard --fix"
+  },
+  "standard": {
+    "env": {
+      "jest": true
+    },
+    "globals": [
+      "jest",
+      "afterAll",
+      "afterEach",
+      "beforeAll",
+      "beforeEach",
+      "describe",
+      "require",
+      "test",
+      "it",
+      "expect",
+      "fetch",
+      "URL"
+    ]
+  },
+  "devDependencies": {
+    "standard": "*"
+  }
+}
