@@ -1,21 +1,37 @@
 import React, { PureComponent } from 'react'
-import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
-import RaisedButton from 'material-ui/RaisedButton';
+import Reboot from 'material-ui/Reboot'
+
+import AppBar from 'material-ui/AppBar'
+import Toolbar from 'material-ui/Toolbar'
+import Typography from 'material-ui/Typography'
+
+import SimpleListMenu from './SimpleListMenu'
+
+import dict from './dict'
+console.log(dict)
 
 class App extends PureComponent {
   render () {
     return (
-      <MuiThemeProvider>
-        <div className='App'>
-          <header className='App-header'>
-            <h1 className='App-title'>Welcome to React</h1>
-          </header>
-          <p className='App-intro'>
-            To get started, edit <code>src/App.js</code> and save to reload.
-          </p>
-          <RaisedButton>Click Me</RaisedButton>
-        </div>
-      </MuiThemeProvider>
+      <div>
+        <Reboot />
+        <AppBar position='static' color='primary'>
+          <Toolbar>
+            <Typography type='title' color='inherit'>
+              Groomer
+            </Typography>
+          </Toolbar>
+        </AppBar>
+        {dict.questions.map((question, i) => (
+          <SimpleListMenu
+            title={question.title}
+            options={question.options}
+            description={question.description}
+            section={dict.sections[question.section]}
+            key={i}
+            />
+        ))}
+      </div>
     )
   }
 }

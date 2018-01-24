@@ -1,0 +1,195 @@
+{
+  "sections": {
+    "0": "Amount of work",
+    "1": "Complexity",
+    "2": "Risks and uncertainty"
+  },
+  "questions": [
+    {
+      "title": "Effort",
+      "description": "without dependencies",
+      "section": "0",
+      "options": [
+        {
+          "title": "Basically free",
+          "value": "1"
+        },
+        {
+          "title": "Easy",
+          "value": "2"
+        },
+        {
+          "title": "Quite a bit",
+          "value": "3"
+        },
+        {
+          "title": "Requires diligence",
+          "value": "5"
+        },
+        {
+          "title": "Demanding",
+          "value": "8"
+        },
+        {
+          "title": "Overwhelming",
+          "value": "13"
+        }
+      ]
+    },
+    {
+      "title": "Dependencies",
+      "description": "the involved amount",
+      "section": "0",
+      "options": [
+        {
+          "title": "None",
+          "value": "1"
+        },
+        {
+          "title": "One will be touched",
+          "value": "2"
+        },
+        {
+          "title": "One is modified",
+          "value": "3"
+        },
+        {
+          "title": "More than one affected",
+          "value": "5"
+        },
+        {
+          "title": "Many dependencies are involved",
+          "value": "8"
+        },
+        {
+          "title": "Major dependency change and involvement",
+          "value": "13"
+        }
+      ]
+    },
+    {
+      "title": "Brainpower",
+      "description": "required power to solve the problem",
+      "section": "1",
+      "options": [
+        {
+          "title": "None",
+          "value": "1"
+        },
+        {
+          "title": "Easy",
+          "value": "2"
+        },
+        {
+          "title": "I've done it in my head",
+          "value": "3"
+        },
+        {
+          "title": "Requires brainpower",
+          "value": "5"
+        },
+        {
+          "title": "Research required",
+          "value": "8"
+        },
+        {
+          "title": "Training and research required",
+          "value": "13"
+        }
+      ]
+    },
+    {
+      "title": "Testing",
+      "description": "involved degree of testing ",
+      "section": "1",
+      "options": [
+        {
+          "title": "It's already covered",
+          "value": "1"
+        },
+        {
+          "title": "One test",
+          "value": "2"
+        },
+        {
+          "title": "Couple of tests",
+          "value": "3"
+        },
+        {
+          "title": "A series of tests",
+          "value": "5"
+        },
+        {
+          "title": "End-to-end tests required",
+          "value": "8"
+        },
+        {
+          "title": "Heavy and manual testing required",
+          "value": "13"
+        }
+      ]
+    },
+    {
+      "title": "Clearness",
+      "description": "of preconditions, scope and the problem itself",
+      "section": "2",
+      "options": [
+        {
+          "title": "Obvious",
+          "value": "1"
+        },
+        {
+          "title": "Pretty clear",
+          "value": "2"
+        },
+        {
+          "title": "Clarifying while working does the job",
+          "value": "3"
+        },
+        {
+          "title": "Requires clarifying things first",
+          "value": "5"
+        },
+        {
+          "title": "Requires pre-study and research",
+          "value": "8"
+        },
+        {
+          "title": "Completely unclear",
+          "value": "13"
+        }
+      ]
+    },
+    {
+      "title": "Legacy stuff",
+      "description": "involvement of known trouble makers and legacy",
+      "section": "2",
+      "options": [
+        {
+          "title": "No",
+          "value": "1"
+        },
+        {
+          "title": "Yes but trivial",
+          "value": "2"
+        },
+        {
+          "title": "Requires to touch old untested parts",
+          "value": "3"
+        },
+        {
+          "title": "Possible trial-and-error required",
+          "value": "5"
+        },
+        {
+          "title": "Direct involvement of a troubler maker",
+          "value": "8"
+        },
+        {
+          "title": "Multiple trouble makers involved",
+          "value": "13"
+        }
+      ]
+    }
+  ]
+}
