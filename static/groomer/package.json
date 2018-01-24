@@ -3,6 +3,7 @@
   "name": "groomer",
   "description": "Helper for grooming and create storypoints",
   "private": true,
+  "homepage": "/groomer",
   "dependencies": {
     "react": "^16.2.0",
     "react-dom": "^16.2.0",
@@ -10,7 +11,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "react-scripts build && cp -rf ./build/* . && rm -rf ./build",
     "test": "react-scripts test --env=jsdom",
     "lint": "standard",
     "lint:fix": "standard --fix"
