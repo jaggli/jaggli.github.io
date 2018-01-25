@@ -21,7 +21,19 @@ import red from 'material-ui/colors/red'
 
 const styles = theme => ({
   card: {
-    margin: '20px'
+    margin: '20px',
+    '&:first-child': {
+      marginTop: '0'
+    }
+  },
+  cardSelected: {
+    margin: '0 20px'
+  },
+  header: {
+    '&:hover': {
+      backgroundColor: '#00000024',
+      cursor: 'pointer'
+    }
   },
   title: {
     color: 'gray'
@@ -31,7 +43,37 @@ const styles = theme => ({
   number3: { backgroundColor: amber[500] },
   number5: { backgroundColor: orange[500] },
   number8: { backgroundColor: deepOrange[500] },
-  number13: { backgroundColor: red[500] }
+  number13: { backgroundColor: red[500] },
+  item1: {
+    '&:hover': {
+      backgroundColor: green[100]
+    }
+  },
+  item2: {
+    '&:hover': {
+      backgroundColor: lime[100]
+    }
+  },
+  item3: {
+    '&:hover': {
+      backgroundColor: amber[100]
+    }
+  },
+  item5: {
+    '&:hover': {
+      backgroundColor: orange[100]
+    }
+  },
+  item8: {
+    '&:hover': {
+      backgroundColor: deepOrange[100]
+    }
+  },
+  item13: {
+    '&:hover': {
+      backgroundColor: red[100]
+    }
+  }
 })
 
 class SimpleListMenu extends React.Component {
@@ -53,51 +95,53 @@ class SimpleListMenu extends React.Component {
     const { selected } = this.state
 
     return (
-      <div>
-        <Card className={classes.card}>
-          <CardHeader
-            onClick={event => {
-              if (!selected) { return }
-              this.handleClick(event)
-            }}
-            avatar={
-              selected &&
-              <Avatar className={classes['number' + selected.value]}>
-                {selected.value}
-              </Avatar>
-            }
-            action={
-              selected &&
-              <IconButton>
-                <ExpandMoreIcon />
-              </IconButton>
-            }
-            title={selected ? selected.title : title}
-            subheader={selected ? <small>{title}</small> : description}
-          />
-          <Collapse in={!selected} timeout='auto'>
-            <Divider />
-            <List>
-              {options.map(option => (
-                <ListItem
-                  key={option.title}
-                  onClick={event => {
-                    window.setTimeout(() => {
-                      this.handleClick(event, option)
-                    }, 300)
-                  }}
-                  button
-                  >
-                  <Avatar className={classes['number' + option.value]}>
-                    {option.value}
-                  </Avatar>
-                  <ListItemText primary={option.title} />
-                </ListItem>
-              ))}
-            </List>
-          </Collapse>
-        </Card>
-      </div>
+      <Card className={selected ? classes.cardSelected : classes.card}>
+        <CardHeader
+          onClick={event => {
+            if (!selected) { return }
+            this.handleClick(event)
+          }}
+          avatar={
+            selected &&
+            <Avatar
+              className={classes['number' + selected.value]}
+              >
+              {selected.value}
+            </Avatar>
+          }
+          action={
+            selected &&
+            <IconButton>
+              <ExpandMoreIcon />
+            </IconButton>
+          }
+          className={selected && classes.header}
+          title={selected ? selected.title : title}
+          subheader={selected ? <small>{title}</small> : description}
+        />
+        <Collapse in={!selected} timeout='auto'>
+          <Divider />
+          <List>
+            {options.map(option => (
+              <ListItem
+                onClick={event => {
+                  window.setTimeout(() => {
+                    this.handleClick(event, option)
+                  }, 300)
+                }}
+                key={option.title}
+                className={classes['item' + option.value]}
+                button
+                >
+                <ListItemText primary={option.title} />
+                <Avatar className={classes['number' + option.value]}>
+                  {option.value}
+                </Avatar>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+      </Card>
     )
   }
 }

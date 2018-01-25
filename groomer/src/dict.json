@@ -42,27 +42,27 @@
       "section": "0",
       "options": [
         {
-          "title": "None",
+          "title": "Doesn't has depencencies",
           "value": "1"
         },
         {
-          "title": "One will be touched",
+          "title": "Dependencies stay untouched",
           "value": "2"
         },
         {
-          "title": "One is modified",
+          "title": "One dependency change required",
           "value": "3"
         },
         {
-          "title": "More than one affected",
+          "title": "More than one change required",
           "value": "5"
         },
         {
-          "title": "Many dependencies are involved",
+          "title": "Many dependency changes involved",
           "value": "8"
         },
         {
-          "title": "Major dependency change and involvement",
+          "title": "Major dependency changes",
           "value": "13"
         }
       ]
