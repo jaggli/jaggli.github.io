@@ -14,7 +14,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build && cp -rf ./build/* . && rm -rf ./build",
+    "build": "rm -rf ./static/js && react-scripts build && cp -rf ./build/* . && rm -rf ./build",
     "test": "react-scripts test --env=jsdom",
     "lint": "standard",
     "lint:fix": "standard --fix"
