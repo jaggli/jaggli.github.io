@@ -42,11 +42,11 @@
       "section": "0",
       "options": [
         {
-          "title": "Doesn't has depencencies",
+          "title": "Doesn't has any",
           "value": "1"
         },
         {
-          "title": "Dependencies stay untouched",
+          "title": "They stay untouched",
           "value": "2"
         },
         {
@@ -161,8 +161,8 @@
       ]
     },
     {
-      "title": "Legacy stuff",
-      "description": "involvement of known trouble makers and legacy",
+      "title": "Legacy and troubles",
+      "description": "involvement of legacy an known trouble makers",
       "section": "2",
       "options": [
         {
@@ -182,7 +182,7 @@
           "value": "5"
         },
         {
-          "title": "Direct involvement of a troubler maker",
+          "title": "One troubler maker direct involvement",
           "value": "8"
         },
         {
