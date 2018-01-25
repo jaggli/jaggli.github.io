@@ -39,8 +39,9 @@ class App extends PureComponent {
     this.setState({ score: null })
   }
 
-  calculateScore () {
+  handleChange (value, i) {
     const scores = this.state.scores.slice()
+    scores[i] = parseInt(value, 0) || 0
     let score = scores.reduce((acc, score) => {
       if (acc === null || score === 0) { return null }
       return acc + score
@@ -50,19 +51,12 @@ class App extends PureComponent {
       score = roundFibonacci(score / dict.questions.length)
     }
 
-    this.setState({ score })
-  }
-
-  handleChange (value, i) {
-    const scores = this.state.scores.slice()
-    scores[i] = parseInt(value, 0) || 0
-    this.setState({ scores })
-    this.calculateScore()
+    this.setState({ score, scores })
   }
 
   render () {
     const { classes } = this.props
-    const { score } = this.state
+    const { score, scores } = this.state
     return (
       <div className={classes.root}>
         <Reboot />
@@ -83,6 +77,7 @@ class App extends PureComponent {
               options={question.options}
               description={question.description}
               section={dict.sections[question.section]}
+              value={scores[i]}
               onChange={option => {
                 this.handleChange(option && option.value, i)
               }}

@@ -79,20 +79,18 @@ const styles = theme => ({
 class SimpleListMenu extends React.Component {
   constructor () {
     super()
-    this.state = {
-      selected: null
-    }
     this.handleClick = this.handleClick.bind(this)
   }
 
   handleClick (event, option = null) {
-    this.setState({ selected: option })
     this.props.onChange(option)
   }
 
   render () {
-    const { classes, title, options, description } = this.props
-    const { selected } = this.state
+    const { classes, title, options, description, value } = this.props
+    const selected = options.filter(
+      option => parseInt(option.value, 10) === value
+    ).pop() || null
 
     return (
       <Card className={selected ? classes.cardSelected : classes.card}>
