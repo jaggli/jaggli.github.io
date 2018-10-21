@@ -69,7 +69,7 @@
     },
     {
       "title": "Brainpower",
-      "description": "required power to solve the problem",
+      "description": "power to solve the problem",
       "section": "1",
       "options": [
         {
@@ -100,7 +100,7 @@
     },
     {
       "title": "Testing",
-      "description": "involved degree of testing ",
+      "description": "degree of testing ",
       "section": "1",
       "options": [
         {
@@ -131,7 +131,7 @@
     },
     {
       "title": "Clearness",
-      "description": "of preconditions, scope and the problem itself",
+      "description": "preconditions, scope, motive, definition of done",
       "section": "2",
       "options": [
         {
@@ -162,7 +162,7 @@
     },
     {
       "title": "Legacy and troubles",
-      "description": "involvement of legacy an known trouble makers",
+      "description": "third parties, untested spaghetti code, old stuff...",
       "section": "2",
       "options": [
         {
