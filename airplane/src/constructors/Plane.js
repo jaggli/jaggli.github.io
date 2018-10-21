@@ -48,13 +48,6 @@ class Plane {
       this.currentImage = this.animation.shift()
       this.animation.push(this.currentImage)
     }
-
-    this.p5.push()
-    this.p5.fill(0, 255, 0, 100)
-    this.p5.noStroke()
-    const collision = this.getCollisionArea()
-    this.p5.rect(collision.x, collision.y, collision.width, collision.height)
-    this.p5.pop()
   }
   update () {
     const { width, height } = this.p5
@@ -108,10 +101,6 @@ class Plane {
   }
   isFrozen () {
     return this.frozen
-  }
-  reset () {
-    this.y = this.p5.height / 2
-    this.velocity = 0
   }
 }
 

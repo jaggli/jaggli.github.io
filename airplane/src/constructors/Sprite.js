@@ -8,7 +8,6 @@ class Sprite {
     this.align = align
   }
   draw () {
-    // const { height, width } = this.p5
     this.update()
 
     this.p5.push()
