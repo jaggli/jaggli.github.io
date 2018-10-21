@@ -1,9 +1,9 @@
 {
-  "main.css": "/airplane/static/css/main.ed7e4b03.chunk.css",
-  "main.js": "/airplane/static/js/main.d00b6882.chunk.js",
-  "main.js.map": "/airplane/static/js/main.d00b6882.chunk.js.map",
-  "static/js/1.93d7000e.chunk.js": "/airplane/static/js/1.93d7000e.chunk.js",
-  "static/js/1.93d7000e.chunk.js.map": "/airplane/static/js/1.93d7000e.chunk.js.map",
+  "main.css": "/airplane/static/css/main.3fa24dd7.chunk.css",
+  "main.js": "/airplane/static/js/main.8140613a.chunk.js",
+  "main.js.map": "/airplane/static/js/main.8140613a.chunk.js.map",
+  "static/js/1.91a79cb1.chunk.js": "/airplane/static/js/1.91a79cb1.chunk.js",
+  "static/js/1.91a79cb1.chunk.js.map": "/airplane/static/js/1.91a79cb1.chunk.js.map",
   "runtime~main.js": "/airplane/static/js/runtime~main.86e60efd.js",
   "runtime~main.js.map": "/airplane/static/js/runtime~main.86e60efd.js.map",
   "static/media/coin.png": "/airplane/static/media/coin.a260b7f4.png",
@@ -12,8 +12,8 @@
   "static/media/menu.mp3": "/airplane/static/media/menu.e6e61a1e.mp3",
   "static/media/JLSDataGothicC_NC.otf": "/airplane/static/media/JLSDataGothicC_NC.d07bdd88.otf",
   "static/media/coin.wav": "/airplane/static/media/coin.e8d3edeb.wav",
-  "static/css/main.ed7e4b03.chunk.css.map": "/airplane/static/css/main.ed7e4b03.chunk.css.map",
+  "static/css/main.3fa24dd7.chunk.css.map": "/airplane/static/css/main.3fa24dd7.chunk.css.map",
   "index.html": "/airplane/index.html",
-  "precache-manifest.62c81ec052ab2212020ab1cce8fe1d8e.js": "/airplane/precache-manifest.62c81ec052ab2212020ab1cce8fe1d8e.js",
+  "precache-manifest.a0170c86d1141f0fd83f1ba7b108f8cf.js": "/airplane/precache-manifest.a0170c86d1141f0fd83f1ba7b108f8cf.js",
   "service-worker.js": "/airplane/service-worker.js"
 }
