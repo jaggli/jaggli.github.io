@@ -1,17 +1,17 @@
 import { intersectRectRect } from '../lib'
 
 class Pipe {
-  constructor (p5) {
+  constructor (p5, level) {
     this.p5 = p5
-    this.topHeight = p5.random(0.1, 0.6)
-    this.bottomHeight = p5.random(0.8 - this.topHeight, 0.85 - this.topHeight)
+    this.topHeight = p5.random(0.05, 0.7)
+    this.bottomHeight = 0.8 - this.topHeight
     this.distance = 0
     this.x = p5.width
     this.frozen = false
   }
-  draw () {
+  draw (speed) {
     const { height } = this.p5
-    this.update()
+    this.update(speed)
     this.p5.fill(73, 111, 135)
     this.p5.noStroke()
     this.p5.rect(
@@ -27,11 +27,11 @@ class Pipe {
       this.bottomHeight * height
     )
   }
-  update () {
+  update (speed) {
     const { width } = this.p5
 
     this.width = width / 20
-    this.speed = width / 200
+    this.speed = speed
 
     if (this.frozen) { return }
     this.distance += 1

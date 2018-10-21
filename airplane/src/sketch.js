@@ -59,11 +59,11 @@ const sketch = p5 => {
     elements.plane.reset()
     elements.pipes = []
     elements.sprites = [
-      new Sprite(p5, elements.images.mountainsVeryFar, 2, 'bottom'),
-      new Sprite(p5, elements.images.mountainsFar, 3.5, 'bottom'),
-      new Sprite(p5, elements.images.mountains, 4, 'bottom'),
-      new Sprite(p5, elements.images.cloudSmall, 2.5, p5.random(0, 0.2)),
-      new Sprite(p5, elements.images.cloudMedium, 4, p5.random(0, 0.2))
+      new Sprite(p5, elements.images.mountainsVeryFar, 1, 'bottom'),
+      new Sprite(p5, elements.images.mountainsFar, 1.5, 'bottom'),
+      new Sprite(p5, elements.images.mountains, 3, 'bottom'),
+      new Sprite(p5, elements.images.cloudSmall, 2.5, 0.2),
+      new Sprite(p5, elements.images.cloudMedium, 4, 0.1)
     ]
     state = STATE_READY
   }
@@ -77,6 +77,7 @@ const sketch = p5 => {
 
   p5.draw = () => {
     const { plane, pipes, sprites } = elements
+    const speed = p5.width / 200
     p5.background(196, 218, 231)
 
     sprites.forEach(sprite => sprite.draw())
@@ -88,7 +89,7 @@ const sketch = p5 => {
     }
 
     pipes.forEach((pipe, i) => {
-      pipe.draw()
+      pipe.draw(speed)
       if (pipe.intersects(plane.getCollisionArea())) {
         return crash()
       }

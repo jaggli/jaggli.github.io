@@ -49,8 +49,12 @@ class Plane {
       this.animation.push(this.currentImage)
     }
 
-    // const collision = this.getCollisionArea()
-    // this.p5.rect(collision.x, collision.y, collision.width, collision.height)
+    this.p5.push()
+    this.p5.fill(0, 255, 0, 100)
+    this.p5.noStroke()
+    const collision = this.getCollisionArea()
+    this.p5.rect(collision.x, collision.y, collision.width, collision.height)
+    this.p5.pop()
   }
   update () {
     const { width, height } = this.p5
@@ -59,7 +63,7 @@ class Plane {
     this.height = this.width / ratio
     this.gravity = height / 6000 * this.gravityDirection
     this.lift = height / 200
-    this.x = width / 2
+    this.x = width / 4
 
     if (this.frozen) { return }
 
@@ -91,9 +95,9 @@ class Plane {
   getCollisionArea () {
     return {
       x: this.x - this.width / 2 + this.width / 4,
-      y: this.y - this.height / 2 + this.height / 3,
+      y: this.y - this.height / 2 + this.height / 10,
       width: this.width - this.width / 1.7,
-      height: this.height - this.height / 1.5
+      height: this.height - this.height / 2.3
     }
   }
   freeze () {

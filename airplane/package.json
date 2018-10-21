@@ -1,10 +1,6 @@
 {
-  "name": "flappy",
+  "name": "airplane",
   "version": "0.1.0",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jaggli/flappy.git"
-  },
   "author": "Matthias Jäggli <matthias.jaeggli@gmail.com>",
   "license": "IMITSC",
   "dependencies": {
@@ -16,7 +12,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "rm -rf ./static/js && react-scripts build && cp -rf ./build/* . && rm -rf ./build",
     "test": "react-scripts test",
     "lint": "standard",
     "lint:fix": "standard --fix"
