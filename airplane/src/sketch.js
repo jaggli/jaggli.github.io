@@ -158,12 +158,14 @@ const sketch = p5 => {
     }
   }
 
+  p5.touchStarted = () => action(PLANE_UP)
   p5.mousePressed = ({ button }) => button === 0
     ? action(PLANE_UP)
     : null
   p5.keyPressed = ({ code }) => code === 'Space'
     ? action(PLANE_UP)
     : null
+  p5.touchEnded = () => action(PLANE_DOWN)
   p5.mouseReleased = ({ button }) => button === 0 && state === STATE_RUNNING
     ? action(PLANE_DOWN)
     : null
