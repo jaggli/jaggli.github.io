@@ -1,4 +1,4 @@
-html, body, #root {
+html, body, #root, .loading {
   width: 100%;
   height: 100%;
 }
@@ -20,4 +20,9 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.loading {
+  background: black;
+  color: white;
 }

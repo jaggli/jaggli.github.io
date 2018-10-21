@@ -18,6 +18,7 @@ class Coin {
       this.x,
       this.y
     )
+
     this.p5.scale(this.getScale())
     this.p5.image(
       this.image,

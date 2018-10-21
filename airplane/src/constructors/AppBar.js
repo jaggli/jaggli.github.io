@@ -1,5 +1,7 @@
 import { intersectRectRect } from '../lib'
 
+const STORAGE_KEY_HIGHSCORE = 'airplane-highscore'
+
 class AppBar {
   constructor (p5, font) {
     this.p5 = p5
@@ -7,6 +9,10 @@ class AppBar {
     this.y = 0
     this.font = font
     this.fontSize = 0
+    this.highscore = parseInt(
+      global.localStorage.getItem(STORAGE_KEY_HIGHSCORE) || 0,
+      10
+    )
   }
   draw (points = 0, hint = '') {
     this.update()
@@ -29,11 +35,19 @@ class AppBar {
     this.p5.fill(0, 0, 0)
     this.p5.textSize(this.fontSize)
     const textX = this.p5.width - padding - this.p5.textWidth(text)
+
+    if (points > this.highscore) {
+      this.highscore = points
+      global.localStorage.setItem(STORAGE_KEY_HIGHSCORE, this.highscore)
+    }
+    this.p5.text(`HIGHSCORE: ${this.highscore}`, padding, this.y + this.fontSize)
+
     this.p5.text(text, textX, this.y + this.fontSize)
     this.p5.stroke(255, 255, 255)
     this.p5.textAlign(this.p5.CENTER)
     this.p5.strokeWeight(this.fontSize / 10)
     this.p5.text(hint, this.p5.width / 2, this.fontSize * 5)
+
     this.p5.pop()
   }
   getHeight () {
