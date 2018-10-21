@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "author": "Matthias Jäggli <matthias.jaeggli@gmail.com>",
   "license": "IMITSC",
+  "homepage": "/airplane",
   "dependencies": {
     "p5": "^0.7.2",
     "react": "^16.5.2",
