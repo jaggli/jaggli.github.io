@@ -28,7 +28,7 @@ class Sprite {
   }
   update () {
     const { width, height } = this.p5
-    this.scale = height / 400
+    this.scale = height / 300
     this.y = this.align === 'bottom'
       ? height - (this.image.height / 2) * this.scale
       : this.align * height

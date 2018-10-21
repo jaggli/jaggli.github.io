@@ -1,6 +1,7 @@
 import { PureComponent } from 'react'
 import P5 from 'p5'
 import './App.css'
+import 'p5/lib/addons/p5.sound'
 
 import sketch from './sketch'
 

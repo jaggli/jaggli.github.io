@@ -7,6 +7,7 @@ class Coin {
     this.frozen = false
     this.relativeSpeed = relativeSpeed
     this.x = p5.width + this.getWidth()
+    this.yOffset = p5.random(0.4) - 0.2
   }
   draw () {
     this.update()
@@ -28,7 +29,7 @@ class Coin {
     this.p5.pop()
   }
   getScale () {
-    return this.p5.width / 10000
+    return this.p5.width / 8000
   }
   getWidth () {
     return this.getScale() * this.image.width
@@ -39,11 +40,9 @@ class Coin {
   }
   update () {
     const { width, height } = this.p5
-    this.y = height / 2
+    this.y = height / 2 + this.yOffset * height
     this.speed = width / (1000 / this.relativeSpeed)
-
     if (this.frozen) { return }
-
     this.x -= this.speed
   }
   freeze () {
@@ -61,12 +60,14 @@ class Coin {
       y: this.y,
       radius: this.getWidth() / 2
     }
-    this.p5.push()
-    this.p5.fill(0, 255, 0, 100)
-    this.p5.noStroke()
-    this.p5.rect(area.x, area.y, area.width, area.height)
-    this.p5.ellipse(this.x, this.y, this.getWidth())
-    this.p5.pop()
+
+    // this.p5.push()
+    // this.p5.fill(0, 255, 0, 100)
+    // this.p5.noStroke()
+    // this.p5.rect(area.x, area.y, area.width, area.height)
+    // this.p5.ellipse(this.x, this.y, this.getWidth())
+    // this.p5.pop()
+
     return intersectCircleRect(circle, area)
   }
 }
