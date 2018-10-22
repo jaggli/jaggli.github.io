@@ -35,7 +35,7 @@ const sketch = p5 => {
     elements.sounds.crash.play()
     elements.sounds.menu.loop()
     elements.sounds.game.stop()
-    elements.plane.freeze()
+    elements.plane.crash()
     elements.pipes.forEach(pipe => pipe.freeze())
     elements.coins.forEach(coin => coin.freeze())
     elements.sprites.forEach(sprite => sprite.freeze())
@@ -66,7 +66,7 @@ const sketch = p5 => {
 
   const reset = () => {
     const { images, fonts } = elements
-    elements.plane = new Plane(p5, [images.plane0, images.plane1])
+    elements.plane = new Plane(p5, [images.plane0, images.plane1], images.planeCrash)
     elements.appBar = new AppBar(p5, fonts.menu)
     elements.pipes = []
     elements.coins = []

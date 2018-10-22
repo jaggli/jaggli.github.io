@@ -1,21 +1,18 @@
 class Plane {
-  constructor (p5, images) {
+  constructor (p5, animation, crashImage) {
     this.p5 = p5
     this.velocity = 0
     this.frozen = true
     this.y = p5.height / 2
-    this.animation = images.slice(0, 2)
+    this.animation = animation.slice(0, 2)
     this.startImage = this.animation[0]
     this.currentImage = this.startImage
+    this.crashImage = crashImage
     this.gravityDirection = 1
   }
   draw () {
     this.update()
     this.p5.fill(255)
-
-    const image = this.frozen
-      ? this.startImage
-      : this.currentImage
 
     // draw airplane
     this.p5.push()
@@ -36,7 +33,7 @@ class Plane {
     const angle = -relativeVelocity * 50
     this.p5.rotate(angle)
     this.p5.image(
-      image,
+      this.currentImage,
       -this.width / 2,
       -this.height / 2,
       this.width,
@@ -96,7 +93,12 @@ class Plane {
   freeze () {
     this.frozen = true
   }
+  crash () {
+    this.currentImage = this.crashImage
+    this.freeze()
+  }
   unfreeze () {
+    this.currentImage = this.startImage
     this.frozen = false
   }
   isFrozen () {
