@@ -4,12 +4,12 @@ self.__precacheManifest = [
     "url": "/airplane/static/media/coin.e8d3edeb.wav"
   },
   {
-    "revision": "d00b6882cdad4b7ecd65",
-    "url": "/airplane/static/css/main.ed7e4b03.chunk.css"
+    "revision": "0c1c163c4d861f32dc27",
+    "url": "/airplane/static/css/main.c41ba5ba.chunk.css"
   },
   {
-    "revision": "93d7000e5017905c1c5c",
-    "url": "/airplane/static/js/1.93d7000e.chunk.js"
+    "revision": "91a79cb102926d8f19ee",
+    "url": "/airplane/static/js/1.91a79cb1.chunk.js"
   },
   {
     "revision": "86e60efd1298e22ac7f8",
@@ -20,8 +20,8 @@ self.__precacheManifest = [
     "url": "/airplane/static/media/coin.a260b7f4.png"
   },
   {
-    "revision": "d00b6882cdad4b7ecd65",
-    "url": "/airplane/static/js/main.d00b6882.chunk.js"
+    "revision": "0c1c163c4d861f32dc27",
+    "url": "/airplane/static/js/main.0c1c163c.chunk.js"
   },
   {
     "revision": "ef1eab693b5cbe7945af521e783bb7b7",
@@ -40,7 +40,7 @@ self.__precacheManifest = [
     "url": "/airplane/static/media/JLSDataGothicC_NC.d07bdd88.otf"
   },
   {
-    "revision": "f3a7e6284a439d8244a8b5b7074b97fd",
+    "revision": "7ebcc62752077d649c4644ce85c1f8f0",
     "url": "/airplane/index.html"
   }
 ];
