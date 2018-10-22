@@ -48,7 +48,7 @@ class Home extends PureComponent {
   render = () => (
     <div>
       <Container>
-        <Ribbon>jaggli.com</Ribbon>
+        <Ribbon>www.jaggli.com</Ribbon>
       </Container>
       <Container>
         <Content id='particles' />          
