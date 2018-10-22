@@ -131,7 +131,7 @@ const sketch = p5 => {
 
     let hint = ''
     if (state === STATE_READY) {
-      hint = 'Hold space/mouse/touch for trottle'
+      hint = 'Hold space/mouse/touch for throttle'
     }
     if (state === STATE_CRASHED) {
       hint = 'Game over\nPress space/mouse/touch'
