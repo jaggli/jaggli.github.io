@@ -1,6 +1,6 @@
-import { injectGlobal, css } from 'styled-components'
+import { createGlobalStyle } from 'styled-components'
 
-const globalStyles = css`
+const GlobalStyles = createGlobalStyle`
   body{    
     color:#4b4d4e;
     min-width:320px;
@@ -9,9 +9,7 @@ const globalStyles = css`
     *, *:after, *:before{
       box-sizing: border-box;
     }
-
   }
 `
 
-injectGlobal([globalStyles])
-export default globalStyles
+export default GlobalStyles

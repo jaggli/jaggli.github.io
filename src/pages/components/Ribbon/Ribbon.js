@@ -28,7 +28,7 @@ const Container = styled.h1`
   }
 `
 
-const LeftFlag = Flag.extend`
+const LeftFlag = styled(Flag)`
   left:-80px;
   background:
     linear-gradient(to top right, transparent 50%, #fbeed0 50%),
@@ -39,7 +39,7 @@ const LeftFlag = Flag.extend`
     right:0;
   }
 `
-const RightFlag = Flag.extend`
+const RightFlag = styled(Flag)`
   right:-80px;
   background:
     linear-gradient(to top left, transparent 50%, #fbeed0 50%),
@@ -51,7 +51,7 @@ const RightFlag = Flag.extend`
   }
 `
 
-const Ribbon = ({children, ...props}) => (
+const Ribbon = ({ children, ...props }) => (
   <Container {...props}>
     <LeftFlag />
     <RightFlag />
