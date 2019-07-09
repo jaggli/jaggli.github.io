@@ -64,7 +64,7 @@ class App extends PureComponent {
           <Toolbar>
             <Typography type='title' color='inherit'>
               {!score
-                ? 'Story estimation'
+                ? 'Complexity estimation'
                 : 'Result'
               }
             </Typography>

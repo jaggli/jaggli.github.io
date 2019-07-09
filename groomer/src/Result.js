@@ -62,13 +62,16 @@ class Result extends React.Component {
               {score}
             </Typography>
             <Typography className={classes.content}>
-              story point{score > 1 ? 's' : ''}
+              Complexity score{score > 1 ? 's' : ''}
             </Typography>
           </CardContent>
           {score > 8 &&
             <CardContent>
               <Typography type='title' className={classes.content2}>
-                Story should probably be splitted
+                Complexity warning
+              </Typography>
+              <Typography className={classes.content2}>
+                Consider splitting it, into smaller portions
               </Typography>
             </CardContent>
           }

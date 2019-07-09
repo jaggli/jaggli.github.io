@@ -7,7 +7,7 @@
   "questions": [
     {
       "title": "Effort",
-      "description": "without dependencies",
+      "description": "Estimated bare effort, excluding dependencies",
       "section": "0",
       "options": [
         {
@@ -38,7 +38,7 @@
     },
     {
       "title": "Dependencies",
-      "description": "the involved amount",
+      "description": "How much dependencies to touch?",
       "section": "0",
       "options": [
         {
@@ -68,8 +68,8 @@
       ]
     },
     {
-      "title": "Brainpower",
-      "description": "power to solve the problem",
+      "title": "Required skills",
+      "description": "How much problem solving skills are required?",
       "section": "1",
       "options": [
         {
@@ -81,56 +81,56 @@
           "value": "2"
         },
         {
-          "title": "I've done it in my head",
+          "title": "The theory for the solution exists",
           "value": "3"
         },
         {
-          "title": "Requires brainpower",
+          "title": "Parts of the solution are unclear",
           "value": "5"
         },
         {
-          "title": "Research required",
+          "title": "Research is required",
           "value": "8"
         },
         {
-          "title": "Training and research required",
+          "title": "Training and research are required",
           "value": "13"
         }
       ]
     },
     {
       "title": "Testing",
-      "description": "degree of testing ",
+      "description": "How is the coverage of all things going to be touched?",
       "section": "1",
       "options": [
         {
-          "title": "It's already covered",
+          "title": "Allmost everything is covered",
           "value": "1"
         },
         {
-          "title": "One test",
+          "title": "Mostly covered",
           "value": "2"
         },
         {
-          "title": "Couple of tests",
+          "title": "Mostly uncovered",
           "value": "3"
         },
         {
-          "title": "A series of tests",
+          "title": "Lot of new unit tests are required",
           "value": "5"
         },
         {
-          "title": "End-to-end tests required",
+          "title": "New end-to-end tests required",
           "value": "8"
         },
         {
-          "title": "Heavy and manual testing required",
+          "title": "Manual testing and new end-to-end tests required",
           "value": "13"
         }
       ]
     },
     {
-      "title": "Clearness",
+      "title": "Clearness of topic",
       "description": "preconditions, scope, motive, definition of done",
       "section": "2",
       "options": [
@@ -161,32 +161,32 @@
       ]
     },
     {
-      "title": "Legacy and troubles",
-      "description": "third parties, untested spaghetti code, old stuff...",
+      "title": "Troublemaker involvement",
+      "description": "Troublesome systems, services, parties and legacy stuff",
       "section": "2",
       "options": [
         {
-          "title": "No",
+          "title": "None",
           "value": "1"
         },
         {
-          "title": "Yes but trivial",
+          "title": "Not sure",
           "value": "2"
         },
         {
-          "title": "Requires to touch old untested parts",
+          "title": "Yes but negligible",
           "value": "3"
         },
         {
-          "title": "Possible trial-and-error required",
+          "title": "One troublemaker involved as a producer (we consume from him)",
           "value": "5"
         },
         {
-          "title": "One troubler maker direct involvement",
+          "title": "One troublermaker involved as a consumer (we produce for him)",
           "value": "8"
         },
         {
-          "title": "Multiple trouble makers involved",
+          "title": "Multiple troublemakers actively involved (we produce for them)",
           "value": "13"
         }
       ]
