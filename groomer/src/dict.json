@@ -99,7 +99,7 @@
       ]
     },
     {
-      "title": "Testing",
+      "title": "Involvement of untested code",
       "description": "How is the coverage of all things going to be touched?",
       "section": "1",
       "options": [
@@ -143,25 +143,25 @@
           "value": "2"
         },
         {
-          "title": "Clarifying while working does the job",
+          "title": "We're able to start and clarify things on the go",
           "value": "3"
         },
         {
-          "title": "Requires clarifying things first",
+          "title": "Requires clarifying, prior start",
           "value": "5"
         },
         {
-          "title": "Requires pre-study and research",
+          "title": "Requires research to clarify things",
           "value": "8"
         },
         {
-          "title": "Completely unclear",
+          "title": "Major things and scope are not clear.",
           "value": "13"
         }
       ]
     },
     {
-      "title": "Troublemaker involvement",
+      "title": "Involvement of troublemakers",
       "description": "Troublesome systems, services, parties and legacy stuff",
       "section": "2",
       "options": [
