@@ -38,7 +38,7 @@
     },
     {
       "title": "Dependencies",
-      "description": "How much dependencies to touch?",
+      "description": "How much dependencies to touch",
       "section": "0",
       "options": [
         {
@@ -69,7 +69,7 @@
     },
     {
       "title": "Required skills",
-      "description": "How much problem solving skills are required?",
+      "description": "How much problem solving skills are required",
       "section": "1",
       "options": [
         {
@@ -100,7 +100,7 @@
     },
     {
       "title": "Involvement of untested code",
-      "description": "How is the coverage of all things going to be touched?",
+      "description": "How is the coverage of all things going to be touched",
       "section": "1",
       "options": [
         {
@@ -178,11 +178,11 @@
           "value": "3"
         },
         {
-          "title": "One troublemaker involved as a producer (we consume from him)",
+          "title": "One troublemaker involved as a producer (we consume from it)",
           "value": "5"
         },
         {
-          "title": "One troublermaker involved as a consumer (we produce for him)",
+          "title": "One troublermaker involved as a consumer (we produce for it)",
           "value": "8"
         },
         {
