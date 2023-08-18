@@ -38,11 +38,11 @@
     // Component for logging into console on mount and unmount
     const Demo = () => {
       useEffect(() => {
-        console.log(new Date().toLocaleTimeString(), "Context did mount");
+        console.log(new Date().toLocaleTimeString(), "Did mount");
         return () =>
           console.log(
             new Date().toLocaleTimeString(),
-            "Context did unmount\n---"
+            "Did unmount\n---"
           );
       }, []);
       return "Click to change state (check the console)";
