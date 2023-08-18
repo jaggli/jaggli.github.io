@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mount and unmount anomaly</title>
+    <title>Bug</title>
     <script
-      src="https://unpkg.com/react@18.3.0-next-fecc288b7-20221025/umd/react.production.min.js"
+      src="https://unpkg.com/react@18.3.0-canary-ade82b8dd-20230816/umd/react.production.min.js"
       crossorigin
     ></script>
     <script
-      src="https://unpkg.com/react-dom@18.3.0-next-fecc288b7-20221025/umd/react-dom.production.min.js"
+      src="https://unpkg.com/react-dom@18.3.0-canary-ade82b8dd-20230816/umd/react-dom.production.min.js"
       crossorigin
     ></script>
   </head>
@@ -23,7 +23,7 @@
     const App = () => {
       const [renderAmount, setRenderAmount] = useState(1);
 
-      // 🪲 this is where it happens 🪲
+      // 🪲 this is where the bug happens 🪲
       // every re-render returns a new function inside the inner createElement
       const DynamicComponent = createElement(() => createElement(Demo));
 
@@ -38,11 +38,11 @@
     // Component for logging into console on mount and unmount
     const Demo = () => {
       useEffect(() => {
-        console.log(new Date().toLocaleTimeString(), "Did mount");
+        console.log(new Date().toLocaleTimeString(), "Context did mount");
         return () =>
           console.log(
             new Date().toLocaleTimeString(),
-            "Did unmount\n---"
+            "Context did unmount\n---"
           );
       }, []);
       return "Click to change state (check the console)";
