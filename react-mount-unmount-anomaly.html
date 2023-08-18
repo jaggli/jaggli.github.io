@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mount and unmount anomaly</title>
+    <script
+      src="https://unpkg.com/react@18.3.0-next-fecc288b7-20221025/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18.3.0-next-fecc288b7-20221025/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { createElement, useEffect, useState } = React;
+
+    const App = () => {
+      const [renderAmount, setRenderAmount] = useState(1);
+
+      // 🪲 this is where it happens 🪲
+      // every re-render returns a new function inside the inner createElement
+      const DynamicComponent = createElement(() => createElement(Demo));
+
+      return createElement(
+        "button",
+        // button onChange increases the state and trigger a re-render of the App
+        { onClick: () => setRenderAmount(renderAmount + 1) },
+        DynamicComponent
+      );
+    };
+
+    // Component for logging into console on mount and unmount
+    const Demo = () => {
+      useEffect(() => {
+        console.log(new Date().toLocaleTimeString(), "Context did mount");
+        return () =>
+          console.log(
+            new Date().toLocaleTimeString(),
+            "Context did unmount\n---"
+          );
+      }, []);
+      return "Click to change state (check the console)";
+    };
+
+    // Render app to dom
+    createRoot(document.getElementById("app")).render(createElement(App));
+  </script>
+</html>
