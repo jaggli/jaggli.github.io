@@ -3,6 +3,20 @@
     <head>
       <title>viewport</title>
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          overflow: scroll;
+        }
+
+        pre {
+          font-family: monospace;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+        }
+      </style>
     </head>
     <body>
       <pre></pre>
@@ -11,39 +25,21 @@
         pre.textContent = [
           `${window.innerWidth} window inner width (window.innerWidth)`,
           `${document.documentElement.clientWidth} html client width (document.documentElement.clientWidth)`,
-          `${document.body.clientWidth} body client width (document.documentElement.clientWidth)`,
+          `${document.body.clientWidth} body client width (document.body.clientWidth)`,
+          "",
           `${document.documentElement.offsetWidth} html offset width (document.documentElement.offsetWidth)`,
           `${document.body.offsetWidth} body offset width (document.body.offsetWidth)`,
+          "",
           `${document.documentElement.scrollWidth} html scroll width (document.documentElement.scrollWidth)`,
           `${document.body.scrollWidth} body scroll width (document.body.scrollWidth)`,
+          "",
           `${
             document.documentElement.getBoundingClientRect().width
           } html bounding client rect width (document.documentElement.getBoundingClientRect().width)`,
           `${
             document.body.getBoundingClientRect().width
           } body bounding client rect width (document.body.getBoundingClientRect().width)`,
-          `${
-            document.documentElement.offsetWidth -
-            document.documentElement.clientWidth
-          } html offset width - html client width`,
-          `${
-            document.body.offsetWidth - document.body.clientWidth
-          } body offset width - body client width`,
-          `${
-            document.documentElement.scrollWidth -
-            document.documentElement.clientWidth
-          } html scroll width - html client width`,
-          `${
-            document.body.scrollWidth - document.body.clientWidth
-          } body scroll width - body client width`,
-          `${
-            document.documentElement.getBoundingClientRect().width -
-            document.documentElement.clientWidth
-          } html bounding client rect width - html client width`,
-          `${
-            document.body.getBoundingClientRect().width -
-            document.body.clientWidth
-          } body bounding client rect width - body client width`,
+          "",
         ].join("\n");
       </script>
     </body>
