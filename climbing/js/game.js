@@ -16,7 +16,7 @@ function setup() {
     leftFoot: null,
     rightFoot: null,
     size: 40,
-    reachDistance: 100,
+    reachDistance: 120,
   };
 
   // Generate climbing holds
@@ -52,32 +52,58 @@ function generateHolds() {
 
   // Starting holds at bottom
   holds.push({
-    x: width / 2 - 60,
+    x: width / 2 - 40,
     y: height - 150,
     color: [100, 255, 100],
     type: "start",
   });
   holds.push({
-    x: width / 2 + 60,
+    x: width / 2 + 40,
     y: height - 150,
     color: [100, 255, 100],
     type: "start",
   });
 
-  // Generate holds going up
+  // Generate holds going up with reduced empty spots and minimal overlap
+  let prevRowHolds = [];
   for (let i = 0; i < 50; i++) {
-    let y = height - 300 - i * random(80, 120);
-    let numHolds = random(3, 6);
+    let y = height - 170 - i * random(80, 100); // slightly denser rows
+    let numHolds = floor(random(4, 7)); // more holds per row
 
-    for (let j = 0; j < numHolds; j++) {
-      holds.push({
-        x: random(100, width - 100),
-        y: y + random(-30, 30),
+    let rowHolds = [];
+    let attempts = 0;
+    while (rowHolds.length < numHolds && attempts < numHolds * 10) {
+      let size = random(18, 25);
+      let x = random(60 + size / 2, width - 60 - size / 2);
+      let yJitter = random(-20, 20);
+      let newHold = {
+        x: x,
+        y: y + yJitter,
         color: [random(150, 255), random(100, 200), random(200, 255)],
         type: "hold",
-        size: random(15, 25),
-      });
+        size: size,
+      };
+
+      // Avoid overlap with holds in this row
+      let overlaps = rowHolds.some(
+        (h) =>
+          dist(h.x, h.y, newHold.x, newHold.y) < (h.size + newHold.size) * 0.7
+      );
+      // Avoid overlap with previous row
+      if (!overlaps && prevRowHolds.length > 0) {
+        overlaps = prevRowHolds.some(
+          (h) =>
+            dist(h.x, h.y, newHold.x, newHold.y) < (h.size + newHold.size) * 0.7
+        );
+      }
+
+      if (!overlaps) {
+        rowHolds.push(newHold);
+        holds.push(newHold);
+      }
+      attempts++;
     }
+    prevRowHolds = rowHolds;
   }
 
   // Finish hold at top
@@ -331,4 +357,27 @@ function keyPressed() {
   if (key === "2") climber.rightHand = null;
   if (key === "3") climber.leftFoot = null;
   if (key === "4") climber.rightFoot = null;
+  if ((key = "p")) {
+    // the player pulls all his limbs to the minimum distance, keeping all the holds
+    // by moving the climber to the average position of all holds
+    let attachedHolds = [];
+    if (climber.leftHand) attachedHolds.push(climber.leftHand);
+    if (climber.rightHand) attachedHolds.push(climber.rightHand);
+    if (climber.leftFoot) attachedHolds.push(climber.leftFoot);
+    if (climber.rightFoot) attachedHolds.push(climber.rightFoot);
+    if (attachedHolds.length > 0) {
+      let avgX = 0;
+      let avgY = 0;
+      for (let hold of attachedHolds) {
+        avgX += hold.x;
+        avgY += hold.y;
+      }
+      avgX /= attachedHolds.length;
+      avgY /= attachedHolds.length;
+
+      // Move the climber a bit higher above the average of the holds
+      climber.x = lerp(climber.x, avgX, 0.6);
+      climber.y = lerp(climber.y, avgY - 10, 0.6); // subtract 10 to move up more
+    }
+  }
 }
