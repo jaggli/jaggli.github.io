@@ -722,8 +722,23 @@
     </div>
 
     <script>
+        // ═══════════════════════════════════════════════════
+        //  Utilities
+        // ═══════════════════════════════════════════════════
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  DOM References
+        // ═══════════════════════════════════════════════════
+
         const editor = document.getElementById('editor');
         const gutter = document.getElementById('gutter');
+        const highlightLayer = document.getElementById('highlightLayer');
         const noteList = document.getElementById('noteList');
         const charCount = document.getElementById('charCount');
         const btnShare = document.getElementById('btnShare');
@@ -732,15 +747,22 @@
         const modalCancel = document.getElementById('modalCancel');
         const modalConfirm = document.getElementById('modalConfirm');
         const sidebar = document.querySelector('.sidebar');
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        const searchResultsList = document.getElementById('searchResultsList');
+        const searchCount = document.getElementById('searchCount');
+        const searchBackdrop = document.getElementById('searchBackdrop');
+        const dropOverlay = document.getElementById('dropOverlay');
+        const sidebarResize = document.getElementById('sidebarResize');
+
+        // ═══════════════════════════════════════════════════
+        //  State & Storage
+        // ═══════════════════════════════════════════════════
 
         const STORAGE_KEY = 'notepad_data';
+        const SIDEBAR_WIDTH_KEY = 'notepad_sidebar_width';
         let state = { notes: [], activeId: null };
         let saveTimeout = null;
-        let urlTimeout = null;
-        const histories = {}; // per-note undo/redo: { noteId: { past: [], future: [] } }
-        let historyTimeout = null;
-
-        // --- Storage ---
 
         function loadState() {
             try {
@@ -753,11 +775,41 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         }
 
+        function scheduleSave() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(saveState, 300);
+        }
+
         function getActiveNote() {
             return state.notes.find(n => n.id === state.activeId) || null;
         }
 
-        // --- URL sync ---
+        function sortNotes() {
+            state.notes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  Compression & URL Sync
+        // ═══════════════════════════════════════════════════
+
+        let urlTimeout = null;
+
+        async function compress(text) {
+            const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+            const buf = await new Response(stream).arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (const b of bytes) binary += String.fromCharCode(b);
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function decompress(b64) {
+            const binary = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+            return await new Response(stream).text();
+        }
 
         async function updateUrl() {
             const note = getActiveNote();
@@ -779,7 +831,47 @@
             urlTimeout = setTimeout(updateUrl, 500);
         }
 
-        // --- Undo/Redo history (per note, in memory) ---
+        // ═══════════════════════════════════════════════════
+        //  Modal
+        // ═══════════════════════════════════════════════════
+
+        function showModal(text, confirmLabel, cancelLabel, danger) {
+            return new Promise((resolve) => {
+                modalText.textContent = text;
+                modalConfirm.textContent = confirmLabel;
+                modalCancel.textContent = cancelLabel || '';
+                modalCancel.style.display = cancelLabel ? '' : 'none';
+                modalConfirm.className = danger ? 'modal-btn modal-btn-danger' : 'modal-btn';
+                modalOverlay.classList.add('visible');
+
+                function cleanup() {
+                    modalOverlay.classList.remove('visible');
+                    modalConfirm.removeEventListener('click', onConfirm);
+                    modalCancel.removeEventListener('click', onCancel);
+                    modalOverlay.removeEventListener('click', onOverlay);
+                    document.removeEventListener('keydown', onKey);
+                }
+                function onConfirm() { cleanup(); resolve(true); }
+                function onCancel() { cleanup(); resolve(false); }
+                function onOverlay(e) { if (e.target === modalOverlay) { cleanup(); resolve(false); } }
+                function onKey(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); onConfirm(); }
+                    if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+                }
+
+                modalConfirm.addEventListener('click', onConfirm);
+                modalCancel.addEventListener('click', onCancel);
+                modalOverlay.addEventListener('click', onOverlay);
+                document.addEventListener('keydown', onKey);
+            });
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  Undo / Redo
+        // ═══════════════════════════════════════════════════
+
+        const histories = {};
+        let historyTimeout = null;
 
         function getHistory(id) {
             if (!histories[id]) histories[id] = { past: [], future: [] };
@@ -804,6 +896,13 @@
             historyTimeout = setTimeout(() => pushHistory(id, content), 400);
         }
 
+        function refreshEditor() {
+            updateLineNumbers();
+            updateCharCount();
+            updateHighlight();
+            scheduleUrlUpdate();
+        }
+
         function undo() {
             const note = getActiveNote();
             if (!note) return;
@@ -814,10 +913,7 @@
             editor.value = note.content;
             note.updatedAt = Date.now();
             saveState();
-            updateLineNumbers();
-            updateCharCount();
-            updateHighlight();
-            scheduleUrlUpdate();
+            refreshEditor();
         }
 
         function redo() {
@@ -830,13 +926,378 @@
             editor.value = note.content;
             note.updatedAt = Date.now();
             saveState();
-            updateLineNumbers();
-            updateCharCount();
-            updateHighlight();
-            scheduleUrlUpdate();
+            refreshEditor();
         }
 
-        // --- Notes CRUD ---
+        // ═══════════════════════════════════════════════════
+        //  Syntax Highlighting
+        // ═══════════════════════════════════════════════════
+
+        function getExtension(name) {
+            const dot = name.lastIndexOf('.');
+            return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+        }
+
+        function tokenize(code, rules) {
+            const tokens = [];
+            for (const [regex, cls] of rules) {
+                regex.lastIndex = 0;
+                let m;
+                while ((m = regex.exec(code)) !== null) {
+                    tokens.push({ s: m.index, e: m.index + m[0].length, cls, t: m[0] });
+                }
+            }
+            tokens.sort((a, b) => a.s - b.s);
+            const out = [];
+            let end = 0;
+            for (const t of tokens) {
+                if (t.s >= end) { out.push(t); end = t.e; }
+            }
+            return out;
+        }
+
+        function buildHTML(code, tokens) {
+            let r = '', p = 0;
+            for (const t of tokens) {
+                if (t.s > p) r += escapeHtml(code.substring(p, t.s));
+                r += `<span class="${t.cls}">${escapeHtml(t.t)}</span>`;
+                p = t.e;
+            }
+            if (p < code.length) r += escapeHtml(code.substring(p));
+            return r;
+        }
+
+        // --- Language rules ---
+
+        const jsRules = [
+            [/\/\/[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/`(?:[^`\\]|\\.)*`/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\/(?![\/\*])(?:[^\/\\\n]|\\.)+\/[gimsuy]*/g, 'hl-regex'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [/\b(abstract|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|if|implements|import|in|instanceof|interface|let|new|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\b/g, 'hl-kw'],
+            [/\b(Array|Boolean|Date|Error|JSON|Map|Math|Number|Object|Promise|Proxy|RegExp|Set|String|Symbol|console|document|window|null|undefined|true|false|NaN|Infinity)\b/g, 'hl-bi'],
+            [/\b[a-zA-Z_$][\w$]*(?=\s*\()/g, 'hl-fn'],
+            [/\.[a-zA-Z_$][\w$]*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^~?:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const pyRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/"""[\s\S]*?"""/g, 'hl-str'],
+            [/'''[\s\S]*?'''/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [/\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b/g, 'hl-kw'],
+            [/\b(True|False|None|print|len|range|int|str|float|list|dict|set|tuple|type|isinstance|open|input|map|filter|sorted|enumerate|zip|super|self|cls|__init__|__name__|__main__)\b/g, 'hl-bi'],
+            [/\b[a-zA-Z_]\w*(?=\s*\()/g, 'hl-fn'],
+            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^~@:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const cssRules = [
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|s|ms|deg|rad|turn|fr)?\b/g, 'hl-num'],
+            [/#[0-9a-fA-F]{3,8}\b/g, 'hl-num'],
+            [/@[a-z\-]+/g, 'hl-kw'],
+            [/\b(important|inherit|initial|unset|none|auto|flex|grid|block|inline|relative|absolute|fixed|sticky)\b/g, 'hl-kw'],
+            [/[a-z\-]+(?=\s*:)/g, 'hl-fn'],
+            [/[{}();:,]/g, 'hl-punc'],
+        ];
+
+        const htmlBaseRules = [
+            [/<!DOCTYPE\b[^>]*/gi, 'hl-tag'],
+            [/<!--[\s\S]*?-->/g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [new RegExp('<\\/?[a-zA-Z][a-zA-Z0-9\\-]*', 'g'), 'hl-tag'],
+            [/\/?>/g, 'hl-tag'],
+            [/\b[a-zA-Z\-:]+(?==)/g, 'hl-attr'],
+            [/&[a-zA-Z]+;|&#\d+;/g, 'hl-bi'],
+        ];
+
+        const jsonRules = [
+            [/"(?:[^"\\]|\\.)*"\s*(?=:)/g, 'hl-key'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/\b(?:true|false|null)\b/g, 'hl-kw'],
+            [/-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g, 'hl-num'],
+            [/[{}()\[\];:,]/g, 'hl-punc'],
+        ];
+
+        const mdRules = [
+            [/^#{1,6}\s+.*/gm, 'hl-h'],
+            [/`[^`\n]+`/g, 'hl-str'],
+            [/```[\s\S]*?```/g, 'hl-str'],
+            [/\*\*[^*]+\*\*/g, 'hl-bold'],
+            [/\[([^\]]+)\]\([^)]+\)/g, 'hl-link'],
+            [/^(\s*[-*+]|\d+\.)\s/gm, 'hl-kw'],
+            [/^>\s.*/gm, 'hl-cmt'],
+        ];
+
+        const shRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'[^']*'/g, 'hl-str'],
+            [/\$\{?[a-zA-Z_]\w*\}?/g, 'hl-bi'],
+            [/\b(if|then|else|elif|fi|for|while|do|done|case|esac|in|function|return|local|export|source|alias|unset|readonly|declare|typeset|eval|exec|set|shift|trap|exit)\b/g, 'hl-kw'],
+            [/\b\d+\b/g, 'hl-num'],
+            [/[|&;><]+/g, 'hl-op'],
+        ];
+
+        const goRules = [
+            [/\/\/[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/`[^`]*`/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [/\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/g, 'hl-kw'],
+            [/\b(true|false|nil|iota|append|cap|close|copy|delete|imag|len|make|new|panic|print|println|real|recover|string|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float32|float64|complex64|complex128|byte|rune|bool|error)\b/g, 'hl-bi'],
+            [/\b[a-zA-Z_]\w*(?=\s*\()/g, 'hl-fn'],
+            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const rsRules = [
+            [/\/\/[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [/\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|type|unsafe|use|where|while|yield)\b/g, 'hl-kw'],
+            [/\b(true|false|Some|None|Ok|Err|Vec|String|Box|Rc|Arc|Option|Result|println!|print!|format!|vec!|panic!|todo!|unimplemented!|assert!|assert_eq!|i8|i16|i32|i64|i128|u8|u16|u32|u64|u128|f32|f64|bool|char|str|usize|isize)\b/g, 'hl-bi'],
+            [/\b[a-zA-Z_]\w*(?=\s*[({])/g, 'hl-fn'],
+            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^~?:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const sqlRules = [
+            [/--[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
+            [/\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|AND|OR|NOT|IN|IS|NULL|AS|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|ALL|DISTINCT|SET|VALUES|INTO|EXISTS|BETWEEN|LIKE|CASE|WHEN|THEN|ELSE|END|BEGIN|COMMIT|ROLLBACK|PRIMARY|KEY|FOREIGN|REFERENCES|CONSTRAINT|DEFAULT|CHECK|UNIQUE|CASCADE|IF|REPLACE|TRIGGER|FUNCTION|PROCEDURE|DECLARE|RETURNS|RETURN|WITH|RECURSIVE|EXPLAIN|ANALYZE|ASC|DESC|COUNT|SUM|AVG|MIN|MAX|COALESCE|CAST|CONVERT)\b/gi, 'hl-kw'],
+            [/\b(TRUE|FALSE|NULL)\b/gi, 'hl-bi'],
+            [/[+\-*/%=<>!&|]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const yamlRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/^[a-zA-Z_][a-zA-Z0-9_\-]*(?=\s*:)/gm, 'hl-key'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(true|false|null|yes|no)\b/gi, 'hl-kw'],
+            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
+        ];
+
+        const tomlRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/\[+[^\]]*\]+/g, 'hl-tag'],
+            [/^[a-zA-Z_][a-zA-Z0-9_\-]*(?=\s*=)/gm, 'hl-key'],
+            [/"""[\s\S]*?"""/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(true|false)\b/g, 'hl-kw'],
+            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
+        ];
+
+        // --- Extension → rules mapping ---
+
+        const langRules = {
+            js: jsRules, jsx: jsRules, ts: jsRules, tsx: jsRules, mjs: jsRules, cjs: jsRules, mts: jsRules, cts: jsRules,
+            py: pyRules, pyi: pyRules, pyw: pyRules,
+            css: cssRules, scss: cssRules, less: cssRules, sass: cssRules,
+            json: jsonRules, jsonl: jsonRules, json5: jsonRules,
+            md: mdRules, markdown: mdRules,
+            sh: shRules, bash: shRules, zsh: shRules, fish: shRules,
+            go: goRules, rs: rsRules, sql: sqlRules,
+            yaml: yamlRules, yml: yamlRules,
+            toml: tomlRules,
+        };
+
+        const htmlExts = new Set(['html', 'htm', 'xml', 'svg', 'xsl']);
+
+        function highlightHTML(code) {
+            const embedded = [];
+            const blockRanges = [];
+            const blockRe = new RegExp('<(style|script)\\b[^>]*>([\\s\\S]*?)<\\/\\1>', 'gi');
+            let bm;
+            while ((bm = blockRe.exec(code)) !== null) {
+                const tag = bm[1].toLowerCase();
+                const innerStart = bm.index + bm[0].indexOf('>') + 1;
+                const innerEnd = bm.index + bm[0].lastIndexOf('<');
+                blockRanges.push({ s: innerStart, e: innerEnd });
+                const innerCode = code.substring(innerStart, innerEnd);
+                const rules = tag === 'style' ? cssRules : jsRules;
+                const innerTokens = tokenize(innerCode, rules);
+                for (const t of innerTokens) {
+                    t.s += innerStart;
+                    t.e += innerStart;
+                    embedded.push(t);
+                }
+            }
+            const htmlTokens = tokenize(code, htmlBaseRules).filter(t => {
+                for (const r of blockRanges) {
+                    if (t.s >= r.s && t.s < r.e) return false;
+                }
+                return true;
+            });
+            const all = embedded.concat(htmlTokens);
+            all.sort((a, b) => a.s - b.s);
+            const merged = [];
+            let end = 0;
+            for (const t of all) {
+                if (t.s >= end) { merged.push(t); end = t.e; }
+            }
+            return buildHTML(code, merged);
+        }
+
+        function highlightCode(code, name) {
+            try {
+                const ext = getExtension(name);
+                if (htmlExts.has(ext)) return highlightHTML(code);
+                const rules = langRules[ext];
+                if (!rules) return escapeHtml(code);
+                return buildHTML(code, tokenize(code, rules));
+            } catch (e) {
+                console.error('Highlight error:', e);
+                return escapeHtml(code);
+            }
+        }
+
+        function updateHighlight() {
+            const note = getActiveNote();
+            if (!note) {
+                highlightLayer.innerHTML = '';
+                return;
+            }
+            highlightLayer.innerHTML = highlightCode(note.content, note.name) + '\n';
+        }
+
+        let highlightTimeout = null;
+        function scheduleHighlight() {
+            clearTimeout(highlightTimeout);
+            highlightTimeout = setTimeout(updateHighlight, 30);
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  Rendering
+        // ═══════════════════════════════════════════════════
+
+        function updateLineNumbers() {
+            const lines = (editor.value || '').split('\n').length;
+            let html = '';
+            for (let i = 1; i <= Math.max(lines, 1); i++) {
+                html += `<div class="gutter-line">${i}</div>`;
+            }
+            gutter.innerHTML = html;
+        }
+
+        function updateCharCount() {
+            const len = (editor.value || '').length;
+            charCount.textContent = len + ' char' + (len !== 1 ? 's' : '');
+        }
+
+        function renderEditor() {
+            const note = getActiveNote();
+            if (note) {
+                editor.value = note.content;
+                editor.disabled = false;
+                btnShare.disabled = false;
+            } else {
+                editor.value = '';
+                editor.disabled = true;
+                btnShare.disabled = true;
+            }
+            updateHighlight();
+        }
+
+        function renderNoteList() {
+            noteList.innerHTML = '';
+            sortNotes();
+            for (const note of state.notes) {
+                const div = document.createElement('div');
+                div.className = 'note-item' + (note.id === state.activeId ? ' active' : '');
+
+                const input = document.createElement('input');
+                input.className = 'note-item-input';
+                input.name = 'filename';
+                input.value = note.name;
+                input.spellcheck = false;
+                input.readOnly = true;
+                input.addEventListener('click', (e) => {
+                    if (state.activeId !== note.id) {
+                        e.preventDefault();
+                        switchNote(note.id);
+                    } else if (input.readOnly) {
+                        e.preventDefault();
+                        input.readOnly = false;
+                        input.classList.add('editing');
+                        input.focus();
+                        setTimeout(() => {
+                            const dot = input.value.lastIndexOf('.');
+                            if (dot > 0) {
+                                input.setSelectionRange(0, dot);
+                            } else {
+                                input.select();
+                            }
+                        }, 0);
+                    }
+                });
+                input.addEventListener('input', () => {
+                    note.name = input.value.trim() || 'untitled';
+                    note.updatedAt = Date.now();
+                    scheduleSave();
+                    scheduleUrlUpdate();
+                    scheduleHighlight();
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        input.blur();
+                        editor.focus();
+                    }
+                });
+                input.addEventListener('blur', () => {
+                    input.readOnly = true;
+                    input.classList.remove('editing');
+                });
+
+                const btn = document.createElement('button');
+                btn.className = 'btn-delete';
+                btn.title = 'Delete';
+                btn.innerHTML = '&times;';
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    confirmDelete(note.id);
+                });
+
+                div.appendChild(input);
+                div.appendChild(btn);
+                noteList.appendChild(div);
+            }
+        }
+
+        function render() {
+            renderNoteList();
+            renderEditor();
+            updateLineNumbers();
+            updateCharCount();
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  Notes CRUD
+        // ═══════════════════════════════════════════════════
 
         function nextNoteName() {
             let num = 1;
@@ -891,19 +1352,6 @@
             updateUrl();
         }
 
-        function toggleSidebar() {
-            sidebar.classList.toggle('open');
-            if (!sidebar.classList.contains('open')) editor.focus();
-        }
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && sidebar.classList.contains('open')) {
-                e.preventDefault();
-                sidebar.classList.remove('open');
-                editor.focus();
-            }
-        });
-
         function switchNote(id) {
             state.activeId = id;
             saveState();
@@ -912,305 +1360,19 @@
             sidebar.classList.remove('open');
         }
 
-        // --- Rendering ---
-
-        function render() {
-            renderNoteList();
-            renderEditor();
-            updateLineNumbers();
-            updateCharCount();
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            if (!sidebar.classList.contains('open')) editor.focus();
         }
 
-        function sortNotes() {
-            state.notes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-        }
+        // ═══════════════════════════════════════════════════
+        //  Search
+        // ═══════════════════════════════════════════════════
 
-        function renderNoteList() {
-            noteList.innerHTML = '';
-            sortNotes();
-            for (const note of state.notes) {
-                const div = document.createElement('div');
-                div.className = 'note-item' + (note.id === state.activeId ? ' active' : '');
-
-                const input = document.createElement('input');
-                input.className = 'note-item-input';
-                input.name = 'filename';
-                input.value = note.name;
-                input.spellcheck = false;
-                input.readOnly = true;
-                input.addEventListener('click', (e) => {
-                    if (state.activeId !== note.id) {
-                        e.preventDefault();
-                        switchNote(note.id);
-                    } else if (input.readOnly) {
-                        e.preventDefault();
-                        input.readOnly = false;
-                        input.classList.add('editing');
-                        input.focus();
-                        setTimeout(() => {
-                            const dot = input.value.lastIndexOf('.');
-                            if (dot > 0) {
-                                input.setSelectionRange(0, dot);
-                            } else {
-                                input.select();
-                            }
-                        }, 0);
-                    }
-                });
-                input.addEventListener('input', () => {
-                    note.name = input.value.trim() || 'untitled';
-                    note.updatedAt = Date.now();
-                    clearTimeout(saveTimeout);
-                    saveTimeout = setTimeout(saveState, 300);
-                    scheduleUrlUpdate();
-                    scheduleHighlight();
-                });
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        input.blur();
-                        editor.focus();
-                    }
-                });
-                input.addEventListener('blur', () => {
-                    input.readOnly = true;
-                    input.classList.remove('editing');
-                });
-
-                const btn = document.createElement('button');
-                btn.className = 'btn-delete';
-                btn.title = 'Delete';
-                btn.innerHTML = '&times;';
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    confirmDelete(note.id);
-                });
-
-                div.appendChild(input);
-                div.appendChild(btn);
-                noteList.appendChild(div);
-            }
-        }
-
-        function renderEditor() {
-            const note = getActiveNote();
-            if (note) {
-                editor.value = note.content;
-                editor.disabled = false;
-                btnShare.disabled = false;
-            } else {
-                editor.value = '';
-                editor.disabled = true;
-                btnShare.disabled = true;
-            }
-            updateHighlight();
-        }
-
-        function updateLineNumbers() {
-            const lines = (editor.value || '').split('\n').length;
-            let html = '';
-            for (let i = 1; i <= Math.max(lines, 1); i++) {
-                html += `<div class="gutter-line">${i}</div>`;
-            }
-            gutter.innerHTML = html;
-        }
-
-        function updateCharCount() {
-            const len = (editor.value || '').length;
-            charCount.textContent = len + ' char' + (len !== 1 ? 's' : '');
-        }
-
-        // --- Auto-save ---
-
-        editor.addEventListener('input', () => {
-            const note = getActiveNote();
-            if (!note) return;
-            // Snapshot previous content for undo before updating
-            const h = getHistory(note.id);
-            if (!h.past.length || h.past[h.past.length - 1] !== note.content) {
-                // Only push if we don't have a pending debounced snapshot
-                if (!historyTimeout) pushHistory(note.id, note.content);
-            }
-            note.content = editor.value;
-            note.updatedAt = Date.now();
-            updateLineNumbers();
-            updateCharCount();
-            scheduleHighlight();
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(saveState, 300);
-            scheduleHistorySnapshot();
-            scheduleUrlUpdate();
-        });
-
-        editor.addEventListener('scroll', () => {
-            gutter.scrollTop = editor.scrollTop;
-            highlightLayer.scrollTop = editor.scrollTop;
-            highlightLayer.scrollLeft = editor.scrollLeft;
-        });
-
-        // --- Tab support ---
-
-        editor.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                const start = editor.selectionStart;
-                const end = editor.selectionEnd;
-                editor.value = editor.value.substring(0, start) + '  ' + editor.value.substring(end);
-                editor.selectionStart = editor.selectionEnd = start + 2;
-                editor.dispatchEvent(new Event('input'));
-            }
-        });
-
-        // --- Keyboard shortcuts ---
-
-        document.addEventListener('keydown', (e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-                e.preventDefault();
-                undo();
-            }
-            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
-                e.preventDefault();
-                redo();
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-                e.preventDefault(); // prevent browser save dialog
-            }
-            if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'n') {
-                e.preventDefault();
-                createNote();
-            }
-        });
-
-        // --- Sharing via URL ---
-
-        async function compress(text) {
-            const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-            const buf = await new Response(stream).arrayBuffer();
-            const bytes = new Uint8Array(buf);
-            let binary = '';
-            for (const b of bytes) binary += String.fromCharCode(b);
-            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        }
-
-        async function decompress(b64) {
-            const binary = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-            return await new Response(stream).text();
-        }
-
-        function downloadNote() {
-            const note = getActiveNote();
-            if (!note) return;
-            const blob = new Blob([note.content], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = note.name;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        async function shareNote() {
-            const note = getActiveNote();
-            if (!note) return;
-            try {
-                const compressed = await compress(note.content);
-                const params = new URLSearchParams();
-                params.set('note', compressed);
-                params.set('name', note.name);
-                const url = location.origin + location.pathname + '?' + params.toString();
-                await navigator.clipboard.writeText(url);
-                btnShare.textContent = 'copied!';
-                btnShare.classList.add('copied');
-                setTimeout(() => {
-                    btnShare.textContent = 'share';
-                    btnShare.classList.remove('copied');
-                }, 2000);
-            } catch (err) {
-                console.error('Share failed:', err);
-            }
-        }
-
-        function showModal(text, confirmLabel, cancelLabel, danger) {
-            return new Promise((resolve) => {
-                modalText.textContent = text;
-                modalConfirm.textContent = confirmLabel;
-                modalCancel.textContent = cancelLabel || '';
-                modalCancel.style.display = cancelLabel ? '' : 'none';
-                modalConfirm.className = danger ? 'modal-btn modal-btn-danger' : 'modal-btn';
-                modalOverlay.classList.add('visible');
-
-                function cleanup() {
-                    modalOverlay.classList.remove('visible');
-                    modalConfirm.removeEventListener('click', onConfirm);
-                    modalCancel.removeEventListener('click', onCancel);
-                    modalOverlay.removeEventListener('click', onOverlay);
-                    document.removeEventListener('keydown', onKey);
-                }
-                function onConfirm() { cleanup(); resolve(true); }
-                function onCancel() { cleanup(); resolve(false); }
-                function onOverlay(e) { if (e.target === modalOverlay) { cleanup(); resolve(false); } }
-                function onKey(e) {
-                    if (e.key === 'Enter') { e.preventDefault(); onConfirm(); }
-                    if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-                }
-
-                modalConfirm.addEventListener('click', onConfirm);
-                modalCancel.addEventListener('click', onCancel);
-                modalOverlay.addEventListener('click', onOverlay);
-                document.addEventListener('keydown', onKey);
-            });
-        }
-
-        async function loadFromUrl() {
-            const params = new URLSearchParams(location.search);
-            const noteData = params.get('note');
-            const name = params.get('name') || 'shared note';
-            if (!noteData) return false;
-            try {
-                const content = await decompress(noteData);
-                const existing = state.notes.find(n => n.name === name);
-                if (existing) {
-                    if (existing.content === content) {
-                        // Identical — just open it
-                        state.activeId = existing.id;
-                        saveState();
-                        return true;
-                    }
-                    // Content differs — ask user
-                    render();
-                    const update = await showModal(
-                        `"${name}" already exists with different content.`,
-                        'update',
-                        'new file'
-                    );
-                    if (update) {
-                        existing.content = content;
-                        existing.updatedAt = Date.now();
-                        state.activeId = existing.id;
-                        saveState();
-                    } else {
-                        createNote(undefined, content);
-                    }
-                } else {
-                    createNote(name, content);
-                }
-                return true;
-            } catch (err) {
-                console.error('Failed to load shared note:', err);
-                return false;
-            }
-        }
-
-        // --- Search ---
-
-        const searchInput = document.getElementById('searchInput');
-        const searchResults = document.getElementById('searchResults');
-        const searchResultsList = document.getElementById('searchResultsList');
-        const searchCount = document.getElementById('searchCount');
-        const searchBackdrop = document.getElementById('searchBackdrop');
+        const MAX_LINES_PER_NOTE = 500;
+        const MAX_MATCHES_PER_NOTE = 3;
+        const MAX_RESULTS = 20;
+        let searchSelectedIdx = -1;
         let searchDebounce = null;
 
         function openSearch() {
@@ -1222,15 +1384,11 @@
             searchInput.focus();
         }
 
-        searchBackdrop.addEventListener('click', () => {
-            closeSearch();
-            searchInput.value = '';
-        });
-
-        const MAX_LINES_PER_NOTE = 500;
-        const MAX_MATCHES_PER_NOTE = 3;
-        const MAX_RESULTS = 20;
-        let searchSelectedIdx = -1;
+        function closeSearch() {
+            searchResults.classList.remove('visible');
+            searchBackdrop.classList.remove('visible');
+            searchSelectedIdx = -1;
+        }
 
         function fuzzyMatch(text, query) {
             const lower = text.toLowerCase();
@@ -1258,13 +1416,36 @@
             if (idx === -1) return null;
             const indices = [];
             for (let i = idx; i < idx + query.length; i++) indices.push(i);
-            // Exact matches score higher than fuzzy
             const score = query.length * 3 + (idx < 10 ? 5 : 0);
             return { indices, score };
         }
 
         function matchLine(text, query) {
             return exactMatch(text, query) || fuzzyMatch(text, query);
+        }
+
+        function highlightFuzzy(text, indices) {
+            if (!indices || !indices.length) return escapeHtml(text);
+            let result = '';
+            let groups = [];
+            let start = indices[0], end = indices[0];
+            for (let i = 1; i < indices.length; i++) {
+                if (indices[i] === end + 1) {
+                    end = indices[i];
+                } else {
+                    groups.push([start, end]);
+                    start = end = indices[i];
+                }
+            }
+            groups.push([start, end]);
+            let last = 0;
+            for (const [s, e] of groups) {
+                result += escapeHtml(text.slice(last, s));
+                result += '<mark>' + escapeHtml(text.slice(s, e + 1)) + '</mark>';
+                last = e + 1;
+            }
+            result += escapeHtml(text.slice(last));
+            return result;
         }
 
         function searchNotes(query) {
@@ -1277,14 +1458,12 @@
             const results = [];
             for (const note of state.notes) {
                 const nameMatch = matchLine(note.name, query);
-                // Search content lines (capped)
                 const lines = note.content.split('\n');
                 const lineLimit = Math.min(lines.length, MAX_LINES_PER_NOTE);
                 const lineMatches = [];
                 for (let i = 0; i < lineLimit; i++) {
                     const m = matchLine(lines[i], query);
                     if (m) {
-                        // Compute char offset for this line
                         let offset = 0;
                         for (let j = 0; j < i; j++) offset += lines[j].length + 1;
                         lineMatches.push({
@@ -1296,59 +1475,24 @@
                         });
                     }
                 }
-                // Sort line matches by score, keep top N
                 lineMatches.sort((a, b) => b.score - a.score);
                 const topLines = lineMatches.slice(0, MAX_MATCHES_PER_NOTE);
-
                 const bestLineScore = topLines.length ? topLines[0].score : 0;
-                // Filename matches weighted 4x
                 const nameScore = nameMatch ? nameMatch.score * 4 : 0;
                 const totalScore = nameScore + bestLineScore;
-                // Active note gets a boost
                 const activeBoost = note.id === state.activeId ? 1000 : 0;
 
                 if (totalScore > 0) {
-                    results.push({
-                        note,
-                        score: totalScore + activeBoost,
-                        nameMatch,
-                        lines: topLines
-                    });
+                    results.push({ note, score: totalScore + activeBoost, nameMatch, lines: topLines });
                 }
-
-                // Early termination: if we have enough high-quality results, stop
                 if (results.length >= MAX_RESULTS * 2) break;
             }
             results.sort((a, b) => b.score - a.score);
             results.length = Math.min(results.length, MAX_RESULTS);
-            showSearchResults(results, query);
+            showSearchResults(results);
         }
 
-        function highlightFuzzy(text, indices) {
-            if (!indices || !indices.length) return escapeHtml(text);
-            let result = '';
-            let last = 0;
-            let groups = [];
-            let start = indices[0], end = indices[0];
-            for (let i = 1; i < indices.length; i++) {
-                if (indices[i] === end + 1) {
-                    end = indices[i];
-                } else {
-                    groups.push([start, end]);
-                    start = end = indices[i];
-                }
-            }
-            groups.push([start, end]);
-            for (const [s, e] of groups) {
-                result += escapeHtml(text.slice(last, s));
-                result += '<mark>' + escapeHtml(text.slice(s, e + 1)) + '</mark>';
-                last = e + 1;
-            }
-            result += escapeHtml(text.slice(last));
-            return result;
-        }
-
-        function showSearchResults(results, query) {
+        function showSearchResults(results) {
             searchResults.classList.add('visible');
             searchBackdrop.classList.add('visible');
             searchCount.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
@@ -1371,7 +1515,6 @@
                     nameDiv.textContent = r.note.name;
                 }
                 div.appendChild(nameDiv);
-                // Show up to 3 matching lines
                 const linesToShow = r.lines.length ? r.lines : [];
                 for (const lm of linesToShow) {
                     const snippetDiv = document.createElement('div');
@@ -1381,7 +1524,6 @@
                     snippetDiv.innerHTML = '<span style="color:var(--gutter)">' + escapeHtml(prefix) + '</span>' + highlightFuzzy(trimmed, lm.lineIndices);
                     div.appendChild(snippetDiv);
                 }
-                // Use first line match for jump target, or just switch to note
                 const target = linesToShow[0] || null;
                 div.addEventListener('click', () => {
                     switchNote(r.note.id);
@@ -1398,7 +1540,6 @@
                 });
                 searchResultsList.appendChild(div);
             }
-            // Auto-select first result
             searchSelectedIdx = 0;
             updateSearchSelection();
         }
@@ -1408,17 +1549,15 @@
             items.forEach((el, i) => {
                 el.classList.toggle('selected', i === searchSelectedIdx);
             });
-            // Scroll selected into view
             if (items[searchSelectedIdx]) {
                 items[searchSelectedIdx].scrollIntoView({ block: 'nearest' });
             }
         }
 
-        function closeSearch() {
-            searchResults.classList.remove('visible');
-            searchBackdrop.classList.remove('visible');
-            searchSelectedIdx = -1;
-        }
+        searchBackdrop.addEventListener('click', () => {
+            closeSearch();
+            searchInput.value = '';
+        });
 
         searchInput.addEventListener('input', () => {
             clearTimeout(searchDebounce);
@@ -1457,302 +1596,103 @@
             }
         });
 
-        // Cmd/Ctrl+P or Cmd/Ctrl+F opens search, Escape closes it
-        document.addEventListener('keydown', (e) => {
-            if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'f')) {
-                e.preventDefault();
-                openSearch();
-                searchInput.select();
-            }
-            if (e.key === 'Escape' && searchResults.classList.contains('visible')) {
-                e.preventDefault();
-                e.stopPropagation();
-                closeSearch();
-                searchInput.value = '';
-                editor.focus();
-            }
-        });
+        // ═══════════════════════════════════════════════════
+        //  Sharing & Download
+        // ═══════════════════════════════════════════════════
 
-        // --- Utilities ---
-
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
+        function downloadNote() {
+            const note = getActiveNote();
+            if (!note) return;
+            const blob = new Blob([note.content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = note.name;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
-        // --- Syntax highlighting ---
-
-        const highlightLayer = document.getElementById('highlightLayer');
-
-        function getExtension(name) {
-            const dot = name.lastIndexOf('.');
-            return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+        async function shareNote() {
+            const note = getActiveNote();
+            if (!note) return;
+            try {
+                const compressed = await compress(note.content);
+                const params = new URLSearchParams();
+                params.set('note', compressed);
+                params.set('name', note.name);
+                const url = location.origin + location.pathname + '?' + params.toString();
+                await navigator.clipboard.writeText(url);
+                btnShare.textContent = 'copied!';
+                btnShare.classList.add('copied');
+                setTimeout(() => {
+                    btnShare.textContent = 'share';
+                    btnShare.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                console.error('Share failed:', err);
+            }
         }
 
-        function tokenize(code, rules) {
-            const tokens = [];
-            for (const [regex, cls] of rules) {
-                regex.lastIndex = 0;
-                let m;
-                while ((m = regex.exec(code)) !== null) {
-                    tokens.push({ s: m.index, e: m.index + m[0].length, cls, t: m[0] });
-                }
-            }
-            tokens.sort((a, b) => a.s - b.s);
-            const out = [];
-            let end = 0;
-            for (const t of tokens) {
-                if (t.s >= end) { out.push(t); end = t.e; }
-            }
-            return out;
-        }
-
-        function buildHTML(code, tokens) {
-            let r = '', p = 0;
-            for (const t of tokens) {
-                if (t.s > p) r += escapeHtml(code.substring(p, t.s));
-                r += `<span class="${t.cls}">${escapeHtml(t.t)}</span>`;
-                p = t.e;
-            }
-            if (p < code.length) r += escapeHtml(code.substring(p));
-            return r;
-        }
-
-        const jsKeywords = /\b(abstract|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|if|implements|import|in|instanceof|interface|let|new|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\b/g;
-        const jsBuiltins = /\b(Array|Boolean|Date|Error|JSON|Map|Math|Number|Object|Promise|Proxy|RegExp|Set|String|Symbol|console|document|window|null|undefined|true|false|NaN|Infinity)\b/g;
-        const jsRules = [
-            [/\/\/[^\n]*/g, 'hl-cmt'],
-            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
-            [/`(?:[^`\\]|\\.)*`/g, 'hl-str'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\/(?![\/\*])(?:[^\/\\\n]|\\.)+\/[gimsuy]*/g, 'hl-regex'],
-            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
-            [jsKeywords, 'hl-kw'],
-            [jsBuiltins, 'hl-bi'],
-            [/\b[a-zA-Z_$][\w$]*(?=\s*\()/g, 'hl-fn'],
-            [/\.[a-zA-Z_$][\w$]*/g, 'hl-prop'],
-            [/[+\-*/%=<>!&|^~?:]+/g, 'hl-op'],
-            [/[{}()\[\];,.]/g, 'hl-punc'],
-        ];
-
-        const pyKeywords = /\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b/g;
-        const pyBuiltins = /\b(True|False|None|print|len|range|int|str|float|list|dict|set|tuple|type|isinstance|open|input|map|filter|sorted|enumerate|zip|super|self|cls|__init__|__name__|__main__)\b/g;
-        const pyRules = [
-            [/#[^\n]*/g, 'hl-cmt'],
-            [/"""[\s\S]*?"""/g, 'hl-str'],
-            [/'''[\s\S]*?'''/g, 'hl-str'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
-            [pyKeywords, 'hl-kw'],
-            [pyBuiltins, 'hl-bi'],
-            [/\b[a-zA-Z_]\w*(?=\s*\()/g, 'hl-fn'],
-            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
-            [/[+\-*/%=<>!&|^~@:]+/g, 'hl-op'],
-            [/[{}()\[\];,.]/g, 'hl-punc'],
-        ];
-
-        const cssRules = [
-            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|s|ms|deg|rad|turn|fr)?\b/g, 'hl-num'],
-            [/#[0-9a-fA-F]{3,8}\b/g, 'hl-num'],
-            [/@[a-z\-]+/g, 'hl-kw'],
-            [/\b(important|inherit|initial|unset|none|auto|flex|grid|block|inline|relative|absolute|fixed|sticky)\b/g, 'hl-kw'],
-            [/[a-z\-]+(?=\s*:)/g, 'hl-fn'],
-            [/[{}();:,]/g, 'hl-punc'],
-        ];
-
-        const htmlBaseRules = [
-            [/<!--[\s\S]*?-->/g, 'hl-cmt'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [new RegExp('<\\/?[a-zA-Z][a-zA-Z0-9\\-]*', 'g'), 'hl-tag'],
-            [/\/?>/g, 'hl-tag'],
-            [/\b[a-zA-Z\-:]+(?==)/g, 'hl-attr'],
-            [/&[a-zA-Z]+;|&#\d+;/g, 'hl-bi'],
-        ];
-
-        function highlightHTML(code) {
-            // Find embedded style and script blocks
-            const embedded = [];
-            const blockRanges = [];
-            const blockRe = new RegExp('<(style|script)\\b[^>]*>([\\s\\S]*?)<\\/\\1>', 'gi');
-            let bm;
-            while ((bm = blockRe.exec(code)) !== null) {
-                const tag = bm[1].toLowerCase();
-                const innerStart = bm.index + bm[0].indexOf('>') + 1;
-                const innerEnd = bm.index + bm[0].lastIndexOf('<');
-                blockRanges.push({ s: innerStart, e: innerEnd });
-                const innerCode = code.substring(innerStart, innerEnd);
-                const rules = tag === 'style' ? cssRules : jsRules;
-                const innerTokens = tokenize(innerCode, rules);
-                for (const t of innerTokens) {
-                    t.s += innerStart;
-                    t.e += innerStart;
-                    embedded.push(t);
-                }
-            }
-            // Tokenize HTML structure, excluding inside script/style blocks
-            const htmlTokens = tokenize(code, htmlBaseRules).filter(t => {
-                for (const r of blockRanges) {
-                    if (t.s >= r.s && t.s < r.e) return false;
+        async function loadFromUrl() {
+            const params = new URLSearchParams(location.search);
+            const noteData = params.get('note');
+            const name = params.get('name') || 'shared note';
+            if (!noteData) return false;
+            try {
+                const content = await decompress(noteData);
+                const existing = state.notes.find(n => n.name === name);
+                if (existing) {
+                    if (existing.content === content) {
+                        state.activeId = existing.id;
+                        saveState();
+                        return true;
+                    }
+                    render();
+                    const update = await showModal(
+                        `"${name}" already exists with different content.`,
+                        'update',
+                        'new file'
+                    );
+                    if (update) {
+                        existing.content = content;
+                        existing.updatedAt = Date.now();
+                        state.activeId = existing.id;
+                        saveState();
+                    } else {
+                        createNote(undefined, content);
+                    }
+                } else {
+                    createNote(name, content);
                 }
                 return true;
-            });
-            const all = embedded.concat(htmlTokens);
-            all.sort((a, b) => a.s - b.s);
-            const merged = [];
-            let end = 0;
-            for (const t of all) {
-                if (t.s >= end) { merged.push(t); end = t.e; }
-            }
-            return buildHTML(code, merged);
-        }
-
-        const jsonRules = [
-            [/"(?:[^"\\]|\\.)*"\s*(?=:)/g, 'hl-key'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/\b(?:true|false|null)\b/g, 'hl-kw'],
-            [/-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g, 'hl-num'],
-            [/[{}()\[\];:,]/g, 'hl-punc'],
-        ];
-
-        const mdRules = [
-            [/^#{1,6}\s+.*/gm, 'hl-h'],
-            [/`[^`\n]+`/g, 'hl-str'],
-            [/```[\s\S]*?```/g, 'hl-str'],
-            [/\*\*[^*]+\*\*/g, 'hl-bold'],
-            [/\[([^\]]+)\]\([^)]+\)/g, 'hl-link'],
-            [/^(\s*[-*+]|\d+\.)\s/gm, 'hl-kw'],
-            [/^>\s.*/gm, 'hl-cmt'],
-        ];
-
-        const shRules = [
-            [/#[^\n]*/g, 'hl-cmt'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'[^']*'/g, 'hl-str'],
-            [/\$\{?[a-zA-Z_]\w*\}?/g, 'hl-bi'],
-            [/\b(if|then|else|elif|fi|for|while|do|done|case|esac|in|function|return|local|export|source|alias|unset|readonly|declare|typeset|eval|exec|set|shift|trap|exit)\b/g, 'hl-kw'],
-            [/\b\d+\b/g, 'hl-num'],
-            [/[|&;><]+/g, 'hl-op'],
-        ];
-
-        const goKeywords = /\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/g;
-        const goBuiltins = /\b(true|false|nil|iota|append|cap|close|copy|delete|imag|len|make|new|panic|print|println|real|recover|string|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float32|float64|complex64|complex128|byte|rune|bool|error)\b/g;
-        const goRules = [
-            [/\/\/[^\n]*/g, 'hl-cmt'],
-            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
-            [/`[^`]*`/g, 'hl-str'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
-            [goKeywords, 'hl-kw'],
-            [goBuiltins, 'hl-bi'],
-            [/\b[a-zA-Z_]\w*(?=\s*\()/g, 'hl-fn'],
-            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
-            [/[+\-*/%=<>!&|^:]+/g, 'hl-op'],
-            [/[{}()\[\];,.]/g, 'hl-punc'],
-        ];
-
-        const rsKeywords = /\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|type|unsafe|use|where|while|yield)\b/g;
-        const rsBuiltins = /\b(true|false|Some|None|Ok|Err|Vec|String|Box|Rc|Arc|Option|Result|println!|print!|format!|vec!|panic!|todo!|unimplemented!|assert!|assert_eq!|i8|i16|i32|i64|i128|u8|u16|u32|u64|u128|f32|f64|bool|char|str|usize|isize)\b/g;
-        const rsRules = [
-            [/\/\/[^\n]*/g, 'hl-cmt'],
-            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
-            [rsKeywords, 'hl-kw'],
-            [rsBuiltins, 'hl-bi'],
-            [/\b[a-zA-Z_]\w*(?=\s*[({])/g, 'hl-fn'],
-            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
-            [/[+\-*/%=<>!&|^~?:]+/g, 'hl-op'],
-            [/[{}()\[\];,.]/g, 'hl-punc'],
-        ];
-
-        const sqlKeywords = /\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|AND|OR|NOT|IN|IS|NULL|AS|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|ALL|DISTINCT|SET|VALUES|INTO|EXISTS|BETWEEN|LIKE|CASE|WHEN|THEN|ELSE|END|BEGIN|COMMIT|ROLLBACK|PRIMARY|KEY|FOREIGN|REFERENCES|CONSTRAINT|DEFAULT|CHECK|UNIQUE|CASCADE|IF|REPLACE|TRIGGER|FUNCTION|PROCEDURE|DECLARE|RETURNS|RETURN|WITH|RECURSIVE|EXPLAIN|ANALYZE|ASC|DESC|COUNT|SUM|AVG|MIN|MAX|COALESCE|CAST|CONVERT)\b/gi;
-        const sqlRules = [
-            [/--[^\n]*/g, 'hl-cmt'],
-            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
-            [sqlKeywords, 'hl-kw'],
-            [/\b(TRUE|FALSE|NULL)\b/gi, 'hl-bi'],
-            [/[+\-*/%=<>!&|]+/g, 'hl-op'],
-            [/[{}()\[\];,.]/g, 'hl-punc'],
-        ];
-
-        const yamlRules = [
-            [/#[^\n]*/g, 'hl-cmt'],
-            [/^[a-zA-Z_][a-zA-Z0-9_\-]*(?=\s*:)/gm, 'hl-key'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b(true|false|null|yes|no)\b/gi, 'hl-kw'],
-            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
-        ];
-
-        const tomlRules = [
-            [/#[^\n]*/g, 'hl-cmt'],
-            [/\[+[^\]]*\]+/g, 'hl-tag'],
-            [/^[a-zA-Z_][a-zA-Z0-9_\-]*(?=\s*=)/gm, 'hl-key'],
-            [/"""[\s\S]*?"""/g, 'hl-str'],
-            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
-            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b(true|false)\b/g, 'hl-kw'],
-            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
-        ];
-
-        const langRules = {
-            js: jsRules, jsx: jsRules, ts: jsRules, tsx: jsRules, mjs: jsRules, cjs: jsRules, mts: jsRules, cts: jsRules,
-            py: pyRules, pyi: pyRules, pyw: pyRules,
-            css: cssRules, scss: cssRules, less: cssRules, sass: cssRules,
-            json: jsonRules, jsonl: jsonRules, json5: jsonRules,
-            md: mdRules, markdown: mdRules,
-            sh: shRules, bash: shRules, zsh: shRules, fish: shRules,
-            go: goRules,
-            rs: rsRules,
-            sql: sqlRules,
-            yaml: yamlRules, yml: yamlRules,
-            toml: tomlRules,
-        };
-
-        const htmlExts = new Set(['html', 'htm', 'xml', 'svg', 'xsl']);
-
-        function highlightCode(code, name) {
-            try {
-                const ext = getExtension(name);
-                if (htmlExts.has(ext)) return highlightHTML(code);
-                const rules = langRules[ext];
-                if (!rules) return escapeHtml(code);
-                return buildHTML(code, tokenize(code, rules));
-            } catch (e) {
-                console.error('Highlight error:', e);
-                return escapeHtml(code);
+            } catch (err) {
+                console.error('Failed to load shared note:', err);
+                return false;
             }
         }
 
-        function updateHighlight() {
-            const note = getActiveNote();
-            if (!note) {
-                highlightLayer.innerHTML = '';
-                return;
-            }
-            highlightLayer.innerHTML = highlightCode(note.content, note.name) + '\n';
+        // ═══════════════════════════════════════════════════
+        //  Drag & Drop
+        // ═══════════════════════════════════════════════════
+
+        const TEXT_EXTS = new Set(
+            'txt md markdown json jsonl json5 js jsx ts tsx mjs cjs mts cts css scss sass less html htm xml xsl xslt csv tsv yaml yml toml ini cfg conf sh bash zsh fish ps1 bat cmd py pyi pyw rb rake gemspec go rs java scala kt kts groovy gradle c h cpp hpp cc cxx hxx cs fs fsx swift m mm r jl lua pl pm php phtml ex exs erl hrl hs lhs clj cljs cljc edn lisp cl el rkt ml mli v sv vhd vhdl sql graphql gql proto thrift avsc tf hcl nix dhall dart zig nim cr d pas pp asm s wasm wat sol vy move cairo log env properties lock sum mod cmake make mk svg plist strings resx pot po rst adoc asciidoc tex bib sty cls org wiki textile diff patch gitignore gitattributes gitmodules dockerignore npmignore eslintignore prettierignore editorconfig prettierrc eslintrc babelrc browserslistrc stylelintrc huskyrc lintstagedrc nvmrc'.split(' ')
+        );
+
+        const TEXT_NAMES = new Set(
+            'dockerfile containerfile vagrantfile rakefile gemfile podfile'.split(' ')
+        );
+
+        const TEXT_SUFFIXES = '.node-version .ruby-version .python-version .tool-versions .env.local .env.example'.split(' ');
+
+        function isTextFilename(name) {
+            const lower = name.toLowerCase();
+            const dot = lower.lastIndexOf('.');
+            if (dot >= 0 && TEXT_EXTS.has(lower.slice(dot + 1))) return true;
+            if (TEXT_NAMES.has(lower)) return true;
+            return TEXT_SUFFIXES.some(s => lower.endsWith(s));
         }
 
-        let highlightTimeout = null;
-        function scheduleHighlight() {
-            clearTimeout(highlightTimeout);
-            highlightTimeout = setTimeout(updateHighlight, 30);
-        }
-
-        // --- Drag & drop files ---
-
-        const dropOverlay = document.getElementById('dropOverlay');
         let dragCounter = 0;
 
         document.addEventListener('dragenter', (e) => {
@@ -1761,11 +1701,9 @@
             if (dragCounter === 1) dropOverlay.classList.add('visible');
         });
 
-        document.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
+        document.addEventListener('dragover', (e) => e.preventDefault());
 
-        document.addEventListener('dragleave', (e) => {
+        document.addEventListener('dragleave', () => {
             dragCounter--;
             if (dragCounter <= 0) {
                 dragCounter = 0;
@@ -1822,16 +1760,9 @@
             }
         });
 
-        function isTextFilename(name) {
-            const textExts = ['.txt','.md','.markdown','.json','.jsonl','.json5','.js','.jsx','.ts','.tsx','.mjs','.cjs','.mts','.cts','.css','.scss','.sass','.less','.html','.htm','.xml','.xsl','.xslt','.csv','.tsv','.yaml','.yml','.toml','.ini','.cfg','.conf','.sh','.bash','.zsh','.fish','.ps1','.bat','.cmd','.py','.pyi','.pyw','.rb','.rake','.gemspec','.go','.rs','.java','.scala','.kt','.kts','.groovy','.gradle','.c','.h','.cpp','.hpp','.cc','.cxx','.hxx','.cs','.fs','.fsx','.swift','.m','.mm','.r','.R','.jl','.lua','.pl','.pm','.php','.phtml','.ex','.exs','.erl','.hrl','.hs','.lhs','.clj','.cljs','.cljc','.edn','.lisp','.cl','.el','.rkt','.ml','.mli','.v','.sv','.vhd','.vhdl','.sql','.graphql','.gql','.proto','.thrift','.avsc','.tf','.hcl','.nix','.dhall','.dart','.zig','.nim','.cr','.d','.pas','.pp','.asm','.s','.wasm','.wat','.sol','.vy','.move','.cairo','.log','.env','.env.local','.env.example','.properties','.lock','.sum','.mod','.cmake','.make','.mk','.dockerfile','.containerfile','.vagrantfile','.rakefile','.gemfile','.podfile','.gitignore','.gitattributes','.gitmodules','.dockerignore','.npmignore','.eslintignore','.prettierignore','.editorconfig','.prettierrc','.eslintrc','.babelrc','.browserslistrc','.stylelintrc','.huskyrc','.lintstagedrc','.nvmrc','.node-version','.ruby-version','.python-version','.tool-versions','.svg','.plist','.strings','.resx','.pot','.po','.rst','.adoc','.asciidoc','.tex','.bib','.sty','.cls','.org','.wiki','.textile','.diff','.patch'];
-            const lower = name.toLowerCase();
-            return textExts.some(ext => lower.endsWith(ext));
-        }
-
-        // --- Sidebar resize ---
-
-        const sidebarResize = document.getElementById('sidebarResize');
-        const SIDEBAR_WIDTH_KEY = 'notepad_sidebar_width';
+        // ═══════════════════════════════════════════════════
+        //  Sidebar Resize
+        // ═══════════════════════════════════════════════════
 
         (function restoreSidebarWidth() {
             const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
@@ -1855,7 +1786,9 @@
             document.addEventListener('mouseup', onUp);
         });
 
-        // --- Cross-tab sync ---
+        // ═══════════════════════════════════════════════════
+        //  Cross-tab Sync
+        // ═══════════════════════════════════════════════════
 
         window.addEventListener('storage', (e) => {
             if (e.key === STORAGE_KEY && e.newValue) {
@@ -1864,14 +1797,12 @@
                     const currentContent = editor.value;
                     const activeNote = getActiveNote();
                     state.notes = newState.notes;
-                    // Keep current tab's active note if it still exists
                     if (activeNote && state.notes.find(n => n.id === activeNote.id)) {
                         state.activeId = activeNote.id;
                     } else {
                         state.activeId = newState.activeId;
                     }
                     render();
-                    // Restore cursor position if active note content didn't change
                     const note = getActiveNote();
                     if (note && note.id === activeNote?.id && note.content === currentContent) {
                         editor.value = currentContent;
@@ -1883,7 +1814,94 @@
             }
         });
 
-        // --- Init ---
+        // ═══════════════════════════════════════════════════
+        //  Editor Events & Keyboard Shortcuts
+        // ═══════════════════════════════════════════════════
+
+        editor.addEventListener('input', () => {
+            const note = getActiveNote();
+            if (!note) return;
+            const h = getHistory(note.id);
+            if (!h.past.length || h.past[h.past.length - 1] !== note.content) {
+                if (!historyTimeout) pushHistory(note.id, note.content);
+            }
+            note.content = editor.value;
+            note.updatedAt = Date.now();
+            updateLineNumbers();
+            updateCharCount();
+            scheduleHighlight();
+            scheduleSave();
+            scheduleHistorySnapshot();
+            scheduleUrlUpdate();
+        });
+
+        editor.addEventListener('scroll', () => {
+            gutter.scrollTop = editor.scrollTop;
+            highlightLayer.scrollTop = editor.scrollTop;
+            highlightLayer.scrollLeft = editor.scrollLeft;
+        });
+
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                editor.value = editor.value.substring(0, start) + '  ' + editor.value.substring(end);
+                editor.selectionStart = editor.selectionEnd = start + 2;
+                editor.dispatchEvent(new Event('input'));
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            // Open search
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'f')) {
+                e.preventDefault();
+                openSearch();
+                searchInput.select();
+                return;
+            }
+            // Close search
+            if (e.key === 'Escape' && searchResults.classList.contains('visible')) {
+                e.preventDefault();
+                closeSearch();
+                searchInput.value = '';
+                editor.focus();
+                return;
+            }
+            // Close sidebar
+            if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+                e.preventDefault();
+                sidebar.classList.remove('open');
+                editor.focus();
+                return;
+            }
+            // Undo
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+            // Redo
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
+                e.preventDefault();
+                redo();
+                return;
+            }
+            // Suppress browser save dialog
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                return;
+            }
+            // New note
+            if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'n') {
+                e.preventDefault();
+                createNote();
+            }
+        });
+
+        // ═══════════════════════════════════════════════════
+        //  Init
+        // ═══════════════════════════════════════════════════
 
         async function init() {
             loadState();
