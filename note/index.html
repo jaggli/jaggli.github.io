@@ -636,7 +636,7 @@
         <div class="editor-container">
             <div class="editor-wrap">
                 <div class="gutter" id="gutter"></div>
-                <textarea class="editor" id="editor" placeholder="Start typing..." spellcheck="false"></textarea>
+                <textarea class="editor" id="editor" name="editor" placeholder="Start typing..." spellcheck="false"></textarea>
             </div>
             <div class="statusbar">
                 <button class="btn-files" id="btnFiles" onclick="toggleSidebar()">files</button>
@@ -663,7 +663,7 @@
     <div class="search-backdrop" id="searchBackdrop"></div>
     <div class="search-results" id="searchResults">
         <div class="search-results-header">
-            <input class="search-input" id="searchInput" type="text" placeholder="search..." spellcheck="false">
+            <input class="search-input" id="searchInput" name="search" type="text" placeholder="search..." spellcheck="false">
             <span class="search-results-count" id="searchCount"></span>
             <button class="btn-search-close" onclick="closeSearch()" title="Close">&times;</button>
         </div>
