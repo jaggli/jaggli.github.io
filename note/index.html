@@ -644,6 +644,7 @@
                 <span class="status-hint" onclick="openSearch()" style="cursor:pointer">ctrl+p search</span>
                 <div class="status-right">
                     <span id="charCount">0 chars</span>
+                    <button class="btn-share" onclick="downloadNote()">download</button>
                     <button class="btn-share" id="btnShare" onclick="shareNote()">share</button>
                 </div>
             </div>
@@ -1042,6 +1043,18 @@
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
             const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
             return await new Response(stream).text();
+        }
+
+        function downloadNote() {
+            const note = getActiveNote();
+            if (!note) return;
+            const blob = new Blob([note.content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = note.name;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         async function shareNote() {
