@@ -355,6 +355,7 @@
             flex: 1;
             display: flex;
             overflow: hidden;
+            position: relative;
         }
 
         .gutter {
@@ -375,25 +376,67 @@
             padding: 0 12px 0 8px;
         }
 
-        .editor {
+        .editor-area {
             flex: 1;
-            background: var(--bg);
-            color: var(--text);
-            border: none;
-            outline: none;
-            resize: none;
+            display: grid;
+            overflow: hidden;
+        }
+
+        .editor-area > * {
+            grid-area: 1 / 1 / 2 / 2;
             font-family: var(--font);
             font-size: 14px;
             line-height: 1.5;
             padding: 10px 16px;
             tab-size: 2;
-            overflow: auto;
             white-space: pre;
+            border: none;
+            margin: 0;
+        }
+
+        .editor {
+            background: transparent;
+            color: transparent;
+            caret-color: var(--text);
+            outline: none;
+            resize: none;
+            overflow: auto;
+            z-index: 1;
         }
 
         .editor::placeholder {
             color: var(--gutter);
         }
+
+        .editor::selection {
+            background: rgba(137, 180, 250, 0.3);
+        }
+
+        .highlight-layer {
+            background: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Syntax highlighting tokens */
+        .hl-kw { color: #cba6f7; }
+        .hl-str { color: #a6e3a1; }
+        .hl-num { color: #fab387; }
+        .hl-cmt { color: #6c7086; font-style: italic; }
+        .hl-op { color: #89dceb; }
+        .hl-punc { color: #9399b2; }
+        .hl-bi { color: #f9e2af; }
+        .hl-fn { color: #89b4fa; }
+        .hl-prop { color: #94e2d5; }
+        .hl-regex { color: #f38ba8; }
+        .hl-tag { color: #f38ba8; }
+        .hl-attr { color: #fab387; }
+        .hl-key { color: #89b4fa; }
+        .hl-h { color: #cba6f7; font-weight: bold; }
+        .hl-bold { font-weight: bold; }
+        .hl-link { color: #89b4fa; text-decoration: underline; }
 
         /* Status bar */
         .statusbar {
@@ -636,7 +679,10 @@
         <div class="editor-container">
             <div class="editor-wrap">
                 <div class="gutter" id="gutter"></div>
-                <textarea class="editor" id="editor" name="editor" placeholder="Start typing..." spellcheck="false"></textarea>
+                <div class="editor-area">
+                    <pre class="highlight-layer" id="highlightLayer" aria-hidden="true"></pre>
+                    <textarea class="editor" id="editor" name="editor" placeholder="Start typing..." spellcheck="false"></textarea>
+                </div>
             </div>
             <div class="statusbar">
                 <button class="btn-files" id="btnFiles" onclick="toggleSidebar()">files</button>
@@ -770,6 +816,7 @@
             saveState();
             updateLineNumbers();
             updateCharCount();
+            updateHighlight();
             scheduleUrlUpdate();
         }
 
@@ -785,6 +832,7 @@
             saveState();
             updateLineNumbers();
             updateCharCount();
+            updateHighlight();
             scheduleUrlUpdate();
         }
 
@@ -915,6 +963,7 @@
                     clearTimeout(saveTimeout);
                     saveTimeout = setTimeout(saveState, 300);
                     scheduleUrlUpdate();
+                    scheduleHighlight();
                 });
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
@@ -954,6 +1003,7 @@
                 editor.disabled = true;
                 btnShare.disabled = true;
             }
+            updateHighlight();
         }
 
         function updateLineNumbers() {
@@ -985,6 +1035,7 @@
             note.updatedAt = Date.now();
             updateLineNumbers();
             updateCharCount();
+            scheduleHighlight();
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(saveState, 300);
             scheduleHistorySnapshot();
@@ -993,6 +1044,8 @@
 
         editor.addEventListener('scroll', () => {
             gutter.scrollTop = editor.scrollTop;
+            highlightLayer.scrollTop = editor.scrollTop;
+            highlightLayer.scrollLeft = editor.scrollLeft;
         });
 
         // --- Tab support ---
@@ -1426,6 +1479,275 @@
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        // --- Syntax highlighting ---
+
+        const highlightLayer = document.getElementById('highlightLayer');
+
+        function getExtension(name) {
+            const dot = name.lastIndexOf('.');
+            return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+        }
+
+        function tokenize(code, rules) {
+            const tokens = [];
+            for (const [regex, cls] of rules) {
+                regex.lastIndex = 0;
+                let m;
+                while ((m = regex.exec(code)) !== null) {
+                    tokens.push({ s: m.index, e: m.index + m[0].length, cls, t: m[0] });
+                }
+            }
+            tokens.sort((a, b) => a.s - b.s);
+            const out = [];
+            let end = 0;
+            for (const t of tokens) {
+                if (t.s >= end) { out.push(t); end = t.e; }
+            }
+            return out;
+        }
+
+        function buildHTML(code, tokens) {
+            let r = '', p = 0;
+            for (const t of tokens) {
+                if (t.s > p) r += escapeHtml(code.substring(p, t.s));
+                r += `<span class="${t.cls}">${escapeHtml(t.t)}</span>`;
+                p = t.e;
+            }
+            if (p < code.length) r += escapeHtml(code.substring(p));
+            return r;
+        }
+
+        const jsKeywords = /\b(abstract|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|if|implements|import|in|instanceof|interface|let|new|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\b/g;
+        const jsBuiltins = /\b(Array|Boolean|Date|Error|JSON|Map|Math|Number|Object|Promise|Proxy|RegExp|Set|String|Symbol|console|document|window|null|undefined|true|false|NaN|Infinity)\b/g;
+        const jsRules = [
+            [/\/\/[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/`(?:[^`\\]|\\.)*`/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\/(?![\/\*])(?:[^\/\\\n]|\\.)+\/[gimsuy]*/g, 'hl-regex'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [jsKeywords, 'hl-kw'],
+            [jsBuiltins, 'hl-bi'],
+            [/\b[a-zA-Z_$][\w$]*(?=\s*\()/g, 'hl-fn'],
+            [/\.[a-zA-Z_$][\w$]*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^~?:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const pyKeywords = /\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b/g;
+        const pyBuiltins = /\b(True|False|None|print|len|range|int|str|float|list|dict|set|tuple|type|isinstance|open|input|map|filter|sorted|enumerate|zip|super|self|cls|__init__|__name__|__main__)\b/g;
+        const pyRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/"""[\s\S]*?"""/g, 'hl-str'],
+            [/'''[\s\S]*?'''/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [pyKeywords, 'hl-kw'],
+            [pyBuiltins, 'hl-bi'],
+            [/\b[a-zA-Z_]\w*(?=\s*\()/g, 'hl-fn'],
+            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^~@:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const cssRules = [
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|s|ms|deg|rad|turn|fr)?\b/g, 'hl-num'],
+            [/#[0-9a-fA-F]{3,8}\b/g, 'hl-num'],
+            [/@[a-z\-]+/g, 'hl-kw'],
+            [/\b(important|inherit|initial|unset|none|auto|flex|grid|block|inline|relative|absolute|fixed|sticky)\b/g, 'hl-kw'],
+            [/[a-z\-]+(?=\s*:)/g, 'hl-fn'],
+            [/[{}();:,]/g, 'hl-punc'],
+        ];
+
+        const htmlBaseRules = [
+            [/<!--[\s\S]*?-->/g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [new RegExp('<\\/?[a-zA-Z][a-zA-Z0-9\\-]*', 'g'), 'hl-tag'],
+            [/\/?>/g, 'hl-tag'],
+            [/\b[a-zA-Z\-:]+(?==)/g, 'hl-attr'],
+            [/&[a-zA-Z]+;|&#\d+;/g, 'hl-bi'],
+        ];
+
+        function highlightHTML(code) {
+            // Find embedded style and script blocks
+            const embedded = [];
+            const blockRanges = [];
+            const blockRe = new RegExp('<(style|script)\\b[^>]*>([\\s\\S]*?)<\\/\\1>', 'gi');
+            let bm;
+            while ((bm = blockRe.exec(code)) !== null) {
+                const tag = bm[1].toLowerCase();
+                const innerStart = bm.index + bm[0].indexOf('>') + 1;
+                const innerEnd = bm.index + bm[0].lastIndexOf('<');
+                blockRanges.push({ s: innerStart, e: innerEnd });
+                const innerCode = code.substring(innerStart, innerEnd);
+                const rules = tag === 'style' ? cssRules : jsRules;
+                const innerTokens = tokenize(innerCode, rules);
+                for (const t of innerTokens) {
+                    t.s += innerStart;
+                    t.e += innerStart;
+                    embedded.push(t);
+                }
+            }
+            // Tokenize HTML structure, excluding inside script/style blocks
+            const htmlTokens = tokenize(code, htmlBaseRules).filter(t => {
+                for (const r of blockRanges) {
+                    if (t.s >= r.s && t.s < r.e) return false;
+                }
+                return true;
+            });
+            const all = embedded.concat(htmlTokens);
+            all.sort((a, b) => a.s - b.s);
+            const merged = [];
+            let end = 0;
+            for (const t of all) {
+                if (t.s >= end) { merged.push(t); end = t.e; }
+            }
+            return buildHTML(code, merged);
+        }
+
+        const jsonRules = [
+            [/"(?:[^"\\]|\\.)*"\s*(?=:)/g, 'hl-key'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/\b(?:true|false|null)\b/g, 'hl-kw'],
+            [/-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g, 'hl-num'],
+            [/[{}()\[\];:,]/g, 'hl-punc'],
+        ];
+
+        const mdRules = [
+            [/^#{1,6}\s+.*/gm, 'hl-h'],
+            [/`[^`\n]+`/g, 'hl-str'],
+            [/```[\s\S]*?```/g, 'hl-str'],
+            [/\*\*[^*]+\*\*/g, 'hl-bold'],
+            [/\[([^\]]+)\]\([^)]+\)/g, 'hl-link'],
+            [/^(\s*[-*+]|\d+\.)\s/gm, 'hl-kw'],
+            [/^>\s.*/gm, 'hl-cmt'],
+        ];
+
+        const shRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'[^']*'/g, 'hl-str'],
+            [/\$\{?[a-zA-Z_]\w*\}?/g, 'hl-bi'],
+            [/\b(if|then|else|elif|fi|for|while|do|done|case|esac|in|function|return|local|export|source|alias|unset|readonly|declare|typeset|eval|exec|set|shift|trap|exit)\b/g, 'hl-kw'],
+            [/\b\d+\b/g, 'hl-num'],
+            [/[|&;><]+/g, 'hl-op'],
+        ];
+
+        const goKeywords = /\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/g;
+        const goBuiltins = /\b(true|false|nil|iota|append|cap|close|copy|delete|imag|len|make|new|panic|print|println|real|recover|string|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|float32|float64|complex64|complex128|byte|rune|bool|error)\b/g;
+        const goRules = [
+            [/\/\/[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/`[^`]*`/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [goKeywords, 'hl-kw'],
+            [goBuiltins, 'hl-bi'],
+            [/\b[a-zA-Z_]\w*(?=\s*\()/g, 'hl-fn'],
+            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const rsKeywords = /\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|type|unsafe|use|where|while|yield)\b/g;
+        const rsBuiltins = /\b(true|false|Some|None|Ok|Err|Vec|String|Box|Rc|Arc|Option|Result|println!|print!|format!|vec!|panic!|todo!|unimplemented!|assert!|assert_eq!|i8|i16|i32|i64|i128|u8|u16|u32|u64|u128|f32|f64|bool|char|str|usize|isize)\b/g;
+        const rsRules = [
+            [/\/\/[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(?:0[xX][\da-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)\b/g, 'hl-num'],
+            [rsKeywords, 'hl-kw'],
+            [rsBuiltins, 'hl-bi'],
+            [/\b[a-zA-Z_]\w*(?=\s*[({])/g, 'hl-fn'],
+            [/\.[a-zA-Z_]\w*/g, 'hl-prop'],
+            [/[+\-*/%=<>!&|^~?:]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const sqlKeywords = /\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|AND|OR|NOT|IN|IS|NULL|AS|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|ALL|DISTINCT|SET|VALUES|INTO|EXISTS|BETWEEN|LIKE|CASE|WHEN|THEN|ELSE|END|BEGIN|COMMIT|ROLLBACK|PRIMARY|KEY|FOREIGN|REFERENCES|CONSTRAINT|DEFAULT|CHECK|UNIQUE|CASCADE|IF|REPLACE|TRIGGER|FUNCTION|PROCEDURE|DECLARE|RETURNS|RETURN|WITH|RECURSIVE|EXPLAIN|ANALYZE|ASC|DESC|COUNT|SUM|AVG|MIN|MAX|COALESCE|CAST|CONVERT)\b/gi;
+        const sqlRules = [
+            [/--[^\n]*/g, 'hl-cmt'],
+            [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
+            [sqlKeywords, 'hl-kw'],
+            [/\b(TRUE|FALSE|NULL)\b/gi, 'hl-bi'],
+            [/[+\-*/%=<>!&|]+/g, 'hl-op'],
+            [/[{}()\[\];,.]/g, 'hl-punc'],
+        ];
+
+        const yamlRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/^[a-zA-Z_][a-zA-Z0-9_\-]*(?=\s*:)/gm, 'hl-key'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(true|false|null|yes|no)\b/gi, 'hl-kw'],
+            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
+        ];
+
+        const tomlRules = [
+            [/#[^\n]*/g, 'hl-cmt'],
+            [/\[+[^\]]*\]+/g, 'hl-tag'],
+            [/^[a-zA-Z_][a-zA-Z0-9_\-]*(?=\s*=)/gm, 'hl-key'],
+            [/"""[\s\S]*?"""/g, 'hl-str'],
+            [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
+            [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
+            [/\b(true|false)\b/g, 'hl-kw'],
+            [/\b\d+(?:\.\d+)?\b/g, 'hl-num'],
+        ];
+
+        const langRules = {
+            js: jsRules, jsx: jsRules, ts: jsRules, tsx: jsRules, mjs: jsRules, cjs: jsRules, mts: jsRules, cts: jsRules,
+            py: pyRules, pyi: pyRules, pyw: pyRules,
+            css: cssRules, scss: cssRules, less: cssRules, sass: cssRules,
+            json: jsonRules, jsonl: jsonRules, json5: jsonRules,
+            md: mdRules, markdown: mdRules,
+            sh: shRules, bash: shRules, zsh: shRules, fish: shRules,
+            go: goRules,
+            rs: rsRules,
+            sql: sqlRules,
+            yaml: yamlRules, yml: yamlRules,
+            toml: tomlRules,
+        };
+
+        const htmlExts = new Set(['html', 'htm', 'xml', 'svg', 'xsl']);
+
+        function highlightCode(code, name) {
+            try {
+                const ext = getExtension(name);
+                if (htmlExts.has(ext)) return highlightHTML(code);
+                const rules = langRules[ext];
+                if (!rules) return escapeHtml(code);
+                return buildHTML(code, tokenize(code, rules));
+            } catch (e) {
+                console.error('Highlight error:', e);
+                return escapeHtml(code);
+            }
+        }
+
+        function updateHighlight() {
+            const note = getActiveNote();
+            if (!note) {
+                highlightLayer.innerHTML = '';
+                return;
+            }
+            highlightLayer.innerHTML = highlightCode(note.content, note.name) + '\n';
+        }
+
+        let highlightTimeout = null;
+        function scheduleHighlight() {
+            clearTimeout(highlightTimeout);
+            highlightTimeout = setTimeout(updateHighlight, 30);
         }
 
         // --- Drag & drop files ---
