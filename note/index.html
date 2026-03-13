@@ -828,8 +828,10 @@
         async function confirmDelete(id) {
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
-            const confirmed = await showModal(`Delete "${note.name}"?`, 'delete', 'cancel', true);
-            if (!confirmed) return;
+            if (note.content) {
+                const confirmed = await showModal(`Delete "${note.name}"?`, 'delete', 'cancel', true);
+                if (!confirmed) return;
+            }
             const idx = state.notes.findIndex(n => n.id === id);
             if (idx === -1) return;
             state.notes.splice(idx, 1);
