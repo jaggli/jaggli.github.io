@@ -313,8 +313,12 @@
             cursor: pointer;
         }
 
-        .note-item-input:focus {
+        .note-item-input.editing {
             cursor: text;
+            background: var(--mantle);
+            border-radius: 3px;
+            padding: 0 4px;
+            margin: 0 -4px;
         }
 
         .note-item .btn-delete {
@@ -886,9 +890,10 @@
                     if (state.activeId !== note.id) {
                         e.preventDefault();
                         switchNote(note.id);
-                    } else {
+                    } else if (input.readOnly) {
                         e.preventDefault();
                         input.readOnly = false;
+                        input.classList.add('editing');
                         input.focus();
                         setTimeout(() => {
                             const dot = input.value.lastIndexOf('.');
@@ -916,6 +921,7 @@
                 });
                 input.addEventListener('blur', () => {
                     input.readOnly = true;
+                    input.classList.remove('editing');
                 });
 
                 const btn = document.createElement('button');
