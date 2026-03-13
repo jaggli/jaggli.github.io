@@ -221,7 +221,8 @@
             color: var(--subtext);
         }
 
-        .search-result-item:hover {
+        .search-result-item:hover,
+        .search-result-item.selected {
             background: var(--overlay);
             color: var(--text);
         }
@@ -230,6 +231,11 @@
             color: var(--blue);
             font-size: 12px;
             margin-bottom: 2px;
+        }
+
+        .search-result-name mark {
+            background: none;
+            color: var(--green);
         }
 
         .search-result-snippet {
@@ -1149,21 +1155,23 @@
             searchInput.value = '';
         });
 
+        const MAX_LINES_PER_NOTE = 500;
+        const MAX_MATCHES_PER_NOTE = 3;
+        const MAX_RESULTS = 20;
+        let searchSelectedIdx = -1;
+
         function fuzzyMatch(text, query) {
             const lower = text.toLowerCase();
             const q = query.toLowerCase();
             let qi = 0;
-            let lastIdx = -1;
             const indices = [];
             for (let i = 0; i < lower.length && qi < q.length; i++) {
                 if (lower[i] === q[qi]) {
                     indices.push(i);
-                    lastIdx = i;
                     qi++;
                 }
             }
             if (qi < q.length) return null;
-            // Score: prefer consecutive matches and earlier matches
             let score = 0;
             for (let i = 0; i < indices.length; i++) {
                 if (i > 0 && indices[i] === indices[i - 1] + 1) score += 2;
@@ -1173,51 +1181,74 @@
             return { indices, score };
         }
 
+        function exactMatch(text, query) {
+            const idx = text.toLowerCase().indexOf(query.toLowerCase());
+            if (idx === -1) return null;
+            const indices = [];
+            for (let i = idx; i < idx + query.length; i++) indices.push(i);
+            // Exact matches score higher than fuzzy
+            const score = query.length * 3 + (idx < 10 ? 5 : 0);
+            return { indices, score };
+        }
+
+        function matchLine(text, query) {
+            return exactMatch(text, query) || fuzzyMatch(text, query);
+        }
+
         function searchNotes(query) {
             if (!query.trim()) {
                 searchCount.textContent = '';
                 searchResultsList.innerHTML = '';
+                searchSelectedIdx = -1;
                 return;
             }
             const results = [];
             for (const note of state.notes) {
-                // Search in name
-                const nameMatch = fuzzyMatch(note.name, query);
-                // Search in content — find best matching line
+                const nameMatch = matchLine(note.name, query);
+                // Search content lines (capped)
                 const lines = note.content.split('\n');
-                let bestLine = null;
-                let bestLineScore = 0;
-                let bestLineIdx = -1;
-                let bestLineIndices = null;
-                for (let i = 0; i < lines.length; i++) {
-                    const m = fuzzyMatch(lines[i], query);
-                    if (m && m.score > bestLineScore) {
-                        bestLine = lines[i];
-                        bestLineScore = m.score;
-                        bestLineIdx = i;
-                        bestLineIndices = m.indices;
+                const lineLimit = Math.min(lines.length, MAX_LINES_PER_NOTE);
+                const lineMatches = [];
+                for (let i = 0; i < lineLimit; i++) {
+                    const m = matchLine(lines[i], query);
+                    if (m) {
+                        // Compute char offset for this line
+                        let offset = 0;
+                        for (let j = 0; j < i; j++) offset += lines[j].length + 1;
+                        lineMatches.push({
+                            line: lines[i],
+                            lineNum: i + 1,
+                            lineIndices: m.indices,
+                            score: m.score,
+                            charOffset: offset + m.indices[0]
+                        });
                     }
                 }
-                // Compute character offset of the best matching line
-                let bestLineOffset = 0;
-                if (bestLineIdx >= 0) {
-                    for (let i = 0; i < bestLineIdx; i++) {
-                        bestLineOffset += lines[i].length + 1;
-                    }
-                }
-                const totalScore = (nameMatch ? nameMatch.score * 2 : 0) + bestLineScore;
+                // Sort line matches by score, keep top N
+                lineMatches.sort((a, b) => b.score - a.score);
+                const topLines = lineMatches.slice(0, MAX_MATCHES_PER_NOTE);
+
+                const bestLineScore = topLines.length ? topLines[0].score : 0;
+                // Filename matches weighted 4x
+                const nameScore = nameMatch ? nameMatch.score * 4 : 0;
+                const totalScore = nameScore + bestLineScore;
+                // Active note gets a boost
+                const activeBoost = note.id === state.activeId ? 1000 : 0;
+
                 if (totalScore > 0) {
                     results.push({
                         note,
-                        score: totalScore,
-                        line: bestLine,
-                        lineNum: bestLineIdx + 1,
-                        lineIndices: bestLineIndices,
-                        charOffset: bestLineIdx >= 0 && bestLineIndices ? bestLineOffset + bestLineIndices[0] : 0
+                        score: totalScore + activeBoost,
+                        nameMatch,
+                        lines: topLines
                     });
                 }
+
+                // Early termination: if we have enough high-quality results, stop
+                if (results.length >= MAX_RESULTS * 2) break;
             }
             results.sort((a, b) => b.score - a.score);
+            results.length = Math.min(results.length, MAX_RESULTS);
             showSearchResults(results, query);
         }
 
@@ -1225,7 +1256,6 @@
             if (!indices || !indices.length) return escapeHtml(text);
             let result = '';
             let last = 0;
-            // Group consecutive indices
             let groups = [];
             let start = indices[0], end = indices[0];
             for (let i = 1; i < indices.length; i++) {
@@ -1251,33 +1281,44 @@
             searchBackdrop.classList.add('visible');
             searchCount.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
             searchResultsList.innerHTML = '';
+            searchSelectedIdx = -1;
             if (results.length === 0) {
                 searchResultsList.innerHTML = '<div class="search-no-results">no matches</div>';
                 return;
             }
-            for (const r of results) {
+            for (let ri = 0; ri < results.length; ri++) {
+                const r = results[ri];
                 const div = document.createElement('div');
                 div.className = 'search-result-item';
+                div.dataset.idx = ri;
                 const nameDiv = document.createElement('div');
                 nameDiv.className = 'search-result-name';
-                nameDiv.textContent = r.note.name + (r.lineNum > 0 ? ':' + r.lineNum : '');
-                const snippetDiv = document.createElement('div');
-                snippetDiv.className = 'search-result-snippet';
-                if (r.line !== null) {
-                    const trimmed = r.line.length > 120 ? r.line.slice(0, 120) : r.line;
-                    snippetDiv.innerHTML = highlightFuzzy(trimmed, r.lineIndices);
+                if (r.nameMatch) {
+                    nameDiv.innerHTML = highlightFuzzy(r.note.name, r.nameMatch.indices);
+                } else {
+                    nameDiv.textContent = r.note.name;
                 }
                 div.appendChild(nameDiv);
-                div.appendChild(snippetDiv);
+                // Show up to 3 matching lines
+                const linesToShow = r.lines.length ? r.lines : [];
+                for (const lm of linesToShow) {
+                    const snippetDiv = document.createElement('div');
+                    snippetDiv.className = 'search-result-snippet';
+                    const prefix = lm.lineNum + ': ';
+                    const trimmed = lm.line.length > 120 ? lm.line.slice(0, 120) : lm.line;
+                    snippetDiv.innerHTML = '<span style="color:var(--gutter)">' + escapeHtml(prefix) + '</span>' + highlightFuzzy(trimmed, lm.lineIndices);
+                    div.appendChild(snippetDiv);
+                }
+                // Use first line match for jump target, or just switch to note
+                const target = linesToShow[0] || null;
                 div.addEventListener('click', () => {
                     switchNote(r.note.id);
                     closeSearch();
                     searchInput.value = '';
                     editor.focus();
-                    if (r.charOffset > 0) {
-                        editor.setSelectionRange(r.charOffset, r.charOffset);
-                        // Scroll the cursor into view
-                        const textBefore = editor.value.substring(0, r.charOffset);
+                    if (target && target.charOffset > 0) {
+                        editor.setSelectionRange(target.charOffset, target.charOffset);
+                        const textBefore = editor.value.substring(0, target.charOffset);
                         const lineNum = textBefore.split('\n').length;
                         const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
                         editor.scrollTop = Math.max(0, (lineNum - 3) * lineHeight);
@@ -1285,11 +1326,26 @@
                 });
                 searchResultsList.appendChild(div);
             }
+            // Auto-select first result
+            searchSelectedIdx = 0;
+            updateSearchSelection();
+        }
+
+        function updateSearchSelection() {
+            const items = searchResultsList.querySelectorAll('.search-result-item');
+            items.forEach((el, i) => {
+                el.classList.toggle('selected', i === searchSelectedIdx);
+            });
+            // Scroll selected into view
+            if (items[searchSelectedIdx]) {
+                items[searchSelectedIdx].scrollIntoView({ block: 'nearest' });
+            }
         }
 
         function closeSearch() {
             searchResults.classList.remove('visible');
             searchBackdrop.classList.remove('visible');
+            searchSelectedIdx = -1;
         }
 
         searchInput.addEventListener('input', () => {
@@ -1298,6 +1354,23 @@
         });
 
         searchInput.addEventListener('keydown', (e) => {
+            const items = searchResultsList.querySelectorAll('.search-result-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (items.length) {
+                    searchSelectedIdx = (searchSelectedIdx + 1) % items.length;
+                    updateSearchSelection();
+                }
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (items.length) {
+                    searchSelectedIdx = (searchSelectedIdx - 1 + items.length) % items.length;
+                    updateSearchSelection();
+                }
+                return;
+            }
             if (e.key === 'Escape') {
                 e.preventDefault();
                 closeSearch();
@@ -1307,8 +1380,8 @@
             }
             if (e.key === 'Enter') {
                 e.preventDefault();
-                const first = searchResultsList.querySelector('.search-result-item');
-                if (first) first.click();
+                const selected = items[searchSelectedIdx] || items[0];
+                if (selected) selected.click();
             }
         });
 
