@@ -67,7 +67,7 @@
 
         .sidebar-header {
             padding: 12px 14px 8px;
-            font-size: 11px;
+            font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 1px;
             color: var(--subtext);
@@ -92,10 +92,165 @@
             background: var(--overlay);
         }
 
+        .search-input {
+            width: 100%;
+            background: var(--overlay);
+            border: none;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 13px;
+            padding: 6px 14px;
+            outline: none;
+        }
+
+        .search-input::placeholder {
+            color: var(--gutter);
+        }
+
+        .search-input:focus {
+            background: var(--surface);
+        }
+
+        .search-results {
+            display: none;
+            position: fixed;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            max-width: 90%;
+            max-height: 70vh;
+            background: var(--sidebar);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            z-index: 210;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .search-results .search-results-header {
+            padding: 0;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-results .search-results-header .search-input {
+            border: none;
+            border-radius: 8px 0 0 0;
+            padding: 10px 14px;
+            background: var(--overlay);
+        }
+
+        .search-results .search-results-header .search-input:focus {
+            background: var(--surface);
+        }
+
+        .search-results.visible {
+            display: flex;
+        }
+
+        .search-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 209;
+        }
+
+        .search-backdrop.visible {
+            display: block;
+        }
+
+        .search-results-header {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-results-header .search-input {
+            flex: 1;
+            border-bottom: 1px solid var(--border);
+            border-radius: 4px;
+        }
+
+        .search-results-count {
+            font-size: 11px;
+            color: var(--gutter);
+            white-space: nowrap;
+            padding-left: 4px;
+        }
+
+        .search-results-list {
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .search-results-list:empty {
+            display: none;
+        }
+
+        .search-result-item {
+            padding: 6px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--subtext);
+        }
+
+        .search-result-item:hover {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
+        .search-result-name {
+            color: var(--blue);
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+
+        .search-result-snippet {
+            font-size: 12px;
+            color: var(--subtext);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .search-result-snippet mark {
+            background: none;
+            color: var(--yellow);
+        }
+
+        .search-no-results {
+            padding: 16px 14px;
+            font-size: 13px;
+            color: var(--gutter);
+        }
+
+        .btn-search-close {
+            background: none;
+            border: none;
+            color: var(--subtext);
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 4px 10px;
+            border-radius: 3px;
+        }
+
+        .btn-search-close:hover {
+            color: var(--text);
+            background: var(--overlay);
+        }
+
         .note-list {
             flex: 1;
             overflow-y: auto;
-            padding: 4px 0;
+            padding: 8px 0 4px;
         }
 
         .note-item {
@@ -222,6 +377,15 @@
             gap: 16px;
         }
 
+        .status-hint {
+            color: var(--gutter);
+            font-size: 12px;
+        }
+
+        .status-hint:hover {
+            color: var(--subtext);
+        }
+
         .status-right {
             margin-left: auto;
             display: flex;
@@ -310,6 +474,32 @@
         .modal-btn-danger:hover {
             background: var(--red);
             color: var(--sidebar);
+        }
+
+        /* Drop overlay */
+        .drop-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(137, 180, 250, 0.08);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .drop-overlay.visible {
+            display: flex;
+        }
+
+        .drop-label {
+            padding: 16px 32px;
+            border: 2px dashed var(--blue);
+            border-radius: 12px;
+            color: var(--blue);
+            font-family: var(--font);
+            font-size: 16px;
+            background: var(--sidebar);
         }
 
         /* Scrollbar */
@@ -414,6 +604,7 @@
             </div>
             <div class="statusbar">
                 <button class="btn-files" id="btnFiles" onclick="toggleSidebar()">files</button>
+                <span class="status-hint" onclick="openSearch()" style="cursor:pointer">ctrl+p search</span>
                 <div class="status-right">
                     <span id="charCount">0 chars</span>
                     <button class="btn-share" id="btnShare" onclick="shareNote()">share</button>
@@ -430,6 +621,20 @@
                 <button class="modal-btn modal-btn-danger" id="modalConfirm">delete</button>
             </div>
         </div>
+    </div>
+
+    <div class="search-backdrop" id="searchBackdrop"></div>
+    <div class="search-results" id="searchResults">
+        <div class="search-results-header">
+            <input class="search-input" id="searchInput" type="text" placeholder="search..." spellcheck="false">
+            <span class="search-results-count" id="searchCount"></span>
+            <button class="btn-search-close" onclick="closeSearch()" title="Close">&times;</button>
+        </div>
+        <div class="search-results-list" id="searchResultsList"></div>
+    </div>
+
+    <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-label">drop files to import</div>
     </div>
 
     <script>
@@ -566,7 +771,16 @@
             render();
             if (focusName) {
                 const input = noteList.querySelector('.note-item.active .note-item-input');
-                if (input) input.focus();
+                if (input) {
+                    input.readOnly = false;
+                    input.focus();
+                    const dot = input.value.lastIndexOf('.');
+                    if (dot > 0) {
+                        input.setSelectionRange(0, dot);
+                    } else {
+                        input.select();
+                    }
+                }
             } else {
                 editor.focus();
             }
@@ -629,18 +843,26 @@
                 input.className = 'note-item-input';
                 input.value = note.name;
                 input.spellcheck = false;
+                input.readOnly = note.id !== state.activeId;
                 input.addEventListener('click', (e) => {
                     if (state.activeId !== note.id) {
                         e.preventDefault();
                         switchNote(note.id);
                     }
                 });
-                input.addEventListener('focus', () => {
-                    const dot = input.value.lastIndexOf('.');
-                    if (dot > 0) {
-                        input.setSelectionRange(0, dot);
-                    } else {
-                        input.select();
+                input.addEventListener('dblclick', (e) => {
+                    if (note.id === state.activeId) {
+                        e.preventDefault();
+                        input.readOnly = false;
+                        input.focus();
+                        setTimeout(() => {
+                            const dot = input.value.lastIndexOf('.');
+                            if (dot > 0) {
+                                input.setSelectionRange(0, dot);
+                            } else {
+                                input.select();
+                            }
+                        }, 0);
                     }
                 });
                 input.addEventListener('input', () => {
@@ -656,6 +878,9 @@
                         input.blur();
                         editor.focus();
                     }
+                });
+                input.addEventListener('blur', () => {
+                    input.readOnly = true;
                 });
 
                 const btn = document.createElement('button');
@@ -802,7 +1027,8 @@
             return new Promise((resolve) => {
                 modalText.textContent = text;
                 modalConfirm.textContent = confirmLabel;
-                modalCancel.textContent = cancelLabel;
+                modalCancel.textContent = cancelLabel || '';
+                modalCancel.style.display = cancelLabel ? '' : 'none';
                 modalConfirm.className = danger ? 'modal-btn modal-btn-danger' : 'modal-btn';
                 modalOverlay.classList.add('visible');
 
@@ -868,12 +1094,270 @@
             }
         }
 
+        // --- Search ---
+
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        const searchResultsList = document.getElementById('searchResultsList');
+        const searchCount = document.getElementById('searchCount');
+        const searchBackdrop = document.getElementById('searchBackdrop');
+        let searchDebounce = null;
+
+        function openSearch() {
+            searchResults.classList.add('visible');
+            searchBackdrop.classList.add('visible');
+            searchInput.value = '';
+            searchCount.textContent = '';
+            searchResultsList.innerHTML = '';
+            searchInput.focus();
+        }
+
+        searchBackdrop.addEventListener('click', () => {
+            closeSearch();
+            searchInput.value = '';
+        });
+
+        function fuzzyMatch(text, query) {
+            const lower = text.toLowerCase();
+            const q = query.toLowerCase();
+            let qi = 0;
+            let lastIdx = -1;
+            const indices = [];
+            for (let i = 0; i < lower.length && qi < q.length; i++) {
+                if (lower[i] === q[qi]) {
+                    indices.push(i);
+                    lastIdx = i;
+                    qi++;
+                }
+            }
+            if (qi < q.length) return null;
+            // Score: prefer consecutive matches and earlier matches
+            let score = 0;
+            for (let i = 0; i < indices.length; i++) {
+                if (i > 0 && indices[i] === indices[i - 1] + 1) score += 2;
+                score += 1;
+                if (indices[i] < 10) score += 1;
+            }
+            return { indices, score };
+        }
+
+        function searchNotes(query) {
+            if (!query.trim()) {
+                searchCount.textContent = '';
+                searchResultsList.innerHTML = '';
+                return;
+            }
+            const results = [];
+            for (const note of state.notes) {
+                // Search in name
+                const nameMatch = fuzzyMatch(note.name, query);
+                // Search in content — find best matching line
+                const lines = note.content.split('\n');
+                let bestLine = null;
+                let bestLineScore = 0;
+                let bestLineIdx = -1;
+                let bestLineIndices = null;
+                for (let i = 0; i < lines.length; i++) {
+                    const m = fuzzyMatch(lines[i], query);
+                    if (m && m.score > bestLineScore) {
+                        bestLine = lines[i];
+                        bestLineScore = m.score;
+                        bestLineIdx = i;
+                        bestLineIndices = m.indices;
+                    }
+                }
+                // Compute character offset of the best matching line
+                let bestLineOffset = 0;
+                if (bestLineIdx >= 0) {
+                    for (let i = 0; i < bestLineIdx; i++) {
+                        bestLineOffset += lines[i].length + 1;
+                    }
+                }
+                const totalScore = (nameMatch ? nameMatch.score * 2 : 0) + bestLineScore;
+                if (totalScore > 0) {
+                    results.push({
+                        note,
+                        score: totalScore,
+                        line: bestLine,
+                        lineNum: bestLineIdx + 1,
+                        lineIndices: bestLineIndices,
+                        charOffset: bestLineIdx >= 0 && bestLineIndices ? bestLineOffset + bestLineIndices[0] : 0
+                    });
+                }
+            }
+            results.sort((a, b) => b.score - a.score);
+            showSearchResults(results, query);
+        }
+
+        function highlightFuzzy(text, indices) {
+            if (!indices || !indices.length) return escapeHtml(text);
+            let result = '';
+            let last = 0;
+            // Group consecutive indices
+            let groups = [];
+            let start = indices[0], end = indices[0];
+            for (let i = 1; i < indices.length; i++) {
+                if (indices[i] === end + 1) {
+                    end = indices[i];
+                } else {
+                    groups.push([start, end]);
+                    start = end = indices[i];
+                }
+            }
+            groups.push([start, end]);
+            for (const [s, e] of groups) {
+                result += escapeHtml(text.slice(last, s));
+                result += '<mark>' + escapeHtml(text.slice(s, e + 1)) + '</mark>';
+                last = e + 1;
+            }
+            result += escapeHtml(text.slice(last));
+            return result;
+        }
+
+        function showSearchResults(results, query) {
+            searchResults.classList.add('visible');
+            searchBackdrop.classList.add('visible');
+            searchCount.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
+            searchResultsList.innerHTML = '';
+            if (results.length === 0) {
+                searchResultsList.innerHTML = '<div class="search-no-results">no matches</div>';
+                return;
+            }
+            for (const r of results) {
+                const div = document.createElement('div');
+                div.className = 'search-result-item';
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'search-result-name';
+                nameDiv.textContent = r.note.name + (r.lineNum > 0 ? ':' + r.lineNum : '');
+                const snippetDiv = document.createElement('div');
+                snippetDiv.className = 'search-result-snippet';
+                if (r.line !== null) {
+                    const trimmed = r.line.length > 120 ? r.line.slice(0, 120) : r.line;
+                    snippetDiv.innerHTML = highlightFuzzy(trimmed, r.lineIndices);
+                }
+                div.appendChild(nameDiv);
+                div.appendChild(snippetDiv);
+                div.addEventListener('click', () => {
+                    switchNote(r.note.id);
+                    closeSearch();
+                    searchInput.value = '';
+                    editor.focus();
+                    if (r.charOffset > 0) {
+                        editor.setSelectionRange(r.charOffset, r.charOffset);
+                        // Scroll the cursor into view
+                        const textBefore = editor.value.substring(0, r.charOffset);
+                        const lineNum = textBefore.split('\n').length;
+                        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+                        editor.scrollTop = Math.max(0, (lineNum - 3) * lineHeight);
+                    }
+                });
+                searchResultsList.appendChild(div);
+            }
+        }
+
+        function closeSearch() {
+            searchResults.classList.remove('visible');
+            searchBackdrop.classList.remove('visible');
+        }
+
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => searchNotes(searchInput.value), 150);
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeSearch();
+                searchInput.value = '';
+                searchInput.blur();
+                editor.focus();
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const first = searchResultsList.querySelector('.search-result-item');
+                if (first) first.click();
+            }
+        });
+
+        // Cmd/Ctrl+P or Cmd/Ctrl+F opens search, Escape closes it
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'f')) {
+                e.preventDefault();
+                openSearch();
+                searchInput.select();
+            }
+            if (e.key === 'Escape' && searchResults.classList.contains('visible')) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeSearch();
+                searchInput.value = '';
+                editor.focus();
+            }
+        });
+
         // --- Utilities ---
 
         function escapeHtml(str) {
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        // --- Drag & drop files ---
+
+        const dropOverlay = document.getElementById('dropOverlay');
+        let dragCounter = 0;
+
+        document.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            if (dragCounter === 1) dropOverlay.classList.add('visible');
+        });
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                dropOverlay.classList.remove('visible');
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dropOverlay.classList.remove('visible');
+            const files = e.dataTransfer.files;
+            if (!files.length) return;
+            const unsupported = [];
+            for (const file of files) {
+                if (!file.type.startsWith('text/') && !isTextFilename(file.name)) {
+                    unsupported.push(file.name);
+                    continue;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    createNote(file.name, reader.result);
+                    render();
+                };
+                reader.readAsText(file);
+            }
+            if (unsupported.length) {
+                showModal(
+                    'Unsupported file' + (unsupported.length > 1 ? 's' : '') + ': ' + unsupported.join(', ') + '. Only text files are supported.',
+                    'ok', null
+                );
+            }
+        });
+
+        function isTextFilename(name) {
+            const textExts = ['.txt','.md','.json','.js','.ts','.css','.html','.xml','.csv','.yaml','.yml','.toml','.ini','.cfg','.conf','.sh','.bash','.zsh','.py','.rb','.go','.rs','.java','.c','.h','.cpp','.hpp','.swift','.kt','.sql','.log','.env','.gitignore','.editorconfig','.prettierrc','.eslintrc','.svg'];
+            const lower = name.toLowerCase();
+            return textExts.some(ext => lower.endsWith(ext));
         }
 
         // --- Init ---
