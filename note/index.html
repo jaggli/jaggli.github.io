@@ -881,15 +881,12 @@
                 input.className = 'note-item-input';
                 input.value = note.name;
                 input.spellcheck = false;
-                input.readOnly = note.id !== state.activeId;
+                input.readOnly = true;
                 input.addEventListener('click', (e) => {
                     if (state.activeId !== note.id) {
                         e.preventDefault();
                         switchNote(note.id);
-                    }
-                });
-                input.addEventListener('dblclick', (e) => {
-                    if (note.id === state.activeId) {
+                    } else {
                         e.preventDefault();
                         input.readOnly = false;
                         input.focus();
