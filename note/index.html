@@ -59,12 +59,30 @@
         /* Sidebar */
         .sidebar {
             width: 200px;
-            min-width: 200px;
+            min-width: 120px;
+            max-width: 50vw;
             background: var(--sidebar);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar-resize {
+            position: absolute;
+            top: 0;
+            right: -4px;
+            width: 8px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 10;
+        }
+
+        .sidebar-resize:hover,
+        .sidebar-resize.active {
+            background: var(--blue);
+            opacity: 0.4;
         }
 
         .sidebar-header {
@@ -577,6 +595,10 @@
                 border-right: none;
             }
 
+            .sidebar-resize {
+                display: none;
+            }
+
             .sidebar-close {
                 display: block;
             }
@@ -590,6 +612,7 @@
 <body>
     <div class="app">
         <div class="sidebar">
+            <div class="sidebar-resize" id="sidebarResize"></div>
             <div class="sidebar-header">
                 <span>notes</span>
                 <span style="margin-left:auto;display:flex;gap:8px">
@@ -606,6 +629,7 @@
             </div>
             <div class="statusbar">
                 <button class="btn-files" id="btnFiles" onclick="toggleSidebar()">files</button>
+                <span class="status-hint" onclick="createNote()" style="cursor:pointer">ctrl+n new</span>
                 <span class="status-hint" onclick="openSearch()" style="cursor:pointer">ctrl+p search</span>
                 <div class="status-right">
                     <span id="charCount">0 chars</span>
@@ -835,8 +859,13 @@
             updateCharCount();
         }
 
+        function sortNotes() {
+            state.notes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        }
+
         function renderNoteList() {
             noteList.innerHTML = '';
+            sortNotes();
             for (const note of state.notes) {
                 const div = document.createElement('div');
                 div.className = 'note-item' + (note.id === state.activeId ? ' active' : '');
@@ -976,12 +1005,12 @@
                 e.preventDefault();
                 redo();
             }
-            if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-                e.preventDefault();
-                createNote(undefined, undefined, true);
-            }
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault(); // prevent browser save dialog
+            }
+            if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'n') {
+                e.preventDefault();
+                createNote();
             }
         });
 
@@ -1342,9 +1371,31 @@
                     continue;
                 }
                 const reader = new FileReader();
-                reader.onload = () => {
-                    createNote(file.name, reader.result);
-                    render();
+                reader.onload = async () => {
+                    const existing = state.notes.find(n => n.name === file.name);
+                    if (existing) {
+                        const update = await showModal(
+                            `"${file.name}" already exists.`,
+                            'update',
+                            'new file'
+                        );
+                        if (update) {
+                            existing.content = reader.result;
+                            existing.updatedAt = Date.now();
+                            state.activeId = existing.id;
+                            saveState();
+                            render();
+                        } else {
+                            const dot = file.name.lastIndexOf('.');
+                            let base = dot > 0 ? file.name.slice(0, dot) : file.name;
+                            let ext = dot > 0 ? file.name.slice(dot) : '';
+                            let num = 1;
+                            while (state.notes.some(n => n.name === `${base}${num}${ext}`)) num++;
+                            createNote(`${base}${num}${ext}`, reader.result);
+                        }
+                    } else {
+                        createNote(file.name, reader.result);
+                    }
                 };
                 reader.readAsText(file);
             }
@@ -1361,6 +1412,33 @@
             const lower = name.toLowerCase();
             return textExts.some(ext => lower.endsWith(ext));
         }
+
+        // --- Sidebar resize ---
+
+        const sidebarResize = document.getElementById('sidebarResize');
+        const SIDEBAR_WIDTH_KEY = 'notepad_sidebar_width';
+
+        (function restoreSidebarWidth() {
+            const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+            if (saved) sidebar.style.width = saved + 'px';
+        })();
+
+        sidebarResize.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            sidebarResize.classList.add('active');
+            const onMove = (e) => {
+                const w = Math.min(Math.max(e.clientX, 120), window.innerWidth * 0.5);
+                sidebar.style.width = w + 'px';
+            };
+            const onUp = () => {
+                sidebarResize.classList.remove('active');
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                localStorage.setItem(SIDEBAR_WIDTH_KEY, parseInt(sidebar.style.width));
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
 
         // --- Init ---
 
