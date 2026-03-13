@@ -1441,6 +1441,34 @@
             document.addEventListener('mouseup', onUp);
         });
 
+        // --- Cross-tab sync ---
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === STORAGE_KEY && e.newValue) {
+                try {
+                    const newState = JSON.parse(e.newValue);
+                    const currentContent = editor.value;
+                    const activeNote = getActiveNote();
+                    state.notes = newState.notes;
+                    // Keep current tab's active note if it still exists
+                    if (activeNote && state.notes.find(n => n.id === activeNote.id)) {
+                        state.activeId = activeNote.id;
+                    } else {
+                        state.activeId = newState.activeId;
+                    }
+                    render();
+                    // Restore cursor position if active note content didn't change
+                    const note = getActiveNote();
+                    if (note && note.id === activeNote?.id && note.content === currentContent) {
+                        editor.value = currentContent;
+                    }
+                } catch {}
+            }
+            if (e.key === SIDEBAR_WIDTH_KEY && e.newValue) {
+                sidebar.style.width = e.newValue + 'px';
+            }
+        });
+
         // --- Init ---
 
         async function init() {
