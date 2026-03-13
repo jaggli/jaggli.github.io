@@ -1008,7 +1008,7 @@
             [/#[0-9a-fA-F]{3,8}\b/g, 'hl-num'],
             [/@[a-z\-]+/g, 'hl-kw'],
             [/\b(important|inherit|initial|unset|none|auto|flex|grid|block|inline|relative|absolute|fixed|sticky)\b/g, 'hl-kw'],
-            [/[a-z\-]+(?=\s*:)/g, 'hl-fn'],
+            [/[a-z\-]+(?=\s*:\s)/g, 'hl-fn'],
             [/[{}();:,]/g, 'hl-punc'],
         ];
 
