@@ -1004,7 +1004,7 @@
             [/\/\*[\s\S]*?\*\//g, 'hl-cmt'],
             [/"(?:[^"\\]|\\.)*"/g, 'hl-str'],
             [/'(?:[^'\\]|\\.)*'/g, 'hl-str'],
-            [/\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|s|ms|deg|rad|turn|fr)?\b/g, 'hl-num'],
+            [/\b\d+(?:\.\d+)?(?:px|em|rem|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|s|ms|deg|rad|turn|fr|%)?/g, 'hl-num'],
             [/#[0-9a-fA-F]{3,8}\b/g, 'hl-num'],
             [/@[a-z\-]+/g, 'hl-kw'],
             [/\b(important|inherit|initial|unset|none|auto|flex|grid|block|inline|relative|absolute|fixed|sticky)\b/g, 'hl-kw'],
