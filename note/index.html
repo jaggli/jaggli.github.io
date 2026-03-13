@@ -162,6 +162,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            position: relative;
         }
 
         .editor-wrap {
@@ -248,11 +249,6 @@
             color: var(--green);
         }
 
-        .status-saved {
-            color: var(--green);
-            transition: opacity 0.3s;
-        }
-
         /* Modal */
         .modal-overlay {
             display: none;
@@ -335,11 +331,66 @@
             background: var(--gutter);
         }
 
+        /* Mobile files button (hidden on desktop) */
+        .btn-files {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--subtext);
+            cursor: pointer;
+            font-family: var(--font);
+            font-size: 14px;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+
+        .btn-files:hover {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
         /* Responsive */
+        .sidebar-close {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--subtext);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+
+        .sidebar-close:hover {
+            color: var(--text);
+            background: var(--overlay);
+        }
+
         @media (max-width: 600px) {
             .sidebar {
-                width: 140px;
-                min-width: 140px;
+                display: none;
+            }
+
+            .sidebar.open {
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 28px;
+                width: 100%;
+                min-width: 0;
+                z-index: 50;
+                border-right: none;
+            }
+
+            .sidebar-close {
+                display: block;
+            }
+
+            .btn-files {
+                display: block;
             }
         }
     </style>
@@ -349,7 +400,10 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <span>notes</span>
-                <button class="btn-new" onclick="createNote(undefined, undefined, true)" title="New note">+</button>
+                <span style="margin-left:auto;display:flex;gap:8px">
+                    <button class="btn-new" onclick="createNote(undefined, undefined, true)" title="New note">+</button>
+                    <button class="sidebar-close" onclick="toggleSidebar()" title="Close">&times;</button>
+                </span>
             </div>
             <div class="note-list" id="noteList"></div>
         </div>
@@ -359,8 +413,8 @@
                 <textarea class="editor" id="editor" placeholder="Start typing..." spellcheck="false"></textarea>
             </div>
             <div class="statusbar">
+                <button class="btn-files" id="btnFiles" onclick="toggleSidebar()">files</button>
                 <div class="status-right">
-                    <span id="statusSaved" class="status-saved" style="opacity:0">saved</span>
                     <span id="charCount">0 chars</span>
                     <button class="btn-share" id="btnShare" onclick="shareNote()">share</button>
                 </div>
@@ -384,16 +438,18 @@
         const noteList = document.getElementById('noteList');
         const charCount = document.getElementById('charCount');
         const btnShare = document.getElementById('btnShare');
-        const statusSaved = document.getElementById('statusSaved');
         const modalOverlay = document.getElementById('modalOverlay');
         const modalText = document.getElementById('modalText');
         const modalCancel = document.getElementById('modalCancel');
         const modalConfirm = document.getElementById('modalConfirm');
+        const sidebar = document.querySelector('.sidebar');
 
         const STORAGE_KEY = 'notepad_data';
         let state = { notes: [], activeId: null };
         let saveTimeout = null;
-        let savedTimeout = null;
+        let urlTimeout = null;
+        const histories = {}; // per-note undo/redo: { noteId: { past: [], future: [] } }
+        let historyTimeout = null;
 
         // --- Storage ---
 
@@ -410,6 +466,83 @@
 
         function getActiveNote() {
             return state.notes.find(n => n.id === state.activeId) || null;
+        }
+
+        // --- URL sync ---
+
+        async function updateUrl() {
+            const note = getActiveNote();
+            if (!note) {
+                history.replaceState(null, '', location.pathname);
+                return;
+            }
+            try {
+                const compressed = await compress(note.content);
+                const params = new URLSearchParams();
+                params.set('note', compressed);
+                params.set('name', note.name);
+                history.replaceState(null, '', location.pathname + '?' + params.toString());
+            } catch {}
+        }
+
+        function scheduleUrlUpdate() {
+            clearTimeout(urlTimeout);
+            urlTimeout = setTimeout(updateUrl, 500);
+        }
+
+        // --- Undo/Redo history (per note, in memory) ---
+
+        function getHistory(id) {
+            if (!histories[id]) histories[id] = { past: [], future: [] };
+            return histories[id];
+        }
+
+        function pushHistory(id, content) {
+            const h = getHistory(id);
+            const last = h.past.length ? h.past[h.past.length - 1] : null;
+            if (content === last) return;
+            h.past.push(content);
+            if (h.past.length > 200) h.past.shift();
+            h.future = [];
+        }
+
+        function scheduleHistorySnapshot() {
+            clearTimeout(historyTimeout);
+            const note = getActiveNote();
+            if (!note) return;
+            const id = note.id;
+            const content = editor.value;
+            historyTimeout = setTimeout(() => pushHistory(id, content), 400);
+        }
+
+        function undo() {
+            const note = getActiveNote();
+            if (!note) return;
+            const h = getHistory(note.id);
+            if (!h.past.length) return;
+            h.future.push(note.content);
+            note.content = h.past.pop();
+            editor.value = note.content;
+            note.updatedAt = Date.now();
+            saveState();
+            updateLineNumbers();
+            updateCharCount();
+            scheduleUrlUpdate();
+        }
+
+        function redo() {
+            const note = getActiveNote();
+            if (!note) return;
+            const h = getHistory(note.id);
+            if (!h.future.length) return;
+            h.past.push(note.content);
+            note.content = h.future.pop();
+            editor.value = note.content;
+            note.updatedAt = Date.now();
+            saveState();
+            updateLineNumbers();
+            updateCharCount();
+            scheduleUrlUpdate();
         }
 
         // --- Notes CRUD ---
@@ -440,42 +573,41 @@
             return note;
         }
 
-        function confirmDelete(id) {
+        async function confirmDelete(id) {
             const note = state.notes.find(n => n.id === id);
             if (!note) return;
-            modalText.textContent = `Delete "${note.name}"?`;
-            modalOverlay.classList.add('visible');
-
-            function cleanup() {
-                modalOverlay.classList.remove('visible');
-                modalConfirm.removeEventListener('click', onConfirm);
-                modalCancel.removeEventListener('click', onCancel);
-                modalOverlay.removeEventListener('click', onOverlay);
+            const confirmed = await showModal(`Delete "${note.name}"?`, 'delete', 'cancel', true);
+            if (!confirmed) return;
+            const idx = state.notes.findIndex(n => n.id === id);
+            if (idx === -1) return;
+            state.notes.splice(idx, 1);
+            if (state.activeId === id) {
+                state.activeId = state.notes.length ? state.notes[0].id : null;
             }
-            function onConfirm() {
-                cleanup();
-                const idx = state.notes.findIndex(n => n.id === id);
-                if (idx === -1) return;
-                state.notes.splice(idx, 1);
-                if (state.activeId === id) {
-                    state.activeId = state.notes.length ? state.notes[0].id : null;
-                }
-                saveState();
-                render();
-            }
-            function onCancel() { cleanup(); }
-            function onOverlay(e) { if (e.target === modalOverlay) cleanup(); }
-
-            modalConfirm.addEventListener('click', onConfirm);
-            modalCancel.addEventListener('click', onCancel);
-            modalOverlay.addEventListener('click', onOverlay);
-            modalCancel.focus();
+            saveState();
+            render();
+            updateUrl();
         }
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            if (!sidebar.classList.contains('open')) editor.focus();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+                e.preventDefault();
+                sidebar.classList.remove('open');
+                editor.focus();
+            }
+        });
 
         function switchNote(id) {
             state.activeId = id;
             saveState();
             render();
+            updateUrl();
+            sidebar.classList.remove('open');
         }
 
         // --- Rendering ---
@@ -516,9 +648,11 @@
                     note.updatedAt = Date.now();
                     clearTimeout(saveTimeout);
                     saveTimeout = setTimeout(saveState, 300);
+                    scheduleUrlUpdate();
                 });
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
+                        e.preventDefault();
                         input.blur();
                         editor.focus();
                     }
@@ -571,12 +705,20 @@
         editor.addEventListener('input', () => {
             const note = getActiveNote();
             if (!note) return;
+            // Snapshot previous content for undo before updating
+            const h = getHistory(note.id);
+            if (!h.past.length || h.past[h.past.length - 1] !== note.content) {
+                // Only push if we don't have a pending debounced snapshot
+                if (!historyTimeout) pushHistory(note.id, note.content);
+            }
             note.content = editor.value;
             note.updatedAt = Date.now();
             updateLineNumbers();
             updateCharCount();
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(saveState, 300);
+            scheduleHistorySnapshot();
+            scheduleUrlUpdate();
         });
 
         editor.addEventListener('scroll', () => {
@@ -596,36 +738,23 @@
             }
         });
 
-        // --- Cmd+S / Ctrl+S: save to localStorage + URL ---
+        // --- Keyboard shortcuts ---
 
-        document.addEventListener('keydown', async (e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault();
-                const note = getActiveNote();
-                if (!note) return;
-                // Ensure latest content is saved
-                note.content = editor.value;
-                note.updatedAt = Date.now();
-                saveState();
-                // Update URL with compressed note
-                try {
-                    const compressed = await compress(note.content);
-                    const params = new URLSearchParams();
-                    params.set('note', compressed);
-                    params.set('name', note.name);
-                    const newUrl = location.pathname + '?' + params.toString();
-                    history.replaceState(null, '', newUrl);
-                } catch {}
-                // Flash "saved" indicator
-                clearTimeout(savedTimeout);
-                statusSaved.style.opacity = '1';
-                savedTimeout = setTimeout(() => {
-                    statusSaved.style.opacity = '0';
-                }, 1500);
+                undo();
+            }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
+                e.preventDefault();
+                redo();
             }
             if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
                 e.preventDefault();
                 createNote(undefined, undefined, true);
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault(); // prevent browser save dialog
             }
         });
 
@@ -669,6 +798,36 @@
             }
         }
 
+        function showModal(text, confirmLabel, cancelLabel, danger) {
+            return new Promise((resolve) => {
+                modalText.textContent = text;
+                modalConfirm.textContent = confirmLabel;
+                modalCancel.textContent = cancelLabel;
+                modalConfirm.className = danger ? 'modal-btn modal-btn-danger' : 'modal-btn';
+                modalOverlay.classList.add('visible');
+
+                function cleanup() {
+                    modalOverlay.classList.remove('visible');
+                    modalConfirm.removeEventListener('click', onConfirm);
+                    modalCancel.removeEventListener('click', onCancel);
+                    modalOverlay.removeEventListener('click', onOverlay);
+                    document.removeEventListener('keydown', onKey);
+                }
+                function onConfirm() { cleanup(); resolve(true); }
+                function onCancel() { cleanup(); resolve(false); }
+                function onOverlay(e) { if (e.target === modalOverlay) { cleanup(); resolve(false); } }
+                function onKey(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); onConfirm(); }
+                    if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+                }
+
+                modalConfirm.addEventListener('click', onConfirm);
+                modalCancel.addEventListener('click', onCancel);
+                modalOverlay.addEventListener('click', onOverlay);
+                document.addEventListener('keydown', onKey);
+            });
+        }
+
         async function loadFromUrl() {
             const params = new URLSearchParams(location.search);
             const noteData = params.get('note');
@@ -676,9 +835,32 @@
             if (!noteData) return false;
             try {
                 const content = await decompress(noteData);
-                createNote(name, content);
-                // Clean URL without reloading
-                history.replaceState(null, '', location.pathname);
+                const existing = state.notes.find(n => n.name === name);
+                if (existing) {
+                    if (existing.content === content) {
+                        // Identical — just open it
+                        state.activeId = existing.id;
+                        saveState();
+                        return true;
+                    }
+                    // Content differs — ask user
+                    render();
+                    const update = await showModal(
+                        `"${name}" already exists with different content.`,
+                        'update',
+                        'new file'
+                    );
+                    if (update) {
+                        existing.content = content;
+                        existing.updatedAt = Date.now();
+                        state.activeId = existing.id;
+                        saveState();
+                    } else {
+                        createNote(undefined, content);
+                    }
+                } else {
+                    createNote(name, content);
+                }
                 return true;
             } catch (err) {
                 console.error('Failed to load shared note:', err);
@@ -700,9 +882,10 @@
             loadState();
             const loaded = await loadFromUrl();
             if (!loaded && state.notes.length === 0) {
-                createNote('welcome.md', 'Welcome to note.\n\nStart typing to create a note.\nYour notes are saved locally in your browser.\n\nCmd+S (Ctrl+S) saves and updates the URL for sharing.');
+                createNote('welcome.md', 'Welcome to note.\n\nStart typing to create a note.\nYour notes are saved locally.\nThe URL updates automatically — copy it to share.');
             }
             render();
+            updateUrl();
         }
 
         init();
