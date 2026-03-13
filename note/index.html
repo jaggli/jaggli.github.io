@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>note</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #1e1e2e;
+            --sidebar: #181825;
+            --surface: #1e1e2e;
+            --overlay: #313244;
+            --text: #cdd6f4;
+            --subtext: #a6adc8;
+            --blue: #89b4fa;
+            --green: #a6e3a1;
+            --red: #f38ba8;
+            --yellow: #f9e2af;
+            --border: #313244;
+            --gutter: #45475a;
+            --font: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 200px;
+            min-width: 200px;
+            background: var(--sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 12px 14px 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--subtext);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-new {
+            background: none;
+            border: none;
+            color: var(--subtext);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+
+        .btn-new:hover {
+            color: var(--text);
+            background: var(--overlay);
+        }
+
+        .note-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .note-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--subtext);
+            position: relative;
+        }
+
+        .note-item:hover {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
+        .note-item.active {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
+        .note-item-input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: inherit;
+            font-family: var(--font);
+            font-size: 13px;
+            padding: 0;
+            outline: none;
+            min-width: 0;
+            cursor: pointer;
+        }
+
+        .note-item-input:focus {
+            cursor: text;
+        }
+
+        .note-item .btn-delete {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--subtext);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 2px;
+            line-height: 1;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .note-item:hover .btn-delete {
+            display: block;
+        }
+
+        .note-item .btn-delete:hover {
+            color: var(--red);
+        }
+
+        /* Editor area */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .editor-wrap {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .gutter {
+            background: var(--surface);
+            color: var(--gutter);
+            padding: 10px 0;
+            text-align: right;
+            font-size: 13px;
+            line-height: 1.5;
+            font-family: var(--font);
+            user-select: none;
+            min-width: 48px;
+            overflow: hidden;
+            border-right: 1px solid var(--border);
+        }
+
+        .gutter-line {
+            padding: 0 12px 0 8px;
+        }
+
+        .editor {
+            flex: 1;
+            background: var(--bg);
+            color: var(--text);
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: var(--font);
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 10px 16px;
+            tab-size: 2;
+            overflow: auto;
+            white-space: pre;
+        }
+
+        .editor::placeholder {
+            color: var(--gutter);
+        }
+
+        /* Status bar */
+        .statusbar {
+            height: 28px;
+            background: var(--sidebar);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            color: var(--subtext);
+            gap: 16px;
+        }
+
+        .status-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn-share {
+            background: none;
+            border: none;
+            color: var(--subtext);
+            cursor: pointer;
+            font-family: var(--font);
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+
+        .btn-share:hover {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
+        .btn-share.copied {
+            color: var(--green);
+        }
+
+        .status-saved {
+            color: var(--green);
+            transition: opacity 0.3s;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--overlay);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gutter);
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .sidebar {
+                width: 140px;
+                min-width: 140px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>notes</span>
+                <button class="btn-new" onclick="createNote()" title="New note">+</button>
+            </div>
+            <div class="note-list" id="noteList"></div>
+        </div>
+        <div class="editor-container">
+            <div class="editor-wrap">
+                <div class="gutter" id="gutter"></div>
+                <textarea class="editor" id="editor" placeholder="Start typing..." spellcheck="false"></textarea>
+            </div>
+            <div class="statusbar">
+                <div class="status-right">
+                    <span id="statusSaved" class="status-saved" style="opacity:0">saved</span>
+                    <span id="charCount">0 chars</span>
+                    <button class="btn-share" id="btnShare" onclick="shareNote()">share</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const gutter = document.getElementById('gutter');
+        const noteList = document.getElementById('noteList');
+        const charCount = document.getElementById('charCount');
+        const btnShare = document.getElementById('btnShare');
+        const statusSaved = document.getElementById('statusSaved');
+
+        const STORAGE_KEY = 'notepad_data';
+        let state = { notes: [], activeId: null };
+        let saveTimeout = null;
+        let savedTimeout = null;
+
+        // --- Storage ---
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) state = JSON.parse(raw);
+            } catch {}
+        }
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function getActiveNote() {
+            return state.notes.find(n => n.id === state.activeId) || null;
+        }
+
+        // --- Notes CRUD ---
+
+        function createNote(name, content) {
+            const note = {
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                name: name || 'untitled',
+                content: content || '',
+                updatedAt: Date.now()
+            };
+            state.notes.unshift(note);
+            state.activeId = note.id;
+            saveState();
+            render();
+            editor.focus();
+            return note;
+        }
+
+        function deleteNote(id) {
+            const idx = state.notes.findIndex(n => n.id === id);
+            if (idx === -1) return;
+            state.notes.splice(idx, 1);
+            if (state.activeId === id) {
+                state.activeId = state.notes.length ? state.notes[0].id : null;
+            }
+            saveState();
+            render();
+        }
+
+        function switchNote(id) {
+            state.activeId = id;
+            saveState();
+            render();
+        }
+
+        // --- Rendering ---
+
+        function render() {
+            renderNoteList();
+            renderEditor();
+            updateLineNumbers();
+            updateCharCount();
+        }
+
+        function renderNoteList() {
+            noteList.innerHTML = '';
+            for (const note of state.notes) {
+                const div = document.createElement('div');
+                div.className = 'note-item' + (note.id === state.activeId ? ' active' : '');
+
+                const input = document.createElement('input');
+                input.className = 'note-item-input';
+                input.value = note.name;
+                input.spellcheck = false;
+                input.addEventListener('click', (e) => {
+                    if (state.activeId !== note.id) {
+                        e.preventDefault();
+                        switchNote(note.id);
+                    }
+                });
+                input.addEventListener('focus', () => {
+                    const dot = input.value.lastIndexOf('.');
+                    if (dot > 0) {
+                        input.setSelectionRange(0, dot);
+                    } else {
+                        input.select();
+                    }
+                });
+                input.addEventListener('input', () => {
+                    note.name = input.value.trim() || 'untitled';
+                    note.updatedAt = Date.now();
+                    clearTimeout(saveTimeout);
+                    saveTimeout = setTimeout(saveState, 300);
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        input.blur();
+                        editor.focus();
+                    }
+                });
+
+                const btn = document.createElement('button');
+                btn.className = 'btn-delete';
+                btn.title = 'Delete';
+                btn.innerHTML = '&times;';
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteNote(note.id);
+                });
+
+                div.appendChild(input);
+                div.appendChild(btn);
+                noteList.appendChild(div);
+            }
+        }
+
+        function renderEditor() {
+            const note = getActiveNote();
+            if (note) {
+                editor.value = note.content;
+                editor.disabled = false;
+                btnShare.disabled = false;
+            } else {
+                editor.value = '';
+                editor.disabled = true;
+                btnShare.disabled = true;
+            }
+        }
+
+        function updateLineNumbers() {
+            const lines = (editor.value || '').split('\n').length;
+            let html = '';
+            for (let i = 1; i <= Math.max(lines, 1); i++) {
+                html += `<div class="gutter-line">${i}</div>`;
+            }
+            gutter.innerHTML = html;
+        }
+
+        function updateCharCount() {
+            const len = (editor.value || '').length;
+            charCount.textContent = len + ' char' + (len !== 1 ? 's' : '');
+        }
+
+        // --- Auto-save ---
+
+        editor.addEventListener('input', () => {
+            const note = getActiveNote();
+            if (!note) return;
+            note.content = editor.value;
+            note.updatedAt = Date.now();
+            updateLineNumbers();
+            updateCharCount();
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(saveState, 300);
+        });
+
+        editor.addEventListener('scroll', () => {
+            gutter.scrollTop = editor.scrollTop;
+        });
+
+        // --- Tab support ---
+
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                editor.value = editor.value.substring(0, start) + '  ' + editor.value.substring(end);
+                editor.selectionStart = editor.selectionEnd = start + 2;
+                editor.dispatchEvent(new Event('input'));
+            }
+        });
+
+        // --- Cmd+S / Ctrl+S: save to localStorage + URL ---
+
+        document.addEventListener('keydown', async (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                const note = getActiveNote();
+                if (!note) return;
+                // Ensure latest content is saved
+                note.content = editor.value;
+                note.updatedAt = Date.now();
+                saveState();
+                // Update URL with compressed note
+                try {
+                    const compressed = await compress(note.content);
+                    const params = new URLSearchParams();
+                    params.set('note', compressed);
+                    params.set('name', note.name);
+                    const newUrl = location.pathname + '?' + params.toString();
+                    history.replaceState(null, '', newUrl);
+                } catch {}
+                // Flash "saved" indicator
+                clearTimeout(savedTimeout);
+                statusSaved.style.opacity = '1';
+                savedTimeout = setTimeout(() => {
+                    statusSaved.style.opacity = '0';
+                }, 1500);
+            }
+        });
+
+        // --- Sharing via URL ---
+
+        async function compress(text) {
+            const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+            const buf = await new Response(stream).arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (const b of bytes) binary += String.fromCharCode(b);
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function decompress(b64) {
+            const binary = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+            return await new Response(stream).text();
+        }
+
+        async function shareNote() {
+            const note = getActiveNote();
+            if (!note) return;
+            try {
+                const compressed = await compress(note.content);
+                const params = new URLSearchParams();
+                params.set('note', compressed);
+                params.set('name', note.name);
+                const url = location.origin + location.pathname + '?' + params.toString();
+                await navigator.clipboard.writeText(url);
+                btnShare.textContent = 'copied!';
+                btnShare.classList.add('copied');
+                setTimeout(() => {
+                    btnShare.textContent = 'share';
+                    btnShare.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                console.error('Share failed:', err);
+            }
+        }
+
+        async function loadFromUrl() {
+            const params = new URLSearchParams(location.search);
+            const noteData = params.get('note');
+            const name = params.get('name') || 'shared note';
+            if (!noteData) return false;
+            try {
+                const content = await decompress(noteData);
+                createNote(name, content);
+                // Clean URL without reloading
+                history.replaceState(null, '', location.pathname);
+                return true;
+            } catch (err) {
+                console.error('Failed to load shared note:', err);
+                return false;
+            }
+        }
+
+        // --- Utilities ---
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // --- Init ---
+
+        async function init() {
+            loadState();
+            const loaded = await loadFromUrl();
+            if (!loaded && state.notes.length === 0) {
+                createNote('welcome.md', 'Welcome to note.\n\nStart typing to create a note.\nYour notes are saved locally in your browser.\n\nCmd+S (Ctrl+S) saves and updates the URL for sharing.');
+            }
+            render();
+        }
+
+        init();
+    </script>
+</body>
+</html>
