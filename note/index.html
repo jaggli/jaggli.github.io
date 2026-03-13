@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>note</title>
     <style>
+        @font-face {
+            font-family: 'Victor Mono';
+            src: url('victor-mono/VictorMono-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -23,8 +31,8 @@
             --red: #f38ba8;
             --yellow: #f9e2af;
             --border: #313244;
-            --gutter: #45475a;
-            --font: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace;
+            --gutter: #585b70;
+            --font: 'Victor Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace;
         }
 
         html, body {
@@ -95,7 +103,7 @@
             align-items: center;
             padding: 6px 14px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 14px;
             color: var(--subtext);
             position: relative;
         }
@@ -116,7 +124,7 @@
             border: none;
             color: inherit;
             font-family: var(--font);
-            font-size: 13px;
+            font-size: 14px;
             padding: 0;
             outline: none;
             min-width: 0;
@@ -167,7 +175,7 @@
             color: var(--gutter);
             padding: 10px 0;
             text-align: right;
-            font-size: 13px;
+            font-size: 14px;
             line-height: 1.5;
             font-family: var(--font);
             user-select: none;
@@ -188,7 +196,7 @@
             outline: none;
             resize: none;
             font-family: var(--font);
-            font-size: 13px;
+            font-size: 14px;
             line-height: 1.5;
             padding: 10px 16px;
             tab-size: 2;
@@ -208,7 +216,7 @@
             display: flex;
             align-items: center;
             padding: 0 12px;
-            font-size: 12px;
+            font-size: 14px;
             color: var(--subtext);
             gap: 16px;
         }
@@ -226,7 +234,7 @@
             color: var(--subtext);
             cursor: pointer;
             font-family: var(--font);
-            font-size: 12px;
+            font-size: 14px;
             padding: 2px 8px;
             border-radius: 3px;
         }
@@ -243,6 +251,69 @@
         .status-saved {
             color: var(--green);
             transition: opacity 0.3s;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--sidebar);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 24px;
+            min-width: 280px;
+            max-width: 400px;
+        }
+
+        .modal-text {
+            font-size: 14px;
+            color: var(--text);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .modal-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--subtext);
+            font-family: var(--font);
+            font-size: 14px;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .modal-btn:hover {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
+        .modal-btn-danger {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .modal-btn-danger:hover {
+            background: var(--red);
+            color: var(--sidebar);
         }
 
         /* Scrollbar */
@@ -278,7 +349,7 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <span>notes</span>
-                <button class="btn-new" onclick="createNote()" title="New note">+</button>
+                <button class="btn-new" onclick="createNote(undefined, undefined, true)" title="New note">+</button>
             </div>
             <div class="note-list" id="noteList"></div>
         </div>
@@ -297,6 +368,16 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-text" id="modalText"></div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="modalCancel">cancel</button>
+                <button class="modal-btn modal-btn-danger" id="modalConfirm">delete</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const editor = document.getElementById('editor');
         const gutter = document.getElementById('gutter');
@@ -304,6 +385,10 @@
         const charCount = document.getElementById('charCount');
         const btnShare = document.getElementById('btnShare');
         const statusSaved = document.getElementById('statusSaved');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalText = document.getElementById('modalText');
+        const modalCancel = document.getElementById('modalCancel');
+        const modalConfirm = document.getElementById('modalConfirm');
 
         const STORAGE_KEY = 'notepad_data';
         let state = { notes: [], activeId: null };
@@ -329,10 +414,16 @@
 
         // --- Notes CRUD ---
 
-        function createNote(name, content) {
+        function nextNoteName() {
+            let num = 1;
+            while (state.notes.some(n => n.name === `note${num}.md`)) num++;
+            return `note${num}.md`;
+        }
+
+        function createNote(name, content, focusName) {
             const note = {
                 id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                name: name || 'untitled',
+                name: name || nextNoteName(),
                 content: content || '',
                 updatedAt: Date.now()
             };
@@ -340,19 +431,45 @@
             state.activeId = note.id;
             saveState();
             render();
-            editor.focus();
+            if (focusName) {
+                const input = noteList.querySelector('.note-item.active .note-item-input');
+                if (input) input.focus();
+            } else {
+                editor.focus();
+            }
             return note;
         }
 
-        function deleteNote(id) {
-            const idx = state.notes.findIndex(n => n.id === id);
-            if (idx === -1) return;
-            state.notes.splice(idx, 1);
-            if (state.activeId === id) {
-                state.activeId = state.notes.length ? state.notes[0].id : null;
+        function confirmDelete(id) {
+            const note = state.notes.find(n => n.id === id);
+            if (!note) return;
+            modalText.textContent = `Delete "${note.name}"?`;
+            modalOverlay.classList.add('visible');
+
+            function cleanup() {
+                modalOverlay.classList.remove('visible');
+                modalConfirm.removeEventListener('click', onConfirm);
+                modalCancel.removeEventListener('click', onCancel);
+                modalOverlay.removeEventListener('click', onOverlay);
             }
-            saveState();
-            render();
+            function onConfirm() {
+                cleanup();
+                const idx = state.notes.findIndex(n => n.id === id);
+                if (idx === -1) return;
+                state.notes.splice(idx, 1);
+                if (state.activeId === id) {
+                    state.activeId = state.notes.length ? state.notes[0].id : null;
+                }
+                saveState();
+                render();
+            }
+            function onCancel() { cleanup(); }
+            function onOverlay(e) { if (e.target === modalOverlay) cleanup(); }
+
+            modalConfirm.addEventListener('click', onConfirm);
+            modalCancel.addEventListener('click', onCancel);
+            modalOverlay.addEventListener('click', onOverlay);
+            modalCancel.focus();
         }
 
         function switchNote(id) {
@@ -413,7 +530,7 @@
                 btn.innerHTML = '&times;';
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    deleteNote(note.id);
+                    confirmDelete(note.id);
                 });
 
                 div.appendChild(input);
@@ -505,6 +622,10 @@
                 savedTimeout = setTimeout(() => {
                     statusSaved.style.opacity = '0';
                 }, 1500);
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+                e.preventDefault();
+                createNote(undefined, undefined, true);
             }
         });
 
