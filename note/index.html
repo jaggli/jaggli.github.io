@@ -1552,7 +1552,7 @@
             loadState();
             const loaded = await loadFromUrl();
             if (!loaded && state.notes.length === 0) {
-                createNote('welcome.md', 'Welcome to note.\n\nA simple, local-first note editor.\n\n## Getting started\n- Start typing to edit a note\n- Ctrl+N to create a new note\n- Ctrl+P to search across all notes\n- Click a filename to select it, click again to rename\n- Drag the sidebar edge to resize it\n\n## Storage\n- Notes are saved locally in your browser\n- No data ever leaves your browser — everything stays on your device\n- Changes sync across tabs automatically\n- The URL updates as you type — copy it to share');
+                createNote('welcome.md', 'Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n\n## Basics\n- Click a file to open, click again to rename\n- Drag the sidebar edge to resize\n- Drop files to import them\n- URL updates as you type — copy to share\n- Syncs across tabs automatically');
             }
             render();
             updateUrl();
