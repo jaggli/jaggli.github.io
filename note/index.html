@@ -676,7 +676,6 @@
 
       .status-hint {
         color: var(--gutter);
-        font-size: 12px;
       }
 
       .status-hint kbd {
@@ -699,10 +698,38 @@
       }
 
       .status-info {
-        font-size: 12px;
         color: var(--gutter);
         display: flex;
         gap: 12px;
+      }
+
+      .storage-meter {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .storage-bar {
+        width: 40px;
+        height: 6px;
+        background: var(--overlay);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .storage-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: var(--gutter);
+        transition: width 0.3s, background 0.3s;
+      }
+
+      .storage-fill.warn {
+        background: var(--yellow);
+      }
+
+      .storage-fill.critical {
+        background: var(--red);
       }
 
       .btn-share {
@@ -965,6 +992,7 @@
         .sidebar-header {
           padding: 14px 16px;
           font-size: 15px;
+          border-bottom: 1px solid var(--border);
         }
 
         .btn-new {
@@ -1209,8 +1237,7 @@
           <div class="status-right">
             <span class="status-info">
               <span id="cursorPos">Ln 1, Col 1</span>
-              <span id="wordCount">0 words</span>
-              <span id="charCount">0 chars</span>
+              <span id="storageUsage" class="storage-meter" title="localStorage usage"></span>
             </span>
             <button
               class="btn-wrap"
@@ -1223,6 +1250,24 @@
             <div class="file-menu-container" id="fileMenuContainer">
               <button class="btn-share" onclick="toggleFileMenu()">file</button>
               <div class="file-menu" id="fileMenu">
+                <button
+                  class="file-menu-item mobile-only"
+                  onclick="createNote(); closeFileMenu();"
+                >
+                  new
+                </button>
+                <button
+                  class="file-menu-item mobile-only"
+                  onclick="openSearch(); closeFileMenu();"
+                >
+                  search all
+                </button>
+                <button
+                  class="file-menu-item mobile-only"
+                  onclick="openFindReplace(); closeFileMenu();"
+                >
+                  find &amp; replace
+                </button>
                 <button
                   class="file-menu-item"
                   id="btnShare"
@@ -1451,6 +1496,7 @@
 
       function saveState() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        updateStorageUsage();
       }
 
       function scheduleSave() {
@@ -1609,8 +1655,6 @@
 
       function refreshEditor() {
         updateLineNumbers();
-        updateCharCount();
-        updateWordCount();
         updateCursorPos();
         updateHighlight();
         scheduleUrlUpdate();
@@ -2063,15 +2107,26 @@
         });
       }
 
-      function updateCharCount() {
-        const len = (editor.value || "").length;
-        charCount.textContent = len + " char" + (len !== 1 ? "s" : "");
-      }
 
-      function updateWordCount() {
-        const text = (editor.value || "").trim();
-        const count = text ? text.split(/\s+/).length : 0;
-        wordCount.textContent = count + " word" + (count !== 1 ? "s" : "");
+
+      const STORAGE_LIMIT = 5 * 1024 * 1024; // 5MB
+      const storageUsage = document.getElementById("storageUsage");
+
+      function updateStorageUsage() {
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          total += key.length + localStorage.getItem(key).length;
+        }
+        const bytes = total * 2;
+        const pct = Math.min((bytes / STORAGE_LIMIT) * 100, 100);
+        const label = bytes >= 1024 * 1024
+          ? (bytes / (1024 * 1024)).toFixed(1) + "MB"
+          : (bytes / 1024).toFixed(0) + "kB";
+        const cls = pct >= 90 ? " critical" : pct >= 70 ? " warn" : "";
+        storageUsage.innerHTML =
+          `<span class="storage-bar"><span class="storage-fill${cls}" style="width:${pct}%"></span></span>${label} (${pct.toFixed(0)}%)`;
+        storageUsage.title = `localStorage: ${label} / 5MB`;
       }
 
       function updateCursorPos() {
@@ -2312,10 +2367,9 @@
         renderNoteList();
         renderEditor();
         updateLineNumbers();
-        updateCharCount();
-        updateWordCount();
         updateCursorPos();
         updateTitle();
+        updateStorageUsage();
       }
 
       // ═══════════════════════════════════════════════════
@@ -2776,8 +2830,6 @@
         scheduleSave();
         scheduleHighlight();
         updateLineNumbers();
-        updateCharCount();
-        updateWordCount();
 
         updateFindMatches();
         if (findMatches.length && findMatchIdx >= findMatches.length) {
@@ -3171,8 +3223,6 @@
         note.content = editor.value;
         note.updatedAt = Date.now();
         updateLineNumbers();
-        updateCharCount();
-        updateWordCount();
         updateCursorPos();
         scheduleHighlight();
         scheduleSave();
