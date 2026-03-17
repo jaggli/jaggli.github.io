@@ -328,7 +328,7 @@
             border: none;
             color: var(--overlay);
             cursor: pointer;
-            font-size: 14px;
+            font-size: 18px;
             width: 36px;
             line-height: 1;
             border-radius: 3px;
@@ -348,13 +348,38 @@
             color: var(--red);
         }
 
+        .note-item .btn-rename {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--overlay);
+            cursor: pointer;
+            font-size: 16px;
+            width: 36px;
+            line-height: 1;
+            border-radius: 3px;
+            flex-shrink: 0;
+            align-self: stretch;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .note-item:hover .btn-rename,
+        .note-item.active .btn-rename {
+            color: var(--gutter);
+        }
+
+        .note-item .btn-rename:hover {
+            color: var(--text);
+        }
+
         /* Note pin */
         .note-item .btn-pin {
             background: none;
             border: none;
             color: var(--overlay);
             cursor: pointer;
-            font-size: 11px;
+            font-size: 14px;
             width: 36px;
             text-align: center;
             line-height: 1;
@@ -648,6 +673,51 @@
             color: var(--green);
         }
 
+        .file-menu-container {
+            position: relative;
+        }
+
+        .file-menu {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            margin-bottom: 4px;
+            background: var(--sidebar);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 0;
+            min-width: 140px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            z-index: 50;
+        }
+
+        .file-menu.visible {
+            display: block;
+        }
+
+        .file-menu-item {
+            display: block;
+            width: 100%;
+            background: none;
+            border: none;
+            color: var(--subtext);
+            font-family: var(--font);
+            font-size: 14px;
+            padding: 6px 14px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .file-menu-item:hover {
+            background: var(--overlay);
+            color: var(--text);
+        }
+
+        .file-menu-item.copied {
+            color: var(--green);
+        }
+
         .btn-wrap {
             background: none;
             border: none;
@@ -813,6 +883,10 @@
         }
 
         @media (max-width: 600px) {
+            :root {
+                font-size: 16px;
+            }
+
             .sidebar {
                 display: none;
             }
@@ -823,23 +897,110 @@
                 top: 0;
                 left: 0;
                 right: 0;
-                bottom: 28px;
+                bottom: 36px;
                 width: 100%;
+                max-width: 100%;
                 min-width: 0;
                 z-index: 50;
                 border-right: none;
+            }
+
+            .sidebar-header {
+                padding: 14px 16px 10px;
+                font-size: 15px;
+            }
+
+            .btn-new {
+                font-size: 24px;
+                padding: 8px 12px;
+            }
+
+            .sidebar-close {
+                display: block;
+                font-size: 24px;
+                padding: 8px 12px;
+            }
+
+            .note-item {
+                padding: 10px 16px 10px 0;
+                font-size: 16px;
+            }
+
+            .note-item-input {
+                font-size: 16px;
+            }
+
+            .note-item-time {
+                font-size: 13px;
+            }
+
+            .note-item .btn-pin {
+                width: 44px;
+                font-size: 14px;
+                color: var(--gutter);
+            }
+
+            .note-item .btn-delete {
+                width: 44px;
+                font-size: 18px;
+                color: var(--gutter);
+            }
+
+            .note-item .btn-rename {
+                display: flex;
+                width: 44px;
+                font-size: 14px;
+                color: var(--gutter);
+            }
+
+            .note-item:hover .btn-pin,
+            .note-item.active .btn-pin {
+                color: var(--subtext);
+            }
+
+            .note-item:hover .btn-delete,
+            .note-item.active .btn-delete {
+                color: var(--subtext);
+            }
+
+            .note-item:hover .btn-rename,
+            .note-item.active .btn-rename {
+                color: var(--subtext);
+            }
+
+            .note-item .btn-pin.pinned {
+                color: var(--yellow);
             }
 
             .sidebar-resize {
                 display: none;
             }
 
-            .sidebar-close {
-                display: block;
-            }
-
             .btn-files {
                 display: block;
+                font-size: 16px;
+                padding: 4px 10px;
+            }
+
+            .editor-area > * {
+                font-size: 16px;
+                padding: 12px 14px;
+            }
+
+            .gutter {
+                font-size: 16px;
+                min-width: 44px;
+                padding: 12px 0;
+            }
+
+            .gutter-line {
+                padding: 0 10px 0 6px;
+            }
+
+            .statusbar {
+                height: 36px;
+                padding: 0 10px;
+                font-size: 16px;
             }
 
             .status-hint {
@@ -851,15 +1012,42 @@
             }
 
             .btn-wrap {
-                display: none;
+                font-size: 16px;
+                padding: 4px 10px;
+            }
+
+            .btn-share {
+                font-size: 16px;
+                padding: 4px 10px;
+            }
+
+            .file-menu {
+                min-width: 200px;
+            }
+
+            .file-menu-item {
+                font-size: 16px;
+                padding: 10px 16px;
+            }
+
+            .empty-state {
+                font-size: 16px;
             }
 
             .find-replace-bar {
                 flex-wrap: wrap;
+                padding: 8px 12px;
             }
 
             .find-replace-bar input {
                 width: 100px;
+                font-size: 16px;
+                padding: 6px 10px;
+            }
+
+            .find-replace-bar button {
+                font-size: 14px;
+                padding: 6px 10px;
             }
         }
     </style>
@@ -910,9 +1098,14 @@
                         <span id="charCount">0 chars</span>
                     </span>
                     <button class="btn-wrap" id="btnWrap" onclick="toggleWrap()" title="Toggle word wrap">wrap</button>
-                    <button class="btn-share" onclick="downloadNote()">download</button>
-                    <button class="btn-share" onclick="downloadAll()">download all</button>
-                    <button class="btn-share" id="btnShare" onclick="shareNote()">share</button>
+                    <div class="file-menu-container" id="fileMenuContainer">
+                        <button class="btn-share" onclick="toggleFileMenu()">file</button>
+                        <div class="file-menu" id="fileMenu">
+                            <button class="file-menu-item" onclick="downloadNote(); closeFileMenu()">download</button>
+                            <button class="file-menu-item" onclick="downloadAll(); closeFileMenu()">download all</button>
+                            <button class="file-menu-item" id="btnShare" onclick="shareNote()">share</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1580,6 +1773,24 @@
         // Drag reorder state
         let dragSrcIdx = null;
 
+        function isMobile() {
+            return window.innerWidth <= 600;
+        }
+
+        function startRename(input) {
+            input.readOnly = false;
+            input.classList.add('editing');
+            input.focus();
+            setTimeout(() => {
+                const dot = input.value.lastIndexOf('.');
+                if (dot > 0) {
+                    input.setSelectionRange(0, dot);
+                } else {
+                    input.select();
+                }
+            }, 0);
+        }
+
         function renderNoteList() {
             noteList.innerHTML = '';
             sortNotes();
@@ -1626,10 +1837,13 @@
 
                 // Click on row to switch note
                 div.addEventListener('click', (e) => {
-                    if (e.target.closest('.btn-pin') || e.target.closest('.btn-delete')) return;
+                    if (e.target.closest('.btn-pin') || e.target.closest('.btn-delete') || e.target.closest('.btn-rename')) return;
                     if (e.target.classList.contains('note-item-input') && !e.target.readOnly) return;
                     if (state.activeId !== note.id) {
                         switchNote(note.id);
+                    } else if (isMobile()) {
+                        sidebar.classList.remove('open');
+                        editor.focus();
                     }
                 });
 
@@ -1647,19 +1861,9 @@
                     if (state.activeId !== note.id) {
                         e.preventDefault();
                         switchNote(note.id);
-                    } else if (input.readOnly) {
+                    } else if (input.readOnly && !isMobile()) {
                         e.preventDefault();
-                        input.readOnly = false;
-                        input.classList.add('editing');
-                        input.focus();
-                        setTimeout(() => {
-                            const dot = input.value.lastIndexOf('.');
-                            if (dot > 0) {
-                                input.setSelectionRange(0, dot);
-                            } else {
-                                input.select();
-                            }
-                        }, 0);
+                        startRename(input);
                     }
                 });
                 input.addEventListener('input', () => {
@@ -1703,6 +1907,16 @@
                     renderNoteList();
                 });
 
+                // Rename button (mobile only)
+                const renameBtn = document.createElement('button');
+                renameBtn.className = 'btn-rename';
+                renameBtn.title = 'Rename';
+                renameBtn.innerHTML = '&#9998;';
+                renameBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    startRename(input);
+                });
+
                 // Delete button
                 const btn = document.createElement('button');
                 btn.className = 'btn-delete';
@@ -1715,6 +1929,7 @@
 
                 div.appendChild(pinBtn);
                 div.appendChild(meta);
+                div.appendChild(renameBtn);
                 div.appendChild(btn);
                 noteList.appendChild(div);
             }
@@ -2224,7 +2439,8 @@
 
         function loadWrap() {
             const saved = localStorage.getItem(WRAP_KEY);
-            if (saved === 'true') {
+            const wrapOn = saved === 'true' || (saved === null && window.innerWidth <= 600);
+            if (wrapOn) {
                 editorArea.classList.add('wrap');
                 btnWrap.classList.add('active');
             }
@@ -2235,6 +2451,28 @@
             btnWrap.classList.toggle('active', isWrap);
             localStorage.setItem(WRAP_KEY, isWrap ? 'true' : 'false');
         }
+
+        // ═══════════════════════════════════════════════════
+        //  File Menu
+        // ═══════════════════════════════════════════════════
+
+        const fileMenu = document.getElementById('fileMenu');
+
+        function toggleFileMenu() {
+            fileMenu.classList.toggle('visible');
+        }
+
+        function closeFileMenu() {
+            fileMenu.classList.remove('visible');
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-menu-container')) {
+                closeFileMenu();
+            }
+        });
+
+        editor.addEventListener('focus', closeFileMenu);
 
         // ═══════════════════════════════════════════════════
         //  Sharing & Download
@@ -2280,6 +2518,7 @@
                 setTimeout(() => {
                     btnShare.textContent = 'share';
                     btnShare.classList.remove('copied');
+                    closeFileMenu();
                 }, 2000);
             } catch (err) {
                 console.error('Share failed:', err);
