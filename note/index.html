@@ -2623,11 +2623,12 @@
         // ═══════════════════════════════════════════════════
 
         async function init() {
+            const isFirstVisit = !localStorage.getItem(STORAGE_KEY);
             loadState();
             loadWrap();
             const loaded = await loadFromUrl();
-            if (!loaded && state.notes.length === 0) {
-                createNote('welcome.md', 'Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap in status bar\n- Syncs across tabs automatically');
+            if (!loaded && state.notes.length === 0 && isFirstVisit) {
+                createNote('welcome.md', '# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap in status bar\n- Syncs across tabs automatically');
             }
             render();
             updateUrl();
