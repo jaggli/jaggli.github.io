@@ -675,19 +675,20 @@
       }
 
       .status-hint {
-        color: var(--gutter);
+        color: var(--subtext);
       }
 
       .status-hint kbd {
-        color: var(--subtext);
+        color: var(--gutter);
+        font-size: 12px;
       }
 
       .status-hint:hover {
-        color: var(--subtext);
+        color: var(--text);
       }
 
       .status-hint:hover kbd {
-        color: var(--text);
+        color: var(--subtext);
       }
 
       .status-right {
@@ -721,7 +722,9 @@
         height: 100%;
         border-radius: 3px;
         background: var(--gutter);
-        transition: width 0.3s, background 0.3s;
+        transition:
+          width 0.3s,
+          background 0.3s;
       }
 
       .storage-fill.warn {
@@ -773,6 +776,17 @@
 
       .file-menu.visible {
         display: block;
+      }
+
+      .file-menu-item.mobile-only,
+      .file-menu-separator.mobile-only {
+        display: none;
+      }
+
+      .file-menu-separator {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 4px 0;
       }
 
       .file-menu-item {
@@ -1114,6 +1128,14 @@
           min-width: 180px;
         }
 
+        .file-menu-item.mobile-only {
+          display: block;
+        }
+
+        .file-menu-separator.mobile-only {
+          display: block;
+        }
+
         .file-menu-item {
           font-size: 16px;
           padding: 10px 16px;
@@ -1220,24 +1242,28 @@
             class="status-hint"
             onclick="createNote()"
             style="cursor: pointer"
-            ><kbd>new</kbd> ctrl+n</span
+            >new <kbd>ctrl+n</kbd></span
           >
           <span
             class="status-hint"
             onclick="openSearch()"
             style="cursor: pointer"
-            ><kbd>search</kbd> ctrl+p</span
+            >search <kbd>ctrl+p</kbd></span
           >
           <span
             class="status-hint"
             onclick="openFindReplace()"
             style="cursor: pointer"
-            ><kbd>replace</kbd> ctrl+h</span
+            >replace <kbd>ctrl+h</kbd></span
           >
           <div class="status-right">
             <span class="status-info">
               <span id="cursorPos">Ln 1, Col 1</span>
-              <span id="storageUsage" class="storage-meter" title="localStorage usage"></span>
+              <span
+                id="storageUsage"
+                class="storage-meter"
+                title="localStorage usage"
+              ></span>
             </span>
             <button
               class="btn-wrap"
@@ -1252,19 +1278,19 @@
               <div class="file-menu" id="fileMenu">
                 <button
                   class="file-menu-item mobile-only"
-                  onclick="createNote(); closeFileMenu();"
+                  onclick="
+                    createNote();
+                    closeFileMenu();
+                  "
                 >
                   new
                 </button>
                 <button
                   class="file-menu-item mobile-only"
-                  onclick="openSearch(); closeFileMenu();"
-                >
-                  search all
-                </button>
-                <button
-                  class="file-menu-item mobile-only"
-                  onclick="openFindReplace(); closeFileMenu();"
+                  onclick="
+                    openFindReplace();
+                    closeFileMenu();
+                  "
                 >
                   find &amp; replace
                 </button>
@@ -1283,6 +1309,16 @@
                   "
                 >
                   download current
+                </button>
+                <hr class="file-menu-separator mobile-only" />
+                <button
+                  class="file-menu-item mobile-only"
+                  onclick="
+                    openSearch();
+                    closeFileMenu();
+                  "
+                >
+                  search all
                 </button>
                 <button
                   class="file-menu-item"
@@ -2107,8 +2143,6 @@
         });
       }
 
-
-
       const STORAGE_LIMIT = 5 * 1024 * 1024; // 5MB
       const storageUsage = document.getElementById("storageUsage");
 
@@ -2120,12 +2154,12 @@
         }
         const bytes = total * 2;
         const pct = Math.min((bytes / STORAGE_LIMIT) * 100, 100);
-        const label = bytes >= 1024 * 1024
-          ? (bytes / (1024 * 1024)).toFixed(1) + "MB"
-          : (bytes / 1024).toFixed(0) + "kB";
+        const label =
+          bytes >= 1024 * 1024
+            ? (bytes / (1024 * 1024)).toFixed(1) + "MB"
+            : (bytes / 1024).toFixed(0) + "kB";
         const cls = pct >= 90 ? " critical" : pct >= 70 ? " warn" : "";
-        storageUsage.innerHTML =
-          `<span class="storage-bar"><span class="storage-fill${cls}" style="width:${pct}%"></span></span>${label} (${pct.toFixed(0)}%)`;
+        storageUsage.innerHTML = `<span class="storage-bar"><span class="storage-fill${cls}" style="width:${pct}%"></span></span>${label} (${pct.toFixed(0)}%)`;
         storageUsage.title = `localStorage: ${label} / 5MB`;
       }
 
@@ -2248,7 +2282,8 @@
             if (state.activeId !== note.id) {
               switchNote(note.id);
             } else if (isMobile()) {
-              sidebar.classList.remove("open"); document.querySelector(".app").classList.remove("sidebar-open");
+              sidebar.classList.remove("open");
+              document.querySelector(".app").classList.remove("sidebar-open");
               editor.focus();
             }
           });
@@ -2441,7 +2476,8 @@
         saveState();
         render();
         updateUrl();
-        sidebar.classList.remove("open"); document.querySelector(".app").classList.remove("sidebar-open");
+        sidebar.classList.remove("open");
+        document.querySelector(".app").classList.remove("sidebar-open");
         // Scroll to top
         editor.scrollTop = 0;
         gutter.scrollTop = 0;
@@ -2451,7 +2487,9 @@
 
       function toggleSidebar() {
         sidebar.classList.toggle("open");
-        document.querySelector(".app").classList.toggle("sidebar-open", sidebar.classList.contains("open"));
+        document
+          .querySelector(".app")
+          .classList.toggle("sidebar-open", sidebar.classList.contains("open"));
         if (!sidebar.classList.contains("open")) editor.focus();
       }
 
@@ -3312,7 +3350,8 @@
         // Close sidebar
         if (e.key === "Escape" && sidebar.classList.contains("open")) {
           e.preventDefault();
-          sidebar.classList.remove("open"); document.querySelector(".app").classList.remove("sidebar-open");
+          sidebar.classList.remove("open");
+          document.querySelector(".app").classList.remove("sidebar-open");
           editor.focus();
           return;
         }
