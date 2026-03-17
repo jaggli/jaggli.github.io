@@ -2400,7 +2400,11 @@
 
         (function restoreSidebarWidth() {
             const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-            if (saved) sidebar.style.width = saved + 'px';
+            if (saved) {
+                sidebar.style.width = saved + 'px';
+            } else if (window.innerWidth >= 1000) {
+                sidebar.style.width = '260px';
+            }
         })();
 
         sidebarResize.addEventListener('mousedown', (e) => {
