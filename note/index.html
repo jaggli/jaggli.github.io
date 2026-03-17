@@ -436,6 +436,10 @@
         line-height: 1.3;
       }
 
+      .note-item.active .note-item-time {
+        color: var(--subtext);
+      }
+
       /* Drag reorder */
       .note-item.dragging {
         opacity: 0.3;
@@ -1426,6 +1430,13 @@
         const mon = Math.floor(day / 30);
         if (mon < 12) return mon + "mo ago";
         return Math.floor(mon / 12) + "y ago";
+      }
+
+      function formatSize(str) {
+        const bytes = new Blob([str]).size;
+        if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + "MB";
+        if (bytes >= 1024) return (bytes / 1024).toFixed(0) + "kB";
+        return bytes + "B";
       }
 
       // ═══════════════════════════════════════════════════
@@ -2429,7 +2440,7 @@
           // Timestamp
           const timeEl = document.createElement("div");
           timeEl.className = "note-item-time";
-          timeEl.textContent = relativeTime(note.updatedAt);
+          timeEl.textContent = relativeTime(note.updatedAt) + ", " + formatSize(note.content);
           meta.appendChild(timeEl);
 
           // Pin button
@@ -2483,7 +2494,7 @@
           sortNotes();
           times.forEach((el, i) => {
             if (state.notes[i])
-              el.textContent = relativeTime(state.notes[i].updatedAt);
+              el.textContent = relativeTime(state.notes[i].updatedAt) + ", " + formatSize(state.notes[i].content);
           });
         }, 30000);
       }
