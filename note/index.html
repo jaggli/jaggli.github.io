@@ -10,7 +10,7 @@
     />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'self'; img-src data:;"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://accounts.google.com; font-src 'self'; img-src data:; connect-src https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com; frame-src https://accounts.google.com;"
     />
     <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#1e1e2e" />
@@ -1161,7 +1161,7 @@
         }
 
         .file-menu {
-          min-width: 180px;
+          min-width: 220px;
         }
 
         .file-menu-item.mobile-only {
@@ -1373,6 +1373,22 @@
                   "
                 >
                   download all
+                </button>
+                <hr class="file-menu-separator" />
+                <button
+                  class="file-menu-item"
+                  id="btnDriveSync"
+                  onclick="driveSync()"
+                >
+                  sync google drive
+                </button>
+                <button
+                  class="file-menu-item"
+                  id="btnDriveSignOut"
+                  onclick="driveSignOut()"
+                  style="display: none"
+                >
+                  sign out of google
                 </button>
               </div>
             </div>
@@ -1617,7 +1633,10 @@
 
       function scheduleSave() {
         clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(saveState, 300);
+        saveTimeout = setTimeout(() => {
+          saveState();
+          scheduleDriveUpload(false);
+        }, 300);
       }
 
       function getActiveNote() {
@@ -2587,6 +2606,7 @@
         state.notes.unshift(note);
         state.activeId = note.id;
         saveState();
+        scheduleDriveUpload(true);
         render();
         if (focusName && !isMobile()) {
           const input = noteList.querySelector(
@@ -2627,6 +2647,7 @@
           state.activeId = state.notes.length ? state.notes[0].id : null;
         }
         saveState();
+        scheduleDriveUpload(true);
         render();
         updateUrl();
       }
@@ -3557,6 +3578,358 @@
           createNote();
         }
       });
+
+      // ═══════════════════════════════════════════════════
+      //  Google Drive Sync (lazy-loaded)
+      // ═══════════════════════════════════════════════════
+
+      const GDRIVE_CLIENT_ID = "1091919486392-7qc53cthqql7h3dftpaek8i9jp5caglu.apps.googleusercontent.com";
+      const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive.appdata";
+      const GDRIVE_FILE_NAME = "note-app-data.json";
+      let gdriveToken = null;
+      let gisLoaded = false;
+
+      function loadGIS() {
+        return new Promise((resolve, reject) => {
+          if (gisLoaded) return resolve();
+          const s = document.createElement("script");
+          s.src = "https://accounts.google.com/gsi/client";
+          s.onload = () => {
+            gisLoaded = true;
+            resolve();
+          };
+          s.onerror = () => reject(new Error("Failed to load Google sign-in"));
+          document.head.appendChild(s);
+        });
+      }
+
+      function gdriveAuth() {
+        if (gdriveToken) return Promise.resolve();
+        return loadGIS().then(
+          () =>
+            new Promise((resolve, reject) => {
+              const client = google.accounts.oauth2.initTokenClient({
+                client_id: GDRIVE_CLIENT_ID,
+                scope: GDRIVE_SCOPES,
+                callback: (resp) => {
+                  if (resp.error) return reject(new Error(resp.error));
+                  gdriveToken = resp.access_token;
+                  document.getElementById("btnDriveSignOut").style.display = "";
+                  resolve();
+                },
+              });
+              client.requestAccessToken();
+            }),
+        );
+      }
+
+      async function gdriveFetch(url, opts = {}) {
+        const res = await fetch(url, {
+          ...opts,
+          headers: {
+            Authorization: "Bearer " + gdriveToken,
+            ...opts.headers,
+          },
+        });
+        if (res.status === 401) {
+          gdriveToken = null;
+          throw new Error("Session expired — please sign in again");
+        }
+        if (!res.ok) throw new Error("Drive error: " + res.status);
+        return res;
+      }
+
+      async function gdriveFindFile() {
+        const res = await gdriveFetch(
+          "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'" +
+            GDRIVE_FILE_NAME +
+            "'&fields=files(id,modifiedTime)",
+        );
+        const data = await res.json();
+        return data.files?.[0] || null;
+      }
+
+      function showConflictModal(noteName, localTime, remoteTime) {
+        return new Promise((resolve) => {
+          const localLabel =
+            localTime > remoteTime ? "local (newer)" : "local (older)";
+          const remoteLabel =
+            remoteTime > localTime ? "remote (newer)" : "remote (older)";
+          modalText.innerHTML =
+            '<b>' + escapeHtml(noteName) + '</b> differs.<br><br>' +
+            '<span style="color:var(--subtext);font-size:12px">' +
+            'Local: ' + new Date(localTime).toLocaleString() + '<br>' +
+            'Remote: ' + new Date(remoteTime).toLocaleString() + '</span>';
+          modalInput.style.display = "none";
+          modalConfirm.textContent = "keep both";
+          modalConfirm.className = "modal-btn";
+          modalCancel.textContent = "override older";
+          modalCancel.style.display = "";
+          modalOverlay.classList.add("visible");
+
+          function cleanup() {
+            modalOverlay.classList.remove("visible");
+            modalText.innerHTML = "";
+            modalConfirm.removeEventListener("click", onKeepBoth);
+            modalCancel.removeEventListener("click", onOverride);
+            modalOverlay.removeEventListener("click", onOverlay);
+            document.removeEventListener("keydown", onKey);
+          }
+          function onKeepBoth() {
+            cleanup();
+            resolve("keep-both");
+          }
+          function onOverride() {
+            cleanup();
+            resolve("override");
+          }
+          function onOverlay(e) {
+            if (e.target === modalOverlay) {
+              cleanup();
+              resolve("skip");
+            }
+          }
+          function onKey(e) {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              cleanup();
+              resolve("skip");
+            }
+          }
+
+          modalConfirm.addEventListener("click", onKeepBoth);
+          modalCancel.addEventListener("click", onOverride);
+          modalOverlay.addEventListener("click", onOverlay);
+          document.addEventListener("keydown", onKey);
+        });
+      }
+
+      function renameWithNumber(name, existingNames) {
+        const dot = name.lastIndexOf(".");
+        const base = dot > 0 ? name.slice(0, dot) : name;
+        const ext = dot > 0 ? name.slice(dot) : "";
+        let n = 1;
+        let candidate;
+        do {
+          candidate = base + "_" + n + ext;
+          n++;
+        } while (existingNames.has(candidate));
+        return candidate;
+      }
+
+      function gatherDrivePayload() {
+        return JSON.stringify({
+          ...state,
+          settings: {
+            wrap: localStorage.getItem(WRAP_KEY),
+            sidebarWidth: localStorage.getItem(SIDEBAR_WIDTH_KEY),
+          },
+        });
+      }
+
+      function applyDriveSettings(settings) {
+        if (!settings) return;
+        if (settings.wrap !== null && settings.wrap !== undefined) {
+          localStorage.setItem(WRAP_KEY, settings.wrap);
+          const wrapOn = settings.wrap === "true";
+          editorArea.classList.toggle("wrap", wrapOn);
+          btnWrap.classList.toggle("active", wrapOn);
+          updateLineNumbers();
+        }
+        if (settings.sidebarWidth) {
+          localStorage.setItem(SIDEBAR_WIDTH_KEY, settings.sidebarWidth);
+          sidebar.style.width = settings.sidebarWidth + "px";
+        }
+      }
+
+      async function gdriveUploadState() {
+        const payload = gatherDrivePayload();
+        const existing = await gdriveFindFile();
+        if (existing) {
+          await gdriveFetch(
+            "https://www.googleapis.com/upload/drive/v3/files/" +
+              existing.id +
+              "?uploadType=media",
+            {
+              method: "PATCH",
+              body: payload,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        } else {
+          const metadata = JSON.stringify({
+            name: GDRIVE_FILE_NAME,
+            parents: ["appDataFolder"],
+          });
+          const boundary = "---noteapp" + Date.now();
+          const body =
+            "--" +
+            boundary +
+            "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" +
+            metadata +
+            "\r\n--" +
+            boundary +
+            "\r\nContent-Type: application/json\r\n\r\n" +
+            payload +
+            "\r\n--" +
+            boundary +
+            "--";
+          await gdriveFetch(
+            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "multipart/related; boundary=" + boundary,
+              },
+              body,
+            },
+          );
+        }
+      }
+
+      async function driveSync() {
+        closeFileMenu();
+        try {
+          await gdriveAuth();
+
+          // Load remote state
+          const file = await gdriveFindFile();
+          let remoteNotes = [];
+          let remoteSettings = null;
+          if (file) {
+            const res = await gdriveFetch(
+              "https://www.googleapis.com/drive/v3/files/" +
+                file.id +
+                "?alt=media",
+            );
+            const data = await res.json();
+            if (data.notes) remoteNotes = data.notes;
+            if (data.settings) remoteSettings = data.settings;
+          }
+
+          const localById = new Map(state.notes.map((n) => [n.id, n]));
+          const remoteById = new Map(remoteNotes.map((n) => [n.id, n]));
+          const merged = [];
+          const allNames = new Set(state.notes.map((n) => n.name));
+          remoteNotes.forEach((n) => allNames.add(n.name));
+          let hadConflicts = false;
+
+          // Process local notes
+          for (const local of state.notes) {
+            const remote = remoteById.get(local.id);
+            if (!remote) {
+              // Only local — keep it
+              merged.push(local);
+            } else if (local.content === remote.content && local.name === remote.name) {
+              // Same — keep local (preserve any local-only fields), use latest timestamp
+              merged.push({
+                ...local,
+                updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0),
+              });
+            } else {
+              // Conflict
+              hadConflicts = true;
+              const localTime = local.updatedAt || 0;
+              const remoteTime = remote.updatedAt || 0;
+              const choice = await showConflictModal(
+                local.name,
+                localTime,
+                remoteTime,
+              );
+              if (choice === "keep-both") {
+                const newer = localTime >= remoteTime ? local : remote;
+                const older = localTime >= remoteTime ? remote : local;
+                merged.push(newer);
+                const renamedName = renameWithNumber(older.name, allNames);
+                allNames.add(renamedName);
+                merged.push({
+                  ...older,
+                  id: older.id + "_copy",
+                  name: renamedName,
+                });
+              } else if (choice === "override") {
+                // Keep the newer one
+                merged.push(localTime >= remoteTime ? local : remote);
+              } else {
+                // Skip — keep local as-is
+                merged.push(local);
+              }
+            }
+          }
+
+          // Add remote-only notes
+          for (const remote of remoteNotes) {
+            if (!localById.has(remote.id)) {
+              merged.push(remote);
+            }
+          }
+
+          state.notes = merged;
+          sortNotes();
+          saveState();
+
+          // Settings: Google Drive is source of truth
+          if (remoteSettings) applyDriveSettings(remoteSettings);
+
+          render();
+
+          // Upload merged state to Drive
+          await gdriveUploadState();
+
+          gdriveConnected = true;
+          gdriveDirty = false;
+
+          if (!hadConflicts) {
+            showModal("Google Drive synced.", "ok", null);
+          } else {
+            showModal("Sync complete — conflicts resolved.", "ok", null);
+          }
+        } catch (e) {
+          showModal("Sync failed: " + e.message, "ok", null);
+        }
+      }
+
+      let gdriveConnected = false;
+      let gdriveDirty = false;
+      let gdriveSyncTimeout = null;
+      let gdriveUploading = false;
+
+      function scheduleDriveUpload(immediate) {
+        if (!gdriveConnected || !gdriveToken) return;
+        gdriveDirty = true;
+        clearTimeout(gdriveSyncTimeout);
+        if (immediate) {
+          drivePushQuiet();
+        } else {
+          // Defensive: wait 30s after last change
+          gdriveSyncTimeout = setTimeout(drivePushQuiet, 30000);
+        }
+      }
+
+      async function drivePushQuiet() {
+        if (!gdriveDirty || !gdriveToken || gdriveUploading) return;
+        gdriveUploading = true;
+        try {
+          await gdriveUploadState();
+          gdriveDirty = false;
+        } catch {
+          // Silently fail — will retry on next change or manual sync
+        } finally {
+          gdriveUploading = false;
+        }
+      }
+
+      function driveSignOut() {
+        closeFileMenu();
+        if (gdriveToken && gisLoaded) {
+          google.accounts.oauth2.revoke(gdriveToken);
+        }
+        gdriveToken = null;
+        gdriveConnected = false;
+        gdriveDirty = false;
+        clearTimeout(gdriveSyncTimeout);
+        document.getElementById("btnDriveSignOut").style.display = "none";
+      }
 
       // ═══════════════════════════════════════════════════
       //  Init
