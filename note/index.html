@@ -842,6 +842,18 @@
                 display: block;
             }
 
+            .status-hint {
+                display: none;
+            }
+
+            .status-info {
+                display: none;
+            }
+
+            .btn-wrap {
+                display: none;
+            }
+
             .find-replace-bar {
                 flex-wrap: wrap;
             }
@@ -1656,6 +1668,7 @@
                     scheduleSave();
                     scheduleUrlUpdate();
                     scheduleHighlight();
+                    updateTitle();
                 });
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
@@ -1721,6 +1734,13 @@
             }, 30000);
         }
 
+        function updateTitle() {
+            const note = getActiveNote();
+            document.title = note
+                ? note.name + ' \u00b7 note \u2014 minimal text editor'
+                : 'note \u2014 minimal text editor';
+        }
+
         function render() {
             renderNoteList();
             renderEditor();
@@ -1728,6 +1748,7 @@
             updateCharCount();
             updateWordCount();
             updateCursorPos();
+            updateTitle();
         }
 
         // ═══════════════════════════════════════════════════
