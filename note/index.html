@@ -943,6 +943,11 @@
           display: none;
         }
 
+        .app.sidebar-open .btn-wrap,
+        .app.sidebar-open .file-menu-container {
+          display: none;
+        }
+
         .sidebar.open {
           display: flex;
           position: fixed;
@@ -1984,12 +1989,55 @@
 
       let currentLine = 1;
 
+      // Reusable measurement element for wrapped line heights
+      const _wrapMeasure = document.createElement("div");
+      _wrapMeasure.style.position = "absolute";
+      _wrapMeasure.style.visibility = "hidden";
+      _wrapMeasure.style.height = "auto";
+      _wrapMeasure.style.padding = "0";
+      _wrapMeasure.style.border = "none";
+      _wrapMeasure.style.whiteSpace = "pre-wrap";
+      _wrapMeasure.style.overflowWrap = "break-word";
+
       function updateLineNumbers() {
-        const lines = (editor.value || "").split("\n").length;
-        let html = "";
-        for (let i = 1; i <= Math.max(lines, 1); i++) {
-          html += `<div class="gutter-line${i === currentLine ? " active" : ""}">${i}</div>`;
+        const text = editor.value || "";
+        const lines = text.split("\n");
+        const wrapOn = editorArea.classList.contains("wrap");
+
+        if (!wrapOn) {
+          let html = "";
+          for (let i = 1; i <= Math.max(lines.length, 1); i++) {
+            html += `<div class="gutter-line${i === currentLine ? " active" : ""}">${i}</div>`;
+          }
+          gutter.innerHTML = html;
+          return;
         }
+
+        // Measure visual line heights when wrap is on
+        const cs = window.getComputedStyle(editor);
+        const lineHeight = parseFloat(cs.lineHeight);
+        const contentWidth =
+          editor.clientWidth -
+          parseFloat(cs.paddingLeft) -
+          parseFloat(cs.paddingRight);
+
+        _wrapMeasure.style.font = cs.font;
+        _wrapMeasure.style.letterSpacing = cs.letterSpacing;
+        _wrapMeasure.style.tabSize = cs.tabSize;
+        _wrapMeasure.style.lineHeight = cs.lineHeight;
+        _wrapMeasure.style.width = contentWidth + "px";
+        document.body.appendChild(_wrapMeasure);
+
+        let html = "";
+        for (let i = 0; i < lines.length; i++) {
+          // Empty lines still take one visual line
+          _wrapMeasure.textContent = lines[i] || " ";
+          const h = _wrapMeasure.offsetHeight;
+          const isActive = i + 1 === currentLine;
+          html += `<div class="gutter-line${isActive ? " active" : ""}" style="height:${h}px">${i + 1}</div>`;
+        }
+
+        document.body.removeChild(_wrapMeasure);
         gutter.innerHTML = html;
       }
 
@@ -2127,7 +2175,7 @@
             if (state.activeId !== note.id) {
               switchNote(note.id);
             } else if (isMobile()) {
-              sidebar.classList.remove("open");
+              sidebar.classList.remove("open"); document.querySelector(".app").classList.remove("sidebar-open");
               editor.focus();
             }
           });
@@ -2321,7 +2369,7 @@
         saveState();
         render();
         updateUrl();
-        sidebar.classList.remove("open");
+        sidebar.classList.remove("open"); document.querySelector(".app").classList.remove("sidebar-open");
         // Scroll to top
         editor.scrollTop = 0;
         gutter.scrollTop = 0;
@@ -2331,6 +2379,7 @@
 
       function toggleSidebar() {
         sidebar.classList.toggle("open");
+        document.querySelector(".app").classList.toggle("sidebar-open", sidebar.classList.contains("open"));
         if (!sidebar.classList.contains("open")) editor.focus();
       }
 
@@ -2789,7 +2838,15 @@
         const isWrap = editorArea.classList.toggle("wrap");
         btnWrap.classList.toggle("active", isWrap);
         localStorage.setItem(WRAP_KEY, isWrap ? "true" : "false");
+        updateLineNumbers();
       }
+
+      // Re-measure wrapped line heights when editor resizes
+      new ResizeObserver(() => {
+        if (editorArea.classList.contains("wrap")) {
+          updateLineNumbers();
+        }
+      }).observe(editor);
 
       // ═══════════════════════════════════════════════════
       //  File Menu
@@ -3191,7 +3248,7 @@
         // Close sidebar
         if (e.key === "Escape" && sidebar.classList.contains("open")) {
           e.preventDefault();
-          sidebar.classList.remove("open");
+          sidebar.classList.remove("open"); document.querySelector(".app").classList.remove("sidebar-open");
           editor.focus();
           return;
         }
