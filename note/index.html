@@ -695,7 +695,7 @@
         margin-left: auto;
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 8px;
       }
 
       .status-info {
@@ -739,7 +739,7 @@
         border: 1px solid var(--border);
         border-radius: 6px;
         padding: 4px 0;
-        min-width: 140px;
+        min-width: 160px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         z-index: 50;
       }
@@ -1078,7 +1078,7 @@
         }
 
         .file-menu {
-          min-width: 200px;
+          min-width: 180px;
         }
 
         .file-menu-item {
@@ -1220,12 +1220,19 @@
               <div class="file-menu" id="fileMenu">
                 <button
                   class="file-menu-item"
+                  id="btnShare"
+                  onclick="shareNote()"
+                >
+                  share current
+                </button>
+                <button
+                  class="file-menu-item"
                   onclick="
                     downloadNote();
                     closeFileMenu();
                   "
                 >
-                  download
+                  download current
                 </button>
                 <button
                   class="file-menu-item"
@@ -1235,13 +1242,6 @@
                   "
                 >
                   download all
-                </button>
-                <button
-                  class="file-menu-item"
-                  id="btnShare"
-                  onclick="shareNote()"
-                >
-                  share
                 </button>
               </div>
             </div>
