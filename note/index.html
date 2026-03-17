@@ -283,7 +283,7 @@
 
         .note-item {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             padding: 6px 14px 6px 0;
             margin: 2px 0;
             cursor: pointer;
@@ -324,20 +324,24 @@
         }
 
         .note-item .btn-delete {
-            display: none;
             background: none;
             border: none;
-            color: var(--subtext);
+            color: var(--overlay);
             cursor: pointer;
             font-size: 14px;
-            padding: 0 2px;
+            width: 36px;
             line-height: 1;
             border-radius: 3px;
             flex-shrink: 0;
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .note-item:hover .btn-delete {
-            display: block;
+        .note-item:hover .btn-delete,
+        .note-item.active .btn-delete {
+            color: var(--gutter);
         }
 
         .note-item .btn-delete:hover {
@@ -348,17 +352,22 @@
         .note-item .btn-pin {
             background: none;
             border: none;
-            color: transparent;
+            color: var(--overlay);
             cursor: pointer;
             font-size: 11px;
-            width: 28px;
+            width: 36px;
             text-align: center;
             line-height: 1;
             border-radius: 3px;
             flex-shrink: 0;
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .note-item:hover .btn-pin {
+        .note-item:hover .btn-pin,
+        .note-item.active .btn-pin {
             color: var(--gutter);
         }
 
@@ -1601,6 +1610,15 @@
                     state.notes.splice(toIdx, 0, moved);
                     saveState();
                     renderNoteList();
+                });
+
+                // Click on row to switch note
+                div.addEventListener('click', (e) => {
+                    if (e.target.closest('.btn-pin') || e.target.closest('.btn-delete')) return;
+                    if (e.target.classList.contains('note-item-input') && !e.target.readOnly) return;
+                    if (state.activeId !== note.id) {
+                        switchNote(note.id);
+                    }
                 });
 
                 // Meta container (name + timestamp)
