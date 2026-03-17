@@ -707,7 +707,7 @@
       .storage-meter {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 10px;
       }
 
       .storage-bar {
@@ -719,9 +719,10 @@
       }
 
       .storage-fill {
+        display: block;
         height: 100%;
         border-radius: 3px;
-        background: var(--gutter);
+        background: var(--subtext);
         transition:
           width 0.3s,
           background 0.3s;
@@ -894,6 +895,25 @@
         color: var(--sidebar);
       }
 
+      .modal-input {
+        display: none;
+        width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        padding: 8px 10px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        box-sizing: border-box;
+      }
+
+      .modal-input:focus {
+        outline: none;
+        border-color: var(--blue);
+      }
+
       /* Drop overlay */
       .drop-overlay {
         display: none;
@@ -937,6 +957,10 @@
 
       ::-webkit-scrollbar-thumb:hover {
         background: var(--gutter);
+      }
+
+      ::-webkit-scrollbar-corner {
+        background: transparent;
       }
 
       /* Mobile files button (hidden on desktop) */
@@ -1259,12 +1283,12 @@
           <div class="status-right">
             <span class="status-info">
               <span id="cursorPos">Ln 1, Col 1</span>
-              <span
-                id="storageUsage"
-                class="storage-meter"
-                title="localStorage usage"
-              ></span>
             </span>
+            <span
+              id="storageUsage"
+              class="storage-meter"
+              title="localStorage usage"
+            ></span>
             <button
               class="btn-wrap"
               id="btnWrap"
@@ -1339,6 +1363,12 @@
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal">
         <div class="modal-text" id="modalText"></div>
+        <input
+          class="modal-input"
+          id="modalInput"
+          type="text"
+          spellcheck="false"
+        />
         <div class="modal-actions">
           <button class="modal-btn" id="modalCancel">cancel</button>
           <button class="modal-btn modal-btn-danger" id="modalConfirm">
@@ -1498,6 +1528,7 @@
       const emptyState = document.getElementById("emptyState");
       const modalOverlay = document.getElementById("modalOverlay");
       const modalText = document.getElementById("modalText");
+      const modalInput = document.getElementById("modalInput");
       const modalCancel = document.getElementById("modalCancel");
       const modalConfirm = document.getElementById("modalConfirm");
       const sidebar = document.querySelector(".sidebar");
@@ -1612,6 +1643,7 @@
       function showModal(text, confirmLabel, cancelLabel, danger) {
         return new Promise((resolve) => {
           modalText.textContent = text;
+          modalInput.style.display = "none";
           modalConfirm.textContent = confirmLabel;
           modalCancel.textContent = cancelLabel || "";
           modalCancel.style.display = cancelLabel ? "" : "none";
@@ -1639,6 +1671,65 @@
             if (e.target === modalOverlay) {
               cleanup();
               resolve(false);
+            }
+          }
+          function onKey(e) {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onConfirm();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              onCancel();
+            }
+          }
+
+          modalConfirm.addEventListener("click", onConfirm);
+          modalCancel.addEventListener("click", onCancel);
+          modalOverlay.addEventListener("click", onOverlay);
+          document.addEventListener("keydown", onKey);
+        });
+      }
+
+      function showPromptModal(text, defaultValue) {
+        return new Promise((resolve) => {
+          modalText.textContent = text;
+          modalInput.style.display = "block";
+          modalInput.value = defaultValue || "";
+          modalConfirm.textContent = "create";
+          modalConfirm.className = "modal-btn";
+          modalCancel.textContent = "cancel";
+          modalCancel.style.display = "";
+          modalOverlay.classList.add("visible");
+          modalInput.focus();
+          const dot = defaultValue ? defaultValue.lastIndexOf(".") : -1;
+          if (dot > 0) {
+            modalInput.setSelectionRange(0, dot);
+          } else {
+            modalInput.select();
+          }
+
+          function cleanup() {
+            modalOverlay.classList.remove("visible");
+            modalInput.style.display = "none";
+            modalConfirm.removeEventListener("click", onConfirm);
+            modalCancel.removeEventListener("click", onCancel);
+            modalOverlay.removeEventListener("click", onOverlay);
+            document.removeEventListener("keydown", onKey);
+          }
+          function onConfirm() {
+            const val = modalInput.value.trim();
+            cleanup();
+            resolve(val || null);
+          }
+          function onCancel() {
+            cleanup();
+            resolve(null);
+          }
+          function onOverlay(e) {
+            if (e.target === modalOverlay) {
+              cleanup();
+              resolve(null);
             }
           }
           function onKey(e) {
@@ -2153,6 +2244,11 @@
           total += key.length + localStorage.getItem(key).length;
         }
         const bytes = total * 2;
+        if (bytes < 200 * 1024) {
+          storageUsage.innerHTML = "";
+          storageUsage.title = "";
+          return;
+        }
         const pct = Math.min((bytes / STORAGE_LIMIT) * 100, 100);
         const label =
           bytes >= 1024 * 1024
@@ -2417,7 +2513,12 @@
         return `note${num}.md`;
       }
 
-      function createNote(name, content, focusName) {
+      async function createNote(name, content, focusName) {
+        if (!name && isMobile()) {
+          const result = await showPromptModal("Filename:", nextNoteName());
+          if (!result) return null;
+          name = result;
+        }
         const note = {
           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
           name: name || nextNoteName(),
@@ -2428,7 +2529,7 @@
         state.activeId = note.id;
         saveState();
         render();
-        if (focusName) {
+        if (focusName && !isMobile()) {
           const input = noteList.querySelector(
             ".note-item.active .note-item-input",
           );
