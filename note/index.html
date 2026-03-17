@@ -1573,8 +1573,29 @@
         } catch {}
       }
 
+      function wouldExceedStorage(extraBytes) {
+        return getStorageUsed() + extraBytes > STORAGE_LIMIT;
+      }
+
+      function getStorageUsed() {
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          total += key.length + localStorage.getItem(key).length;
+        }
+        return total * 2;
+      }
+
       function saveState() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+          showModal(
+            "Storage full. Delete some notes to free up space.",
+            "ok",
+            null,
+          );
+        }
         updateStorageUsage();
       }
 
@@ -2440,7 +2461,7 @@
           // Timestamp
           const timeEl = document.createElement("div");
           timeEl.className = "note-item-time";
-          timeEl.textContent = relativeTime(note.updatedAt) + ", " + formatSize(note.content);
+          timeEl.textContent = relativeTime(note.updatedAt) + (note.content ? ", " + formatSize(note.content) : "");
           meta.appendChild(timeEl);
 
           // Pin button
@@ -2531,10 +2552,20 @@
           if (!result) return null;
           name = result;
         }
+        const contentStr = content || "";
+        const estimatedBytes = (name || "").length * 2 + contentStr.length * 2 + 200;
+        if (wouldExceedStorage(estimatedBytes)) {
+          showModal(
+            "Not enough storage space. Delete some notes to free up space.",
+            "ok",
+            null,
+          );
+          return null;
+        }
         const note = {
           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
           name: name || nextNoteName(),
-          content: content || "",
+          content: contentStr,
           updatedAt: Date.now(),
         };
         state.notes.unshift(note);
@@ -3247,6 +3278,14 @@
           }
           const reader = new FileReader();
           reader.onload = async () => {
+            if (wouldExceedStorage(reader.result.length * 2)) {
+              showModal(
+                `"${file.name}" is too large. Delete some notes to free up space.`,
+                "ok",
+                null,
+              );
+              return;
+            }
             const existing = state.notes.find((n) => n.name === file.name);
             if (existing) {
               const update = await showModal(
