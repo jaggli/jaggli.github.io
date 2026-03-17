@@ -611,6 +611,11 @@
         display: flex;
       }
 
+      .empty-state-mobile {
+        display: none;
+        pointer-events: auto;
+      }
+
       /* Find & Replace */
       .find-replace-bar {
         display: none;
@@ -1174,6 +1179,14 @@
           font-size: 16px;
         }
 
+        .empty-state-desktop {
+          display: none;
+        }
+
+        .empty-state-mobile {
+          display: block;
+        }
+
         .find-replace-bar {
           flex-wrap: wrap;
           padding: 8px 12px;
@@ -1260,7 +1273,8 @@
             ></textarea>
           </div>
           <div class="empty-state" id="emptyState">
-            <div>ctrl+n or drop a file to start</div>
+            <div class="empty-state-desktop">ctrl+n or drop a file to start</div>
+            <button class="empty-state-mobile btn-wrap" onclick="createNote()">new file</button>
           </div>
         </div>
         <div class="statusbar">
