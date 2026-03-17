@@ -1999,23 +1999,37 @@
       _wrapMeasure.style.whiteSpace = "pre-wrap";
       _wrapMeasure.style.overflowWrap = "break-word";
 
+      let _gutterLineCount = 0;
+      let _wrapMeasureRAF = 0;
+
       function updateLineNumbers() {
         const text = editor.value || "";
-        const lines = text.split("\n");
+        const lineCount = Math.max((text.match(/\n/g) || []).length + 1, 1);
         const wrapOn = editorArea.classList.contains("wrap");
 
         if (!wrapOn) {
-          let html = "";
-          for (let i = 1; i <= Math.max(lines.length, 1); i++) {
-            html += `<div class="gutter-line${i === currentLine ? " active" : ""}">${i}</div>`;
+          // Only rebuild gutter DOM if line count changed
+          if (lineCount !== _gutterLineCount) {
+            _gutterLineCount = lineCount;
+            let html = "";
+            for (let i = 1; i <= lineCount; i++) {
+              html += `<div class="gutter-line${i === currentLine ? " active" : ""}">${i}</div>`;
+            }
+            gutter.innerHTML = html;
           }
-          gutter.innerHTML = html;
           return;
         }
 
-        // Measure visual line heights when wrap is on
+        // Wrap mode: debounce expensive measurement to next frame
+        cancelAnimationFrame(_wrapMeasureRAF);
+        _wrapMeasureRAF = requestAnimationFrame(() => {
+          _measureWrappedLines(text);
+        });
+      }
+
+      function _measureWrappedLines(text) {
+        const lines = text.split("\n");
         const cs = window.getComputedStyle(editor);
-        const lineHeight = parseFloat(cs.lineHeight);
         const contentWidth =
           editor.clientWidth -
           parseFloat(cs.paddingLeft) -
@@ -2030,7 +2044,6 @@
 
         let html = "";
         for (let i = 0; i < lines.length; i++) {
-          // Empty lines still take one visual line
           _wrapMeasure.textContent = lines[i] || " ";
           const h = _wrapMeasure.offsetHeight;
           const isActive = i + 1 === currentLine;
@@ -2038,7 +2051,16 @@
         }
 
         document.body.removeChild(_wrapMeasure);
+        _gutterLineCount = lines.length;
         gutter.innerHTML = html;
+      }
+
+      // Update only the active gutter line highlight without rebuilding DOM
+      function updateGutterActive() {
+        const gutterLines = gutter.querySelectorAll(".gutter-line");
+        gutterLines.forEach((el, i) => {
+          el.classList.toggle("active", i + 1 === currentLine);
+        });
       }
 
       function updateCharCount() {
@@ -2060,11 +2082,7 @@
         const col = pos - before.lastIndexOf("\n");
         currentLine = line;
         cursorPos.textContent = "Ln " + line + ", Col " + col;
-        // Update active gutter line
-        const gutterLines = gutter.querySelectorAll(".gutter-line");
-        gutterLines.forEach((el, i) => {
-          el.classList.toggle("active", i + 1 === line);
-        });
+        updateGutterActive();
       }
 
       function updateEmptyState() {
@@ -3183,8 +3201,7 @@
 
           if (start === end && !e.shiftKey) {
             // No selection: insert 2 spaces
-            editor.value = val.substring(0, start) + "  " + val.substring(end);
-            editor.selectionStart = editor.selectionEnd = start + 2;
+            editor.setRangeText("  ", start, end, "end");
           } else {
             // Selection: indent/dedent all selected lines
             const lineStart = val.lastIndexOf("\n", start - 1) + 1;
@@ -3194,19 +3211,16 @@
             const lines = block.split("\n");
             let newLines;
             if (e.shiftKey) {
-              // Dedent
               newLines = lines.map((l) => {
                 if (l.startsWith("  ")) return l.slice(2);
                 if (l.startsWith("\t")) return l.slice(1);
                 return l;
               });
             } else {
-              // Indent
               newLines = lines.map((l) => "  " + l);
             }
             const newBlock = newLines.join("\n");
-            editor.value =
-              val.substring(0, lineStart) + newBlock + val.substring(actualEnd);
+            editor.setRangeText(newBlock, lineStart, actualEnd, "select");
             editor.selectionStart = lineStart;
             editor.selectionEnd = lineStart + newBlock.length;
           }
