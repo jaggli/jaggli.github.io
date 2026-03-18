@@ -3787,10 +3787,25 @@
         }
       }
 
+      let driveSyncAborted = false;
+
       async function driveSync() {
         closeFileMenu();
+        driveSyncAborted = false;
+
+        // Show progress modal
+        const progressDone = showModal(
+          "Google Drive sync in progress…",
+          "cancel",
+          null,
+        );
+        progressDone.then((confirmed) => {
+          if (confirmed) driveSyncAborted = true;
+        });
+
         try {
           await gdriveAuth();
+          if (driveSyncAborted) return;
 
           // Load remote state
           const file = await gdriveFindFile();
@@ -3878,6 +3893,11 @@
 
           gdriveConnected = true;
           gdriveDirty = false;
+          document.getElementById("btnDriveSync").textContent = "manual sync";
+
+          // Dismiss progress modal, then show result
+          modalOverlay.classList.remove("visible");
+          if (driveSyncAborted) return;
 
           if (!hadConflicts) {
             showModal("Google Drive synced.", "ok", null);
@@ -3885,7 +3905,10 @@
             showModal("Sync complete — conflicts resolved.", "ok", null);
           }
         } catch (e) {
-          showModal("Sync failed: " + e.message, "ok", null);
+          modalOverlay.classList.remove("visible");
+          if (!driveSyncAborted) {
+            showModal("Sync failed: " + e.message, "ok", null);
+          }
         }
       }
 
