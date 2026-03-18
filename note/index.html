@@ -15,9 +15,23 @@
     <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#1e1e2e" />
     <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="img/favicon-16x16.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="img/favicon-32x32.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="img/apple-touch-icon.png"
+    />
     <link rel="manifest" href="manifest.json" />
     <style>
       @font-face {
@@ -1275,8 +1289,12 @@
             ></textarea>
           </div>
           <div class="empty-state" id="emptyState">
-            <div class="empty-state-desktop">ctrl+n or drop a file to start</div>
-            <button class="empty-state-mobile btn-wrap" onclick="createNote()">new file</button>
+            <div class="empty-state-desktop">
+              ctrl+n or drop a file to start
+            </div>
+            <button class="empty-state-mobile btn-wrap" onclick="createNote()">
+              new file
+            </button>
           </div>
         </div>
         <div class="statusbar">
@@ -1344,7 +1362,7 @@
                   id="btnShare"
                   onclick="shareNote()"
                 >
-                  share current
+                  share file
                 </button>
                 <button
                   class="file-menu-item"
@@ -1353,7 +1371,7 @@
                     closeFileMenu();
                   "
                 >
-                  download current
+                  download file
                 </button>
                 <hr class="file-menu-separator mobile-only" />
                 <button
@@ -1390,6 +1408,15 @@
                 >
                   turn off sync
                 </button>
+                <hr class="file-menu-separator" />
+                <a
+                  class="file-menu-item"
+                  href="legal/privacy-policy.html"
+                  target="_blank"
+                  style="text-decoration: none; color: var(--subtext)"
+                >
+                  privacy policy
+                </a>
               </div>
             </div>
           </div>
@@ -1466,7 +1493,8 @@
 
       function formatSize(str) {
         const bytes = new Blob([str]).size;
-        if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + "MB";
+        if (bytes >= 1024 * 1024)
+          return (bytes / (1024 * 1024)).toFixed(1) + "MB";
         if (bytes >= 1024) return (bytes / 1024).toFixed(0) + "kB";
         return bytes + "B";
       }
@@ -2496,7 +2524,9 @@
           // Timestamp
           const timeEl = document.createElement("div");
           timeEl.className = "note-item-time";
-          timeEl.textContent = relativeTime(note.updatedAt) + (note.content ? ", " + formatSize(note.content) : "");
+          timeEl.textContent =
+            relativeTime(note.updatedAt) +
+            (note.content ? ", " + formatSize(note.content) : "");
           meta.appendChild(timeEl);
 
           // Pin button
@@ -2550,7 +2580,10 @@
           sortNotes();
           times.forEach((el, i) => {
             if (state.notes[i])
-              el.textContent = relativeTime(state.notes[i].updatedAt) + ", " + formatSize(state.notes[i].content);
+              el.textContent =
+                relativeTime(state.notes[i].updatedAt) +
+                ", " +
+                formatSize(state.notes[i].content);
           });
         }, 30000);
       }
@@ -2588,7 +2621,8 @@
           name = result;
         }
         const contentStr = content || "";
-        const estimatedBytes = (name || "").length * 2 + contentStr.length * 2 + 200;
+        const estimatedBytes =
+          (name || "").length * 2 + contentStr.length * 2 + 200;
         if (wouldExceedStorage(estimatedBytes)) {
           showModal(
             "Not enough storage space. Delete some notes to free up space.",
@@ -3583,7 +3617,8 @@
       //  Google Drive Sync (lazy-loaded)
       // ═══════════════════════════════════════════════════
 
-      const GDRIVE_CLIENT_ID = "1091919486392-7qc53cthqql7h3dftpaek8i9jp5caglu.apps.googleusercontent.com";
+      const GDRIVE_CLIENT_ID =
+        "1091919486392-7qc53cthqql7h3dftpaek8i9jp5caglu.apps.googleusercontent.com";
       const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive.appdata";
       const GDRIVE_FILE_NAME = "note-app-data.json";
       const GDRIVE_TOKEN_KEY = "notepad_gdrive_token";
@@ -3666,7 +3701,8 @@
       }
 
       function gdriveAuth() {
-        if (gdriveToken && Date.now() < gdriveTokenExpiry) return Promise.resolve();
+        if (gdriveToken && Date.now() < gdriveTokenExpiry)
+          return Promise.resolve();
         clearToken();
         return loadGIS().then(
           () =>
@@ -3720,10 +3756,16 @@
           const remoteLabel =
             remoteTime > localTime ? "remote (newer)" : "remote (older)";
           modalText.innerHTML =
-            '<b>' + escapeHtml(noteName) + '</b> differs.<br><br>' +
+            "<b>" +
+            escapeHtml(noteName) +
+            "</b> differs.<br><br>" +
             '<span style="color:var(--subtext);font-size:12px">' +
-            'Local: ' + new Date(localTime).toLocaleString() + '<br>' +
-            'Remote: ' + new Date(remoteTime).toLocaleString() + '</span>';
+            "Local: " +
+            new Date(localTime).toLocaleString() +
+            "<br>" +
+            "Remote: " +
+            new Date(remoteTime).toLocaleString() +
+            "</span>";
           modalInput.style.display = "none";
           modalConfirm.textContent = "keep both";
           modalConfirm.className = "modal-btn";
@@ -3899,11 +3941,17 @@
             if (!remote) {
               // Only local — keep it
               merged.push(local);
-            } else if (local.content === remote.content && local.name === remote.name) {
+            } else if (
+              local.content === remote.content &&
+              local.name === remote.name
+            ) {
               // Same — keep local (preserve any local-only fields), use latest timestamp
               merged.push({
                 ...local,
-                updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0),
+                updatedAt: Math.max(
+                  local.updatedAt || 0,
+                  remote.updatedAt || 0,
+                ),
               });
             } else {
               // Conflict
@@ -4017,7 +4065,8 @@
         clearTimeout(gdriveSyncTimeout);
         clearTimeout(gdriveRefreshTimer);
         document.getElementById("btnDriveSignOut").style.display = "none";
-        document.getElementById("btnDriveSync").textContent = "sync google drive";
+        document.getElementById("btnDriveSync").textContent =
+          "sync google drive";
       }
 
       // ═══════════════════════════════════════════════════
