@@ -73,6 +73,8 @@ Features include:
 - Line operations: `dd` `cc` `yy` `>>` `<<` `J` `p` `P`
 - Visual selection with `v`, visual line with `V`
 - Dot repeat (`.`) for most editing commands
+- Search with `/` (forward) and `?` (backward), `n`/`N`
+  to navigate matches, `*`/`#` to search word under cursor
 - Command mode (`:`) with `:set wrap`, `:set nowrap`,
   `:new`, `:e <name>`, `:help`, `:<number>` (jump to
   line), `:%s/find/replace/g` (opens find & replace)
