@@ -2732,6 +2732,13 @@
         highlightLayer.scrollLeft = 0;
       }
 
+      // On mobile Safari, tapping a button while the editor is focused
+      // just blurs the editor on the first tap — the click never fires.
+      // Blurring on touchstart ensures the click registers on the same tap.
+      document.querySelector(".statusbar").addEventListener("touchstart", () => {
+        editor.blur();
+      });
+
       function toggleSidebar() {
         sidebar.classList.toggle("open");
         document
@@ -3815,80 +3822,6 @@
         return data.files?.[0] || null;
       }
 
-      function showConflictModal(noteName, localTime, remoteTime) {
-        return new Promise((resolve) => {
-          const localLabel =
-            localTime > remoteTime ? "local (newer)" : "local (older)";
-          const remoteLabel =
-            remoteTime > localTime ? "remote (newer)" : "remote (older)";
-          modalText.innerHTML =
-            "<b>" +
-            escapeHtml(noteName) +
-            "</b> differs.<br><br>" +
-            '<span style="color:var(--subtext);font-size:12px">' +
-            "Local: " +
-            new Date(localTime).toLocaleString() +
-            "<br>" +
-            "Remote: " +
-            new Date(remoteTime).toLocaleString() +
-            "</span>";
-          modalInput.style.display = "none";
-          modalConfirm.textContent = "keep both";
-          modalConfirm.className = "modal-btn";
-          modalCancel.textContent = "override older";
-          modalCancel.style.display = "";
-          modalOverlay.classList.add("visible");
-
-          function cleanup() {
-            modalOverlay.classList.remove("visible");
-            modalText.innerHTML = "";
-            modalConfirm.removeEventListener("click", onKeepBoth);
-            modalCancel.removeEventListener("click", onOverride);
-            modalOverlay.removeEventListener("click", onOverlay);
-            document.removeEventListener("keydown", onKey);
-          }
-          function onKeepBoth() {
-            cleanup();
-            resolve("keep-both");
-          }
-          function onOverride() {
-            cleanup();
-            resolve("override");
-          }
-          function onOverlay(e) {
-            if (e.target === modalOverlay) {
-              cleanup();
-              resolve("skip");
-            }
-          }
-          function onKey(e) {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              cleanup();
-              resolve("skip");
-            }
-          }
-
-          modalConfirm.addEventListener("click", onKeepBoth);
-          modalCancel.addEventListener("click", onOverride);
-          modalOverlay.addEventListener("click", onOverlay);
-          document.addEventListener("keydown", onKey);
-        });
-      }
-
-      function renameWithNumber(name, existingNames) {
-        const dot = name.lastIndexOf(".");
-        const base = dot > 0 ? name.slice(0, dot) : name;
-        const ext = dot > 0 ? name.slice(dot) : "";
-        let n = 1;
-        let candidate;
-        do {
-          candidate = base + "_" + n + ext;
-          n++;
-        } while (existingNames.has(candidate));
-        return candidate;
-      }
-
       function gatherDrivePayload() {
         return JSON.stringify({
           ...state,
@@ -4000,9 +3933,6 @@
           const localById = new Map(state.notes.map((n) => [n.id, n]));
           const remoteById = new Map(remoteNotes.map((n) => [n.id, n]));
           const merged = [];
-          const allNames = new Set(state.notes.map((n) => n.name));
-          remoteNotes.forEach((n) => allNames.add(n.name));
-          let hadConflicts = false;
 
           // Process local notes
           for (const local of state.notes) {
@@ -4023,38 +3953,10 @@
                 ),
               });
             } else {
-              // Different content or name
+              // Different content or name — newer wins
               const localTime = local.updatedAt || 0;
               const remoteTime = remote.updatedAt || 0;
-
-              if (remoteTime > localTime) {
-                // Remote is newer — auto-update, no prompt
-                merged.push(remote);
-              } else {
-                // Local is newer or same age — ask user
-                hadConflicts = true;
-                const choice = await showConflictModal(
-                  local.name,
-                  localTime,
-                  remoteTime,
-                );
-                if (choice === "keep-both") {
-                  merged.push(local);
-                  const renamedName = renameWithNumber(remote.name, allNames);
-                  allNames.add(renamedName);
-                  merged.push({
-                    ...remote,
-                    id: remote.id + "_copy",
-                    name: renamedName,
-                  });
-                } else if (choice === "override") {
-                  // Local is newer — keep local
-                  merged.push(local);
-                } else {
-                  // Skip — keep local as-is
-                  merged.push(local);
-                }
-              }
+              merged.push(remoteTime > localTime ? remote : local);
             }
           }
 
@@ -4085,11 +3987,7 @@
           modalOverlay.classList.remove("visible");
           if (driveSyncAborted) return;
 
-          if (!hadConflicts) {
-            showModal("Google Drive synced.", "ok", null);
-          } else {
-            showModal("Sync complete — conflicts resolved.", "ok", null);
-          }
+          showModal("Google Drive synced.", "ok", null);
         } catch (e) {
           modalOverlay.classList.remove("visible");
           if (!driveSyncAborted) {
@@ -4134,6 +4032,7 @@
           const remoteById = new Map(remoteNotes.map((n) => [n.id, n]));
           const merged = [];
           let changed = false;
+          let localNewer = false;
 
           for (const local of state.notes) {
             const remote = remoteById.get(local.id);
@@ -4152,6 +4051,7 @@
                 changed = true;
               } else {
                 merged.push(local);
+                if (localTime > remoteTime) localNewer = true;
               }
             }
           }
@@ -4170,6 +4070,9 @@
             if (remoteSettings) applyDriveSettings(remoteSettings);
             render();
           }
+
+          // Push to Drive if any local notes were newer
+          if (localNewer) drivePushQuiet();
         } catch {
           // Silent — don't interrupt app load
         }
