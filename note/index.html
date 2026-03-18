@@ -1747,6 +1747,7 @@
         visualLine: false, // V mode
         visualHeadLine: 0, // tracked head line for V mode
         insertEntry: null, // { key, pos } — how insert mode was entered
+        searchDirection: 1, // 1 = forward (/), -1 = backward (?)
       };
 
       function loadState() {
@@ -4216,18 +4217,19 @@
           return;
         }
 
-        // * — search word under cursor forward
+        // * — search word under cursor forward, # — backward
         if (key === "*" || key === "#") {
+          vimState.searchDirection = key === "*" ? 1 : -1;
           const obj = vimTextObject("w", true);
           if (obj) {
             const word = val.substring(obj.start, obj.end);
             if (word) {
-              openFindReplace();
               findInput.value = word;
-              findInput.dispatchEvent(new Event("input"));
-              if (key === "*") findNext();
-              else findPrev();
-              editor.focus();
+              updateFindMatches();
+              if (findMatches.length) {
+                if (key === "*") findNext();
+                else findPrev();
+              }
               updateCursorPos();
             }
           }
@@ -4553,22 +4555,23 @@
 
         // Search
         if (key === "/" || key === "?") {
-          openFindReplace();
-          findInput.focus();
-          findInput.select();
+          vimState.searchDirection = key === "/" ? 1 : -1;
+          vimOpenCommandBar(key);
           return;
         }
         if (key === ":") {
-          vimOpenCommandBar();
+          vimOpenCommandBar(":");
           return;
         }
         if (key === "n") {
-          findNext();
+          if (vimState.searchDirection === 1) findNext();
+          else findPrev();
           updateCursorPos();
           return;
         }
         if (key === "N") {
-          findPrev();
+          if (vimState.searchDirection === 1) findPrev();
+          else findNext();
           updateCursorPos();
           return;
         }
@@ -4748,8 +4751,9 @@
       const vimCommandBar = document.getElementById("vimCommandBar");
       const vimCommandInput = document.getElementById("vimCommandInput");
 
-      function vimOpenCommandBar() {
+      function vimOpenCommandBar(prefix) {
         vimCommandBar.classList.add("visible");
+        document.querySelector(".vim-command-prefix").textContent = prefix || ":";
         vimCommandInput.value = "";
         vimCommandInput.focus();
       }
@@ -4862,9 +4866,23 @@
       vimCommandInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
+          const prefix = document.querySelector(".vim-command-prefix").textContent;
           const cmd = vimCommandInput.value;
           vimCloseCommandBar();
-          vimExecCommand(cmd);
+          if (prefix === "/" || prefix === "?") {
+            // Vim search: populate find and jump to match
+            if (cmd) {
+              findInput.value = cmd;
+              updateFindMatches();
+              if (findMatches.length) {
+                if (prefix === "/") findNext();
+                else findPrev();
+              }
+              updateCursorPos();
+            }
+          } else {
+            vimExecCommand(cmd);
+          }
         }
         if (e.key === "Escape") {
           e.preventDefault();
