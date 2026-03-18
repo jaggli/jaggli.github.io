@@ -26,7 +26,3 @@ We do not use cookies, analytics, or any tracking mechanisms.
 ## Third Parties
 
 We do not share any data with third parties. The only external service used is Google's authentication and Drive API, and only when you explicitly opt in.
-
-## Contact
-
-For questions, reach out at matthias@jaggli.com.

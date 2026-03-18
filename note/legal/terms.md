@@ -28,7 +28,3 @@ To the fullest extent permitted by law, the developer of note shall not be liabl
 ## Changes
 
 These terms may be updated at any time. Continued use of the application constitutes acceptance of the updated terms.
-
-## Contact
-
-For questions, reach out at matthias@jaggli.com.
