@@ -904,6 +904,37 @@
         100% { opacity: 0.7; }
       }
 
+      .vim-command-bar {
+        display: none;
+        background: var(--sidebar);
+        border-top: 1px solid var(--border);
+        padding: 4px 12px;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font);
+        font-size: 14px;
+      }
+
+      .vim-command-bar.visible {
+        display: flex;
+      }
+
+      .vim-command-prefix {
+        color: var(--text);
+        font-weight: bold;
+      }
+
+      .vim-command-bar input {
+        flex: 1;
+        background: none;
+        border: none;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        outline: none;
+        padding: 0;
+      }
+
       .vim-mode-normal {
         color: var(--blue);
         font-weight: bold;
@@ -1481,6 +1512,10 @@
               </div>
             </div>
           </div>
+        </div>
+        <div class="vim-command-bar" id="vimCommandBar">
+          <span class="vim-command-prefix">:</span>
+          <input id="vimCommandInput" type="text" spellcheck="false" />
         </div>
       </div>
     </div>
@@ -2787,6 +2822,11 @@
         gutter.scrollTop = 0;
         highlightLayer.scrollTop = 0;
         highlightLayer.scrollLeft = 0;
+        // Reset vim state
+        if (vimState.enabled) {
+          if (vimCommandBar.classList.contains("visible")) vimCloseCommandBar();
+          if (vimState.mode !== "normal") vimSetMode("normal");
+        }
       }
 
       // On mobile Safari, tapping a button while the editor is focused
@@ -4189,6 +4229,10 @@
           findInput.select();
           return;
         }
+        if (key === ":") {
+          vimOpenCommandBar();
+          return;
+        }
         if (key === "n") {
           findNext();
           updateCursorPos();
@@ -4336,6 +4380,136 @@
           return;
         }
       }
+
+      // ── Vim command mode ──
+
+      const vimCommandBar = document.getElementById("vimCommandBar");
+      const vimCommandInput = document.getElementById("vimCommandInput");
+
+      function vimOpenCommandBar() {
+        vimCommandBar.classList.add("visible");
+        vimCommandInput.value = "";
+        vimCommandInput.focus();
+      }
+
+      function vimCloseCommandBar() {
+        vimCommandBar.classList.remove("visible");
+        vimCommandInput.value = "";
+        // Temporarily allow focus, then re-assert readonly
+        editor.readOnly = false;
+        editor.focus();
+        if (vimState.enabled && vimState.mode !== "insert") {
+          editor.readOnly = true;
+        }
+        updateCursorPos();
+        vimUpdateBlockCursor();
+      }
+
+      function vimExecCommand(cmd) {
+        const trimmed = cmd.trim();
+
+        // :w — no-op (auto-saved)
+        if (trimmed === "w") {
+          // already saved
+          return;
+        }
+
+        // :q / :wq / :q! — exit vim mode
+        if (trimmed === "q" || trimmed === "wq" || trimmed === "q!") {
+          toggleVim();
+          return;
+        }
+
+        // :set wrap / :set nowrap / :set wrap!
+        if (trimmed === "set wrap") {
+          if (!editorArea.classList.contains("wrap")) toggleWrap();
+          return;
+        }
+        if (trimmed === "set nowrap") {
+          if (editorArea.classList.contains("wrap")) toggleWrap();
+          return;
+        }
+        if (trimmed === "set wrap!") {
+          toggleWrap();
+          return;
+        }
+
+        // :new / :n — create new note
+        if (trimmed === "new" || trimmed === "n") {
+          createNote();
+          return;
+        }
+
+        // :help — open help
+        if (trimmed === "help") {
+          openHelp();
+          return;
+        }
+
+        // :d — delete current line
+        if (trimmed === "d") {
+          const lineIdx = vimCursorLine();
+          const lines = vimGetLines();
+          const start = vimLineStart(lineIdx);
+          const end = lineIdx < lines.length - 1
+            ? vimLineStart(lineIdx + 1)
+            : vimLineEnd(lineIdx);
+          // Also remove the preceding newline if deleting last line
+          const delStart = lineIdx > 0 && lineIdx === lines.length - 1
+            ? start - 1 : start;
+          vimDeleteRange(delStart, end, true);
+          updateCursorPos();
+          return;
+        }
+
+        // :e <name> — open note by name (fuzzy match)
+        const eMatch = trimmed.match(/^e\s+(.+)$/);
+        if (eMatch) {
+          const query = eMatch[1].toLowerCase();
+          const match = state.notes.find(
+            (n) => n.name.toLowerCase() === query
+          ) || state.notes.find(
+            (n) => n.name.toLowerCase().includes(query)
+          );
+          if (match) {
+            switchNote(match.id);
+          }
+          return;
+        }
+
+        // :<number> — jump to line
+        if (/^\d+$/.test(trimmed)) {
+          const targetLine = Math.max(1, parseInt(trimmed));
+          const lines = vimGetLines();
+          const li = Math.min(targetLine - 1, lines.length - 1);
+          vimSetCursor(vimFirstNonBlank(li));
+          updateCursorPos();
+          return;
+        }
+
+        // :%s/find/replace/g — open find/replace pre-filled
+        const sMatch = trimmed.match(/^%s\/(.+?)\/(.*)\/([gi]*)$/);
+        if (sMatch) {
+          openFindReplace();
+          findInput.value = sMatch[1];
+          replaceInput.value = sMatch[2];
+          findInput.dispatchEvent(new Event("input"));
+          return;
+        }
+      }
+
+      vimCommandInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const cmd = vimCommandInput.value;
+          vimCloseCommandBar();
+          vimExecCommand(cmd);
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          vimCloseCommandBar();
+        }
+      });
 
       // ── Vim keydown handler ──
 
@@ -5352,19 +5526,20 @@
       // ═══════════════════════════════════════════════════
 
       const HELP_DESKTOP =
-        "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap and vim mode in status bar\n- Syncs across tabs automatically\n\n## Vim mode\nToggle vim mode from the status bar for modal editing.\n- Normal mode — hjkl navigation, w/b/e word motions, dd/yy/p editing\n- Insert mode — i, a, o, O, A, I, s, S\n- Visual mode — v to select, V for line select, then d/y/c to act\n- Text objects — ciw, di\", da(, etc.\n- Find on line — f/F/t/T + char, repeat with ;/,\n- r to replace char, J to join lines, ~ to toggle case\n- >> / << to indent/dedent, Ctrl+D/U for half-page scroll\n- . to repeat last change\n- Repeat counts — 3j, 5dd, 2w\n- Search — / or ? to find, n/N to cycle, * to search word";
+        "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap and vim mode in status bar\n- Syncs across tabs automatically\n\n## Vim mode\nToggle vim mode from the status bar. Vim uses modes — keys do different things depending on the mode.\n\n### Modes\n- **Normal** (default) — keys are commands, not text. Press Esc to return here.\n- **Insert** — type text normally. Enter with i (before cursor), a (after cursor), o (new line below), O (new line above), A (end of line), I (start of line), s (replace char), S (replace line).\n- **Visual** — select text. Enter with v (characters) or V (whole lines). Use movement keys to extend selection, then d to delete, y to copy, c to change, > / < to indent.\n\n### Movement\n- h/j/k/l — left/down/up/right\n- w/b/e — next word / previous word / end of word\n- 0 / $ / ^ — start of line / end of line / first non-space\n- gg / G — top / bottom of file\n- { / } — previous / next blank line\n- f/F + char — jump to char on line (forward/backward), t/T stops one before\n- ; / , — repeat last f/F/t/T forward / backward\n- Ctrl+D / Ctrl+U — half page down / up\n\n### Editing\n- x — delete character under cursor\n- dd — delete line, D — delete to end of line\n- yy — copy line, p — paste after, P — paste before\n- r + char — replace character under cursor\n- J — join current line with next\n- ~ — toggle uppercase/lowercase\n- u — undo, Ctrl+R — redo\n- >> / << — indent / dedent line\n- . — repeat last change\n\n### Operators + motions\nCombine d (delete), c (change), or y (copy) with any motion:\n- dw — delete word, cw — change word, yw — copy word\n- d$ — delete to end of line, d0 — delete to start\n- 3dd — delete 3 lines, 2dw — delete 2 words\n\n### Text objects\nUse i (inner) or a (around) with operators:\n- ciw — change inner word, diw — delete inner word\n- ci\" — change inside quotes, da( — delete around parens\n- Works with \", ', `, (, ), {, }, [, ], <, >\n\n### Search\n- / or ? — open find, n/N — next/previous match\n- * — search for word under cursor\n\n### Command mode\nPress : to open the command bar.\n- :w — save (auto-saves already), :q — exit vim mode\n- :set wrap / :set nowrap / :set wrap! — toggle word wrap\n- :new — new note, :e name — open note by name\n- :d — delete current line, :42 — jump to line 42\n- :help — open this help page\n- :%s/find/replace/g — find and replace";
       const HELP_MOBILE =
         "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Getting started\n- Tap \"notes\" to open the sidebar\n- Tap + to create a new note\n- Tap a file to open, tap again to rename\n- Long press a note to pin or delete it\n\n## Tips\n- Your notes stay in your browser\n- URL updates as you type — copy to share\n- Download all notes as a zip backup\n- Syncs across tabs automatically";
 
       async function openHelp() {
+        const content = isMobile() ? HELP_MOBILE : HELP_DESKTOP;
         const existing = state.notes.find((n) => n.name === "help.md");
         if (existing) {
+          existing.content = content;
+          existing.updatedAt = Date.now();
           switchNote(existing.id);
+          saveState();
         } else {
-          await createNote(
-            "help.md",
-            isMobile() ? HELP_MOBILE : HELP_DESKTOP,
-          );
+          await createNote("help.md", content);
         }
       }
 
@@ -5390,6 +5565,7 @@
         render();
         updateUrl();
         startTimestampRefresh();
+        if (getActiveNote()) editor.focus();
 
         // Auto-sync from Google Drive on load (quiet, no modals)
         if (gdriveConnected) driveSyncQuiet();
