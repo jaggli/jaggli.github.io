@@ -88,7 +88,7 @@
 
       /* Sidebar */
       .sidebar {
-        width: 200px;
+        width: var(--sidebar-width, 200px);
         min-width: 120px;
         max-width: 50vw;
         background: var(--sidebar);
@@ -358,7 +358,7 @@
       .note-item .btn-delete {
         background: none;
         border: none;
-        color: var(--overlay);
+        color: transparent;
         cursor: pointer;
         font-size: 18px;
         width: 36px;
@@ -371,8 +371,7 @@
         justify-content: center;
       }
 
-      .note-item:hover .btn-delete,
-      .note-item.active .btn-delete {
+      .note-item:hover .btn-delete {
         color: var(--gutter);
       }
 
@@ -409,7 +408,7 @@
       .note-item .btn-pin {
         background: none;
         border: none;
-        color: var(--overlay);
+        color: transparent;
         cursor: pointer;
         font-size: 14px;
         width: 36px;
@@ -423,8 +422,7 @@
         justify-content: center;
       }
 
-      .note-item:hover .btn-pin,
-      .note-item.active .btn-pin {
+      .note-item:hover .btn-pin {
         color: var(--gutter);
       }
 
@@ -1047,13 +1045,16 @@
         background: var(--overlay);
       }
 
-      @media (max-width: 600px) {
+      @media (max-width: 900px) {
         :root {
           font-size: 16px;
         }
 
         .sidebar {
           display: none;
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
         }
 
         .app.sidebar-open .btn-wrap,
@@ -1069,9 +1070,6 @@
           left: 0;
           right: 0;
           bottom: 36px;
-          width: 100%;
-          max-width: 100%;
-          min-width: 0;
           z-index: 50;
           border-right: none;
         }
@@ -2423,7 +2421,7 @@
       let dragSrcIdx = null;
 
       function isMobile() {
-        return window.innerWidth <= 600;
+        return window.innerWidth <= 900;
       }
 
       function startRename(input) {
@@ -2564,7 +2562,8 @@
           const pinBtn = document.createElement("button");
           pinBtn.className = "btn-pin" + (note.pinned ? " pinned" : "");
           pinBtn.title = note.pinned ? "Unpin" : "Pin";
-          pinBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>';
+          pinBtn.innerHTML =
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>';
           pinBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             note.pinned = !note.pinned;
@@ -3181,7 +3180,7 @@
       function loadWrap() {
         const saved = localStorage.getItem(WRAP_KEY);
         const wrapOn =
-          saved === "true" || (saved === null && window.innerWidth <= 600);
+          saved === "true" || (saved === null && window.innerWidth <= 900);
         if (wrapOn) {
           editorArea.classList.add("wrap");
           btnWrap.classList.add("active");
@@ -3457,9 +3456,9 @@
       (function restoreSidebarWidth() {
         const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
         if (saved) {
-          sidebar.style.width = saved + "px";
+          sidebar.style.setProperty("--sidebar-width", saved + "px");
         } else if (window.innerWidth >= 1000) {
-          sidebar.style.width = "260px";
+          sidebar.style.setProperty("--sidebar-width", "260px");
         }
       })();
 
@@ -3468,7 +3467,7 @@
         sidebarResize.classList.add("active");
         const onMove = (e) => {
           const w = Math.min(Math.max(e.clientX, 120), window.innerWidth * 0.5);
-          sidebar.style.width = w + "px";
+          sidebar.style.setProperty("--sidebar-width", w + "px");
         };
         const onUp = () => {
           sidebarResize.classList.remove("active");
@@ -3476,7 +3475,7 @@
           document.removeEventListener("mouseup", onUp);
           localStorage.setItem(
             SIDEBAR_WIDTH_KEY,
-            parseInt(sidebar.style.width),
+            parseInt(getComputedStyle(sidebar).width),
           );
         };
         document.addEventListener("mousemove", onMove);
@@ -3511,7 +3510,7 @@
           } catch {}
         }
         if (e.key === SIDEBAR_WIDTH_KEY && e.newValue) {
-          sidebar.style.width = e.newValue + "px";
+          sidebar.style.setProperty("--sidebar-width", e.newValue + "px");
         }
         if (e.key === WRAP_KEY && e.newValue) {
           const isWrap = e.newValue === "true";
@@ -3904,7 +3903,10 @@
         }
         if (settings.sidebarWidth) {
           localStorage.setItem(SIDEBAR_WIDTH_KEY, settings.sidebarWidth);
-          sidebar.style.width = settings.sidebarWidth + "px";
+          sidebar.style.setProperty(
+            "--sidebar-width",
+            settings.sidebarWidth + "px",
+          );
         }
       }
 
