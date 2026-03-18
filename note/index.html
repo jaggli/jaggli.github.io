@@ -3762,10 +3762,14 @@
             // dd, cc, yy — line-wise
             const firstLine = lineIdx;
             const lastLine = Math.min(lineIdx + cnt - 1, lines.length - 1);
-            start = vimLineStart(firstLine);
-            end = lastLine < lines.length - 1
-              ? vimLineStart(lastLine + 1)
-              : vimLineEnd(lastLine);
+            if (lastLine < lines.length - 1) {
+              start = vimLineStart(firstLine);
+              end = vimLineStart(lastLine + 1);
+            } else {
+              // Last line: include the preceding newline if not at line 0
+              start = firstLine > 0 ? vimLineEnd(firstLine - 1) : 0;
+              end = vimLineEnd(lastLine);
+            }
             linewise = true;
           } else if ("hjklwbe0$^{}".includes(key) || key === "g" || key === "G") {
             if (key === "g") {
