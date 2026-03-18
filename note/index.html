@@ -3586,8 +3586,40 @@
       const GDRIVE_CLIENT_ID = "1091919486392-7qc53cthqql7h3dftpaek8i9jp5caglu.apps.googleusercontent.com";
       const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive.appdata";
       const GDRIVE_FILE_NAME = "note-app-data.json";
+      const GDRIVE_TOKEN_KEY = "notepad_gdrive_token";
       let gdriveToken = null;
+      let gdriveTokenExpiry = 0;
       let gisLoaded = false;
+
+      function persistToken(token, expiresIn) {
+        gdriveToken = token;
+        gdriveTokenExpiry = Date.now() + expiresIn * 1000;
+        localStorage.setItem(
+          GDRIVE_TOKEN_KEY,
+          JSON.stringify({ token, expiry: gdriveTokenExpiry }),
+        );
+      }
+
+      function restoreToken() {
+        try {
+          const raw = localStorage.getItem(GDRIVE_TOKEN_KEY);
+          if (!raw) return false;
+          const { token, expiry } = JSON.parse(raw);
+          if (Date.now() < expiry) {
+            gdriveToken = token;
+            gdriveTokenExpiry = expiry;
+            return true;
+          }
+          localStorage.removeItem(GDRIVE_TOKEN_KEY);
+        } catch {}
+        return false;
+      }
+
+      function clearToken() {
+        gdriveToken = null;
+        gdriveTokenExpiry = 0;
+        localStorage.removeItem(GDRIVE_TOKEN_KEY);
+      }
 
       function loadGIS() {
         return new Promise((resolve, reject) => {
@@ -3603,8 +3635,39 @@
         });
       }
 
+      let gdriveRefreshTimer = null;
+
+      function scheduleTokenRefresh() {
+        clearTimeout(gdriveRefreshTimer);
+        const msUntilExpiry = gdriveTokenExpiry - Date.now();
+        // Refresh 5 minutes before expiry
+        const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 0);
+        gdriveRefreshTimer = setTimeout(async () => {
+          if (!gdriveConnected) return;
+          try {
+            await loadGIS();
+            await new Promise((resolve, reject) => {
+              const client = google.accounts.oauth2.initTokenClient({
+                client_id: GDRIVE_CLIENT_ID,
+                scope: GDRIVE_SCOPES,
+                callback: (resp) => {
+                  if (resp.error) return reject(new Error(resp.error));
+                  persistToken(resp.access_token, resp.expires_in);
+                  scheduleTokenRefresh();
+                  resolve();
+                },
+              });
+              client.requestAccessToken({ prompt: "" });
+            });
+          } catch {
+            // Silent refresh failed — user will re-auth on next action
+          }
+        }, refreshIn);
+      }
+
       function gdriveAuth() {
-        if (gdriveToken) return Promise.resolve();
+        if (gdriveToken && Date.now() < gdriveTokenExpiry) return Promise.resolve();
+        clearToken();
         return loadGIS().then(
           () =>
             new Promise((resolve, reject) => {
@@ -3613,7 +3676,8 @@
                 scope: GDRIVE_SCOPES,
                 callback: (resp) => {
                   if (resp.error) return reject(new Error(resp.error));
-                  gdriveToken = resp.access_token;
+                  persistToken(resp.access_token, resp.expires_in);
+                  scheduleTokenRefresh();
                   document.getElementById("btnDriveSignOut").style.display = "";
                   resolve();
                 },
@@ -3632,7 +3696,7 @@
           },
         });
         if (res.status === 401) {
-          gdriveToken = null;
+          clearToken();
           throw new Error("Session expired — please sign in again");
         }
         if (!res.ok) throw new Error("Drive error: " + res.status);
@@ -3947,11 +4011,13 @@
         if (gdriveToken && gisLoaded) {
           google.accounts.oauth2.revoke(gdriveToken);
         }
-        gdriveToken = null;
+        clearToken();
         gdriveConnected = false;
         gdriveDirty = false;
         clearTimeout(gdriveSyncTimeout);
+        clearTimeout(gdriveRefreshTimer);
         document.getElementById("btnDriveSignOut").style.display = "none";
+        document.getElementById("btnDriveSync").textContent = "sync google drive";
       }
 
       // ═══════════════════════════════════════════════════
@@ -3962,6 +4028,14 @@
         const isFirstVisit = !localStorage.getItem(STORAGE_KEY);
         loadState();
         loadWrap();
+
+        // Restore Google Drive session
+        if (restoreToken()) {
+          gdriveConnected = true;
+          document.getElementById("btnDriveSync").textContent = "manual sync";
+          document.getElementById("btnDriveSignOut").style.display = "";
+          scheduleTokenRefresh();
+        }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
           createNote(
