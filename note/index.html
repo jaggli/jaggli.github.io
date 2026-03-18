@@ -3916,6 +3916,7 @@
             if (!linewise) vimSetCursor(start);
           } else if (pending === "c") {
             vimDeleteRange(start, end, linewise);
+            vimState.insertEntry = { key: "c", pos: editor.selectionStart };
             vimSetMode("insert");
           }
           vimState.pending = "";
@@ -4198,6 +4199,7 @@
         // C — change to end of line
         if (key === "C") {
           vimDeleteRange(pos, vimLineEnd(lineIdx));
+          vimState.insertEntry = { key: "C", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
@@ -4282,6 +4284,13 @@
                 // Re-execute paste using current state
                 vimExecNormal(la.key, null);
                 return;
+              } else if (la.key === "x") {
+                const s = editor.selectionStart;
+                const e = Math.min(s + (la.cnt || 1), editor.value.length);
+                if (s < editor.value.length) vimDeleteRange(s, e);
+              } else if (la.key === "D") {
+                const li = vimCursorLine();
+                vimDeleteRange(editor.selectionStart, vimLineEnd(li));
               } else if (la.key === "J") {
                 const li = vimCursorLine();
                 const allLines = vimGetLines();
@@ -4337,6 +4346,42 @@
                   vimSetCursor(start);
                 }
               }
+            } else if (la.type === "insert") {
+              // Replay the insert: re-do the entry action, then insert the captured text
+              const p = editor.selectionStart;
+              const li = vimCursorLine();
+              if (la.key === "o") {
+                const end = vimLineEnd(li);
+                vimInsertText(end, "\n" + la.text);
+                vimSetCursor(end + 1 + la.text.length);
+              } else if (la.key === "O") {
+                const start = vimLineStart(li);
+                vimInsertText(start, la.text + "\n");
+                vimSetCursor(start + la.text.length);
+              } else if (la.key === "s") {
+                if (p < editor.value.length) vimDeleteRange(p, p + 1);
+                vimInsertText(editor.selectionStart, la.text);
+                vimSetCursor(editor.selectionStart + la.text.length);
+              } else if (la.key === "S") {
+                const ls = vimLineStart(li);
+                const le = vimLineEnd(li);
+                vimDeleteRange(ls, le);
+                vimInsertText(ls, la.text);
+                vimSetCursor(ls + la.text.length);
+              } else if (la.key === "C") {
+                vimDeleteRange(p, vimLineEnd(li));
+                vimInsertText(editor.selectionStart, la.text);
+                vimSetCursor(editor.selectionStart + la.text.length);
+              } else if (la.key === "c") {
+                // For c operator, just insert the text at cursor
+                vimInsertText(p, la.text);
+                vimSetCursor(p + la.text.length);
+              } else {
+                // i, a, I, A — just insert the text at cursor
+                vimInsertText(p, la.text);
+                vimSetCursor(p + la.text.length);
+              }
+              editor.dispatchEvent(new Event("input"));
             } else if (la.type === "raw" && la.fn) {
               la.fn();
             } else if (la.type === "textobj") {
@@ -4356,21 +4401,25 @@
 
         // Mode entry
         if (key === "i") {
+          vimState.insertEntry = { key: "i", pos };
           vimSetMode("insert");
           return;
         }
         if (key === "a") {
           vimSetCursor(Math.min(pos + 1, val.length));
+          vimState.insertEntry = { key: "a", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
         if (key === "I") {
           vimSetCursor(vimFirstNonBlank(lineIdx));
+          vimState.insertEntry = { key: "I", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
         if (key === "A") {
           vimSetCursor(vimLineEnd(lineIdx));
+          vimState.insertEntry = { key: "A", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
@@ -4378,6 +4427,7 @@
           const end = vimLineEnd(lineIdx);
           vimInsertText(end, "\n");
           vimSetCursor(end + 1);
+          vimState.insertEntry = { key: "o", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
@@ -4385,11 +4435,13 @@
           const start = vimLineStart(lineIdx);
           vimInsertText(start, "\n");
           vimSetCursor(start);
+          vimState.insertEntry = { key: "O", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
         if (key === "s") {
           if (pos < val.length) vimDeleteRange(pos, pos + 1);
+          vimState.insertEntry = { key: "s", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
@@ -4397,6 +4449,7 @@
           const ls = vimLineStart(lineIdx);
           const le = vimLineEnd(lineIdx);
           vimDeleteRange(ls, le);
+          vimState.insertEntry = { key: "S", pos: editor.selectionStart };
           vimSetMode("insert");
           return;
         }
@@ -4415,11 +4468,13 @@
           if (start < editor.value.length) {
             vimDeleteRange(start, end);
           }
+          vimState.lastAction = { type: "simple", key: "x", cnt };
           updateCursorPos();
           return;
         }
         if (key === "D") {
           vimDeleteRange(pos, vimLineEnd(lineIdx));
+          vimState.lastAction = { type: "simple", key: "D" };
           updateCursorPos();
           return;
         }
