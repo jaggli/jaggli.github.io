@@ -838,6 +838,23 @@
         color: var(--green);
       }
 
+      .file-menu-label {
+        padding: 6px 14px 2px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--subtext);
+        cursor: default;
+      }
+
+      .file-menu-link {
+        text-decoration: none;
+        color: var(--subtext);
+      }
+
+      .sync-dot {
+        color: var(--green);
+      }
+
       .btn-wrap {
         background: none;
         border: none;
@@ -1035,8 +1052,9 @@
         }
 
         .app.sidebar-open .btn-wrap,
-        .app.sidebar-open .file-menu-container {
-          display: none;
+        .app.sidebar-open .file-menu-container,
+        .app.sidebar-open #syncMenuContainer {
+          display: none !important;
         }
 
         .sidebar.open {
@@ -1400,23 +1418,34 @@
                 >
                   sync google drive
                 </button>
-                <button
-                  class="file-menu-item"
-                  id="btnDriveSignOut"
-                  onclick="driveSignOut()"
-                  style="display: none"
-                >
-                  turn off sync
-                </button>
-                <hr class="file-menu-separator" />
                 <a
-                  class="file-menu-item"
+                  class="file-menu-item file-menu-link"
                   href="legal/privacy-policy.html"
                   target="_blank"
-                  style="text-decoration: none; color: var(--subtext)"
                 >
                   privacy policy
                 </a>
+              </div>
+            </div>
+            <div class="file-menu-container" id="syncMenuContainer" style="display: none">
+              <button class="btn-share" onclick="toggleSyncMenu()">sync <span class="sync-dot">&#9679;</span></button>
+              <div class="file-menu" id="syncMenu">
+                <div class="file-menu-label">
+                  connected to<br />google drive
+                </div>
+                <hr class="file-menu-separator" />
+                <button
+                  class="file-menu-item"
+                  onclick="driveSync()"
+                >
+                  manual sync
+                </button>
+                <button
+                  class="file-menu-item"
+                  onclick="driveSignOut()"
+                >
+                  turn off sync
+                </button>
               </div>
             </div>
           </div>
@@ -3176,8 +3205,10 @@
       // ═══════════════════════════════════════════════════
 
       const fileMenu = document.getElementById("fileMenu");
+      const syncMenu = document.getElementById("syncMenu");
 
       function toggleFileMenu() {
+        syncMenu.classList.remove("visible");
         fileMenu.classList.toggle("visible");
       }
 
@@ -3185,13 +3216,27 @@
         fileMenu.classList.remove("visible");
       }
 
+      function toggleSyncMenu() {
+        fileMenu.classList.remove("visible");
+        syncMenu.classList.toggle("visible");
+      }
+
+      function closeSyncMenu() {
+        syncMenu.classList.remove("visible");
+      }
+
+      function closeAllMenus() {
+        closeFileMenu();
+        closeSyncMenu();
+      }
+
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".file-menu-container")) {
-          closeFileMenu();
+        if (!e.target.closest(".file-menu-container") && !e.target.closest("#syncMenuContainer")) {
+          closeAllMenus();
         }
       });
 
-      editor.addEventListener("focus", closeFileMenu);
+      editor.addEventListener("focus", closeAllMenus);
 
       // ═══════════════════════════════════════════════════
       //  Sharing & Download
@@ -3656,6 +3701,16 @@
         localStorage.removeItem(GDRIVE_TOKEN_KEY);
       }
 
+      function showSyncConnected() {
+        document.getElementById("syncMenuContainer").style.display = "";
+        document.getElementById("btnDriveSync").style.display = "none";
+      }
+
+      function hideSyncConnected() {
+        document.getElementById("syncMenuContainer").style.display = "none";
+        document.getElementById("btnDriveSync").style.display = "";
+      }
+
       function loadGIS() {
         return new Promise((resolve, reject) => {
           if (gisLoaded) return resolve();
@@ -3714,7 +3769,7 @@
                   if (resp.error) return reject(new Error(resp.error));
                   persistToken(resp.access_token, resp.expires_in);
                   scheduleTokenRefresh();
-                  document.getElementById("btnDriveSignOut").style.display = "";
+                  showSyncConnected();
                   resolve();
                 },
               });
@@ -3896,7 +3951,7 @@
       let driveSyncAborted = false;
 
       async function driveSync() {
-        closeFileMenu();
+        closeAllMenus();
         driveSyncAborted = false;
 
         // Show progress modal
@@ -3954,32 +4009,37 @@
                 ),
               });
             } else {
-              // Conflict
-              hadConflicts = true;
+              // Different content or name
               const localTime = local.updatedAt || 0;
               const remoteTime = remote.updatedAt || 0;
-              const choice = await showConflictModal(
-                local.name,
-                localTime,
-                remoteTime,
-              );
-              if (choice === "keep-both") {
-                const newer = localTime >= remoteTime ? local : remote;
-                const older = localTime >= remoteTime ? remote : local;
-                merged.push(newer);
-                const renamedName = renameWithNumber(older.name, allNames);
-                allNames.add(renamedName);
-                merged.push({
-                  ...older,
-                  id: older.id + "_copy",
-                  name: renamedName,
-                });
-              } else if (choice === "override") {
-                // Keep the newer one
-                merged.push(localTime >= remoteTime ? local : remote);
+
+              if (remoteTime > localTime) {
+                // Remote is newer — auto-update, no prompt
+                merged.push(remote);
               } else {
-                // Skip — keep local as-is
-                merged.push(local);
+                // Local is newer or same age — ask user
+                hadConflicts = true;
+                const choice = await showConflictModal(
+                  local.name,
+                  localTime,
+                  remoteTime,
+                );
+                if (choice === "keep-both") {
+                  merged.push(local);
+                  const renamedName = renameWithNumber(remote.name, allNames);
+                  allNames.add(renamedName);
+                  merged.push({
+                    ...remote,
+                    id: remote.id + "_copy",
+                    name: renamedName,
+                  });
+                } else if (choice === "override") {
+                  // Local is newer — keep local
+                  merged.push(local);
+                } else {
+                  // Skip — keep local as-is
+                  merged.push(local);
+                }
               }
             }
           }
@@ -4005,8 +4065,7 @@
 
           gdriveConnected = true;
           gdriveDirty = false;
-          document.getElementById("btnDriveSync").textContent =
-            "manual re-sync";
+          showSyncConnected();
 
           // Dismiss progress modal, then show result
           modalOverlay.classList.remove("visible");
@@ -4042,6 +4101,63 @@
         }
       }
 
+      async function driveSyncQuiet() {
+        if (!gdriveConnected || !gdriveToken) return;
+        try {
+          const file = await gdriveFindFile();
+          if (!file) return;
+          const res = await gdriveFetch(
+            "https://www.googleapis.com/drive/v3/files/" +
+              file.id +
+              "?alt=media",
+          );
+          const data = await res.json();
+          if (!data.notes) return;
+          const remoteNotes = data.notes;
+          const remoteSettings = data.settings || null;
+
+          const localById = new Map(state.notes.map((n) => [n.id, n]));
+          const remoteById = new Map(remoteNotes.map((n) => [n.id, n]));
+          const merged = [];
+          let changed = false;
+
+          for (const local of state.notes) {
+            const remote = remoteById.get(local.id);
+            if (!remote) {
+              merged.push(local);
+            } else if (local.content === remote.content && local.name === remote.name) {
+              merged.push(local);
+            } else {
+              const remoteTime = remote.updatedAt || 0;
+              const localTime = local.updatedAt || 0;
+              if (remoteTime > localTime) {
+                merged.push(remote);
+                changed = true;
+              } else {
+                merged.push(local);
+              }
+            }
+          }
+
+          for (const remote of remoteNotes) {
+            if (!localById.has(remote.id)) {
+              merged.push(remote);
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            state.notes = merged;
+            sortNotes();
+            saveState();
+            if (remoteSettings) applyDriveSettings(remoteSettings);
+            render();
+          }
+        } catch {
+          // Silent — don't interrupt app load
+        }
+      }
+
       async function drivePushQuiet() {
         if (!gdriveDirty || !gdriveToken || gdriveUploading) return;
         gdriveUploading = true;
@@ -4056,7 +4172,7 @@
       }
 
       function driveSignOut() {
-        closeFileMenu();
+        closeSyncMenu();
         if (gdriveToken && gisLoaded) {
           google.accounts.oauth2.revoke(gdriveToken);
         }
@@ -4065,9 +4181,7 @@
         gdriveDirty = false;
         clearTimeout(gdriveSyncTimeout);
         clearTimeout(gdriveRefreshTimer);
-        document.getElementById("btnDriveSignOut").style.display = "none";
-        document.getElementById("btnDriveSync").textContent =
-          "sync google drive";
+        hideSyncConnected();
       }
 
       // ═══════════════════════════════════════════════════
@@ -4082,8 +4196,7 @@
         // Restore Google Drive session
         if (restoreToken()) {
           gdriveConnected = true;
-          document.getElementById("btnDriveSync").textContent = "manual sync";
-          document.getElementById("btnDriveSignOut").style.display = "";
+          showSyncConnected();
           scheduleTokenRefresh();
         }
         const loaded = await loadFromUrl();
@@ -4096,6 +4209,9 @@
         render();
         updateUrl();
         startTimestampRefresh();
+
+        // Auto-sync from Google Drive on load (quiet, no modals)
+        if (gdriveConnected) driveSyncQuiet();
       }
 
       init();
