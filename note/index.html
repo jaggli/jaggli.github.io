@@ -3500,7 +3500,9 @@
       }
 
       function vimInsertText(pos, text) {
-        editor.setRangeText(text, pos, pos, "end");
+        vimEditGuard(() => {
+          editor.setRangeText(text, pos, pos, "end");
+        });
         editor.dispatchEvent(new Event("input"));
       }
 
@@ -3675,7 +3677,7 @@
           case "w": {
             let p = pos;
             for (let i = 0; i < c; i++) {
-              const m = val.substring(p).match(/^(\w+|\W)\s*/);
+              const m = val.substring(p).match(/^(\w+|[^\w\s]+)\s*/);
               p += m ? m[0].length : 1;
             }
             return Math.min(p, val.length);
@@ -3684,7 +3686,7 @@
             let p = pos;
             for (let i = 0; i < c; i++) {
               const before = val.substring(0, p);
-              const m = before.match(/\s*(\w+|\W)$/);
+              const m = before.match(/\s*(\w+|[^\w\s]+)$/);
               p -= m ? m[0].length : 1;
             }
             return Math.max(p, 0);
@@ -3726,6 +3728,13 @@
       // ── Vim command execution ──
 
       function vimExecNormal(key, e) {
+        // Temporarily allow editing for commands that modify text
+        const _wasRO = editor.readOnly;
+        editor.readOnly = false;
+        try { return _vimExecNormal(key, e); }
+        finally { editor.readOnly = _wasRO; }
+      }
+      function _vimExecNormal(key, e) {
         const val = editor.value;
         const pos = editor.selectionStart;
         const lineIdx = vimCursorLine();
@@ -3887,9 +3896,9 @@
         // Standalone r + char
         if (pending === "r") {
           if (pos < val.length && key.length === 1) {
-            const before = val.substring(0, pos);
-            const after = val.substring(pos + 1);
-            editor.value = before + key + after;
+            vimEditGuard(() => {
+              editor.setRangeText(key, pos, pos + 1, "end");
+            });
             vimSetCursor(pos);
             editor.dispatchEvent(new Event("input"));
             vimState.lastAction = { type: "replace", char: key };
@@ -3902,12 +3911,13 @@
 
         // >> and <<
         if (pending === ">" && key === ">") {
-          for (let i = 0; i < cnt; i++) {
-            const li = vimCursorLine();
+          const startLine = vimCursorLine();
+          const endLine = Math.min(startLine + cnt - 1, vimGetLines().length - 1);
+          for (let li = endLine; li >= startLine; li--) {
             const ls = vimLineStart(li);
             editor.setRangeText("  ", ls, ls, "end");
-            editor.dispatchEvent(new Event("input"));
           }
+          editor.dispatchEvent(new Event("input"));
           vimState.pending = "";
           vimState.count = "";
           vimState.lastAction = { type: "simple", key: ">>", cnt };
@@ -3915,14 +3925,15 @@
           return;
         }
         if (pending === "<" && key === "<") {
-          for (let i = 0; i < cnt; i++) {
-            const li = vimCursorLine();
+          const startLine = vimCursorLine();
+          const endLine = Math.min(startLine + cnt - 1, vimGetLines().length - 1);
+          for (let li = endLine; li >= startLine; li--) {
             const ls = vimLineStart(li);
             const line = vimGetLines()[li];
             if (line.startsWith("  ")) editor.setRangeText("", ls, ls + 2, "start");
             else if (line.startsWith("\t")) editor.setRangeText("", ls, ls + 1, "start");
-            editor.dispatchEvent(new Event("input"));
           }
+          editor.dispatchEvent(new Event("input"));
           vimState.pending = "";
           vimState.count = "";
           vimState.lastAction = { type: "simple", key: "<<", cnt };
@@ -4101,6 +4112,26 @@
                   editor.dispatchEvent(new Event("input"));
                 }
               }
+            } else if (la.type === "operator") {
+              const target = vimMotion(la.motion, la.cnt);
+              const p = editor.selectionStart;
+              const start = Math.min(p, target);
+              const end = Math.max(p, target);
+              if (la.linewise) {
+                const li = vimCursorLine();
+                const lastLine = Math.min(li + la.cnt - 1, vimGetLines().length - 1);
+                const ls = vimLineStart(li);
+                const le = lastLine < vimGetLines().length - 1 ? vimLineStart(lastLine + 1) : vimLineEnd(lastLine);
+                if (la.op === "d") { vimDeleteRange(ls, le, true); vimSetCursor(vimFirstNonBlank(Math.min(li, vimGetLines().length - 1))); }
+                else if (la.op === "c") { vimDeleteRange(ls, le, true); vimSetMode("insert"); }
+                else if (la.op === "y") { vimYankRange(ls, le, true); }
+              } else {
+                if (la.op === "d") vimDeleteRange(start, end);
+                else if (la.op === "c") { vimDeleteRange(start, end); vimSetMode("insert"); }
+                else if (la.op === "y") { vimYankRange(start, end); vimSetCursor(start); }
+              }
+            } else if (la.type === "raw" && la.fn) {
+              la.fn();
             } else if (la.type === "textobj") {
               const obj = vimTextObject(la.objType, la.inner);
               if (obj) {
@@ -4166,10 +4197,10 @@
 
         // Single-key editing
         if (key === "x") {
-          for (let i = 0; i < cnt; i++) {
-            if (editor.selectionStart < editor.value.length) {
-              vimDeleteRange(editor.selectionStart, editor.selectionStart + 1);
-            }
+          const start = editor.selectionStart;
+          const end = Math.min(start + cnt, editor.value.length);
+          if (start < editor.value.length) {
+            vimDeleteRange(start, end);
           }
           updateCursorPos();
           return;
@@ -4246,6 +4277,12 @@
       }
 
       function vimExecVisual(key) {
+        const _wasRO = editor.readOnly;
+        editor.readOnly = false;
+        try { return _vimExecVisual(key); }
+        finally { editor.readOnly = _wasRO; }
+      }
+      function _vimExecVisual(key) {
         const pos = editor.selectionStart;
         const anchor = vimState.visualAnchor;
         const head =
@@ -4270,20 +4307,13 @@
           let newHead = vimMotion(motionKey, cnt);
           if (vimState.visualLine) {
             // In visual line mode, extend to full lines
-            const headLine = vimCursorLine();
-            const targetLine = (key === "j" || key === "G" || key === "}") ?
-              Math.min(headLine + cnt, vimGetLines().length - 1) :
-              (key === "k" || key === "{") ? Math.max(headLine - cnt, 0) : headLine;
-            // Recalc: anchor stays at line start, head extends to line end
-            const anchorLine = Math.floor(anchor / (editor.value.length + 1)); // approximate
             newHead = vimMotion(motionKey, cnt);
-            const newHeadLine = editor.value.substring(0, newHead).split("\n").length - 1;
             const anchorLineIdx = editor.value.substring(0, anchor).split("\n").length - 1;
+            const newHeadLine = editor.value.substring(0, newHead).split("\n").length - 1;
             const minLine = Math.min(anchorLineIdx, newHeadLine);
             const maxLine = Math.max(anchorLineIdx, newHeadLine);
             const selS = vimLineStart(minLine);
             const selE = maxLine < vimGetLines().length - 1 ? vimLineStart(maxLine + 1) : vimLineEnd(maxLine);
-            vimState.visualAnchor = selS;
             vimSetSelection(selS, selE);
           } else {
             vimSetSelection(anchor, newHead);
@@ -4562,8 +4592,12 @@
           // Let these keys pass through
           if (e.key === "Tab" || e.key === "Shift") return;
           if (e.key.startsWith("F") && e.key.length > 1) return;
-          // Escape in normal mode: let it bubble to close panels/sidebars
-          if (e.key === "Escape") return;
+          // Escape in normal mode: clear pending state, then let it bubble to close panels/sidebars
+          if (e.key === "Escape") {
+            vimState.pending = "";
+            vimState.count = "";
+            return;
+          }
 
           // Map arrow keys to hjkl
           const arrowMap = {
@@ -4580,6 +4614,18 @@
 
         if (vimState.mode === "visual") {
           if (e.key === "Tab" || e.key === "Shift") return;
+          // Ctrl+D/U — half-page scroll in visual mode
+          if (e.ctrlKey && (e.key === "d" || e.key === "u")) {
+            e.preventDefault();
+            e.stopPropagation();
+            const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
+            const pageLines = Math.floor(editor.clientHeight / lineHeight / 2);
+            const motion = e.key === "d" ? "j" : "k";
+            vimExecVisual(motion === "j" ? "j" : "k");
+            // Move additional lines
+            for (let i = 1; i < pageLines; i++) vimExecVisual(motion === "j" ? "j" : "k");
+            return;
+          }
           const arrowMapV = {
             ArrowLeft: "h", ArrowDown: "j",
             ArrowUp: "k", ArrowRight: "l",
