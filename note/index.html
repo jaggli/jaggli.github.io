@@ -358,7 +358,7 @@
       .note-item .btn-delete {
         background: none;
         border: none;
-        color: transparent;
+        color: var(--gutter);
         cursor: pointer;
         font-size: 18px;
         width: 36px;
@@ -371,19 +371,11 @@
         justify-content: center;
       }
 
-      .note-item:hover .btn-delete {
-        color: var(--gutter);
-      }
-
-      .note-item .btn-delete:hover {
-        color: var(--red);
-      }
-
       .note-item .btn-rename {
         display: none;
         background: none;
         border: none;
-        color: var(--overlay);
+        color: var(--gutter);
         cursor: pointer;
         font-size: 16px;
         width: 36px;
@@ -395,20 +387,11 @@
         justify-content: center;
       }
 
-      .note-item:hover .btn-rename,
-      .note-item.active .btn-rename {
-        color: var(--gutter);
-      }
-
-      .note-item .btn-rename:hover {
-        color: var(--text);
-      }
-
       /* Note pin */
       .note-item .btn-pin {
         background: none;
         border: none;
-        color: transparent;
+        color: var(--gutter);
         cursor: pointer;
         font-size: 14px;
         width: 36px;
@@ -422,20 +405,38 @@
         justify-content: center;
       }
 
-      .note-item:hover .btn-pin {
-        color: var(--gutter);
-      }
-
       .note-item .btn-pin.pinned {
         color: var(--blue);
       }
 
-      .note-item .btn-pin:hover {
-        color: var(--subtext);
-      }
-
-      .note-item .btn-pin.pinned:hover {
-        color: var(--blue);
+      /* Pointer: fine (mouse) — hide icons, reveal on hover */
+      @media (pointer: fine) {
+        .note-item .btn-delete,
+        .note-item .btn-pin:not(.pinned) {
+          color: transparent;
+        }
+        .note-item:hover .btn-delete {
+          color: var(--gutter);
+        }
+        .note-item .btn-delete:hover {
+          color: var(--red);
+        }
+        .note-item:hover .btn-rename,
+        .note-item.active .btn-rename {
+          color: var(--gutter);
+        }
+        .note-item .btn-rename:hover {
+          color: var(--text);
+        }
+        .note-item:hover .btn-pin {
+          color: var(--gutter);
+        }
+        .note-item .btn-pin:hover {
+          color: var(--subtext);
+        }
+        .note-item .btn-pin.pinned:hover {
+          color: var(--blue);
+        }
       }
 
       /* Note metadata (name + timestamp) */
@@ -1112,40 +1113,15 @@
 
         .note-item .btn-pin {
           width: 44px;
-          font-size: 14px;
-          color: var(--gutter);
         }
 
         .note-item .btn-delete {
           width: 44px;
-          font-size: 18px;
-          color: var(--gutter);
         }
 
         .note-item .btn-rename {
           display: flex;
           width: 44px;
-          font-size: 14px;
-          color: var(--gutter);
-        }
-
-        .note-item:hover .btn-pin,
-        .note-item.active .btn-pin {
-          color: var(--subtext);
-        }
-
-        .note-item:hover .btn-delete,
-        .note-item.active .btn-delete {
-          color: var(--subtext);
-        }
-
-        .note-item:hover .btn-rename,
-        .note-item.active .btn-rename {
-          color: var(--subtext);
-        }
-
-        .note-item .btn-pin.pinned {
-          color: var(--blue);
         }
 
         .sidebar-resize {
