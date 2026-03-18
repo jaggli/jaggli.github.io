@@ -1,12 +1,13 @@
 # note — minimal text editor
 
 A single-file, local-first text editor that runs entirely
-in your browser. No signup, no cloud, no backend, no
-dependencies. Just open the page and start typing.
+in your browser. No signup, no backend, no dependencies.
+Just open the page and start typing.
 
 Built as a single `index.html` file with vanilla JS and
-CSS. Your notes never leave your device — everything is
-stored in `localStorage`.
+CSS. Your notes are stored in `localStorage` by default.
+Optionally, sign in with Google to sync notes across
+devices via Google Drive.
 
 ## How it works
 
@@ -23,6 +24,11 @@ stored in `localStorage`.
   compression encoded in the hash fragment. The shared
   note is embedded in the link itself — no server
   involved.
+- **Google Drive sync**: Optionally sign in with Google
+  to sync notes across devices. Files are stored in your
+  Google Drive's hidden app folder — no storage cost to
+  the app. The Google library is lazy-loaded only when
+  you initiate sync.
 - **Offline**: Works fully offline. The only external
   asset is the Victor Mono font file served alongside
   the HTML.
@@ -38,6 +44,7 @@ stored in `localStorage`.
 - Drag to reorder notes in sidebar
 - Pin notes to keep them at the top
 - Zip export (download all notes at once)
+- Google Drive sync with per-file conflict resolution
 - Word wrap toggle with wrap-aware line numbers
 - Current line highlighting
 - Cursor position (line/column) in status bar
@@ -76,3 +83,6 @@ prompt for a filename via a styled dialog.
   `DecompressionStream` APIs for URL sharing
 - **Zip**: Custom minimal zip builder (no library)
   for multi-note download
+- **Google Drive**: OAuth 2.0 via Google Identity
+  Services (lazy-loaded). Drive API calls use plain
+  `fetch` — no `gapi` client library needed
