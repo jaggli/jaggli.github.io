@@ -5,21 +5,21 @@ in your browser. No signup, no backend, no dependencies.
 Just open the page and start typing.
 
 Built as a single `index.html` file with vanilla JS and
-CSS. Your notes are stored in `localStorage` by default.
-Optionally, sign in with Google to sync notes across
-devices via Google Drive.
+CSS (~5500 lines). Your notes are stored in `localStorage`
+by default. Optionally, sign in with Google to sync notes
+across devices via Google Drive.
 
 ## How it works
 
 - **Single file**: The entire app is one self-contained
-  HTML file (~3500 lines). No build step, no bundler,
+  HTML file (~5500 lines). No build step, no bundler,
   no framework.
 - **Local storage**: Notes are persisted in your
   browser's `localStorage` (5MB limit). A storage meter
   appears when usage exceeds 200kB.
 - **Cross-tab sync**: Open the editor in multiple tabs —
-  changes to notes, sidebar width, word wrap, and pin
-  state sync instantly via `storage` events.
+  changes to notes, sidebar width, word wrap, vim mode,
+  and pin state sync instantly via `storage` events.
 - **URL sharing**: Notes can be shared via URL using zlib
   compression encoded in the hash fragment. The shared
   note is embedded in the link itself — no server
@@ -45,13 +45,38 @@ devices via Google Drive.
 - Pin notes to keep them at the top
 - Zip export (download all notes at once)
 - Google Drive sync with per-file conflict resolution
+- Vim mode (toggle in toolbar, desktop only)
 - Word wrap toggle with wrap-aware line numbers
 - Current line highlighting
-- Cursor position (line/column) in status bar
+- Cursor position (line/column) and vim mode indicator in status bar
 - Indent/dedent selection with Tab/Shift+Tab
 - Undo/redo with per-note history
 - Delete confirmation dialog
+- Built-in help page (accessible from file menu)
 - Mobile-optimized UI with touch-friendly controls
+
+## Vim mode
+
+Toggle vim mode via the `vim` button in the toolbar
+(desktop only, hidden on touch devices). The setting
+persists in localStorage and syncs via Google Drive.
+
+Supported modes: **Normal**, **Insert**, **Visual**,
+**Visual Line**, and **Command** (`:` prompt).
+
+Features include:
+- Modal editing with block cursor in normal mode
+- Motions: `h` `j` `k` `l` `w` `b` `e` `0` `$` `^`
+  `gg` `G` `{` `}` `f`/`F`/`t`/`T` with `;` `,` repeat
+- Operators: `d` `c` `y` with motions and text objects
+  (`iw` `aw` `i"` `a(` etc.)
+- Line operations: `dd` `cc` `yy` `>>` `<<` `J` `p` `P`
+- Visual selection with `v`, visual line with `V`
+- Dot repeat (`.`) for most editing commands
+- Command mode (`:`) with `:set wrap`, `:set nowrap`,
+  `:new`, `:e <name>`, `:help`, `:<number>` (jump to
+  line), `:%s/find/replace/g` (opens find & replace)
+- Count prefixes (e.g. `3dw`, `5j`, `2>>`)
 
 ## Keyboard shortcuts
 
@@ -66,6 +91,10 @@ devices via Google Drive.
 | Tab             | Insert 2 spaces / indent selection |
 | Shift+Tab       | Dedent selection                   |
 | Escape          | Close search / sidebar / find bar  |
+
+When vim mode is active, standard vim keybindings take
+precedence in the editor. The shortcuts above still work
+in input fields (search, find & replace).
 
 ## Mobile
 
