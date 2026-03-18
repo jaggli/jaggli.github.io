@@ -947,6 +947,14 @@
         padding: 0;
       }
 
+      .vim-command-bar.error input {
+        color: var(--red);
+      }
+      .vim-dirty-indicator {
+        color: var(--blue);
+        margin-left: 6px;
+      }
+
       .vim-mode-normal {
         color: var(--blue);
         font-weight: bold;
@@ -1732,6 +1740,7 @@
       const SIDEBAR_WIDTH_KEY = "notepad_sidebar_width";
       const WRAP_KEY = "notepad_wrap";
       const VIM_KEY = "notepad_vim";
+      const SWAP_PREFIX = "notepad_swap_";
       let state = { notes: [], activeId: null };
       let saveTimeout = null;
       let vimState = {
@@ -1748,6 +1757,7 @@
         visualHeadLine: 0, // tracked head line for V mode
         insertEntry: null, // { key, pos } — how insert mode was entered
         searchDirection: 1, // 1 = forward (/), -1 = backward (?)
+        bufferDirty: false, // true when buffer differs from saved content
       };
 
       function loadState() {
@@ -1789,6 +1799,32 @@
           saveState();
           scheduleDriveUpload(false);
         }, 300);
+      }
+
+      function swapKey(noteId) {
+        return SWAP_PREFIX + noteId;
+      }
+
+      function saveSwap(noteId, content) {
+        try {
+          localStorage.setItem(
+            swapKey(noteId),
+            JSON.stringify({ content, timestamp: Date.now() }),
+          );
+        } catch {}
+      }
+
+      function loadSwap(noteId) {
+        try {
+          const raw = localStorage.getItem(swapKey(noteId));
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function deleteSwap(noteId) {
+        localStorage.removeItem(swapKey(noteId));
       }
 
       function getActiveNote() {
@@ -2022,19 +2058,22 @@
         if (!note) return;
         const h = getHistory(note.id);
         if (!h.past.length) return;
-        const oldContent = note.content;
+        const oldContent = editor.value;
         h.future.push({ content: oldContent });
         const entry = h.past.pop();
-        note.content = entry.content;
-        editor.value = note.content;
-        // Place cursor at the first difference (where the change was)
-        const diffPos = findFirstDiff(oldContent, note.content);
+        editor.value = entry.content;
+        const diffPos = findFirstDiff(oldContent, entry.content);
         editor.selectionStart = editor.selectionEnd = Math.min(
           diffPos,
-          note.content.length,
+          entry.content.length,
         );
-        note.updatedAt = Date.now();
-        saveState();
+        if (vimState.enabled) {
+          vimState.bufferDirty = entry.content !== note.content;
+        } else {
+          note.content = entry.content;
+          note.updatedAt = Date.now();
+          saveState();
+        }
         refreshEditor();
       }
 
@@ -2043,18 +2082,22 @@
         if (!note) return;
         const h = getHistory(note.id);
         if (!h.future.length) return;
-        const oldContent = note.content;
+        const oldContent = editor.value;
         h.past.push({ content: oldContent });
         const entry = h.future.pop();
-        note.content = entry.content;
-        editor.value = note.content;
-        const diffPos = findFirstDiff(oldContent, note.content);
+        editor.value = entry.content;
+        const diffPos = findFirstDiff(oldContent, entry.content);
         editor.selectionStart = editor.selectionEnd = Math.min(
           diffPos,
-          note.content.length,
+          entry.content.length,
         );
-        note.updatedAt = Date.now();
-        saveState();
+        if (vimState.enabled) {
+          vimState.bufferDirty = entry.content !== note.content;
+        } else {
+          note.content = entry.content;
+          note.updatedAt = Date.now();
+          saveState();
+        }
         refreshEditor();
       }
 
@@ -2390,7 +2433,7 @@
           return;
         }
         highlightLayer.innerHTML =
-          highlightCode(note.content, note.name) + "\n";
+          highlightCode(editor.value, note.name) + "\n";
       }
 
       let highlightTimeout = null;
@@ -2513,12 +2556,17 @@
         currentLine = line;
         if (vimState.enabled) {
           const m = vimState.mode.toUpperCase();
+          const dirty = vimState.bufferDirty
+            ? '<span class="vim-dirty-indicator">[+]</span>'
+            : "";
           cursorPos.innerHTML =
             '<span class="vim-mode-' +
             vimState.mode +
             '">' +
             m +
-            "</span>  Ln " +
+            "</span>" +
+            dirty +
+            "  Ln " +
             line +
             ", Col " +
             col;
@@ -2542,6 +2590,27 @@
           editor.value = note.content;
           editor.disabled = false;
           btnShare.disabled = false;
+          // Recover from swap file
+          const swap = loadSwap(note.id);
+          if (swap && swap.content !== note.content) {
+            if (vimState.enabled) {
+              // In vim mode: load swap into buffer, mark dirty
+              editor.value = swap.content;
+              vimState.bufferDirty = true;
+            } else {
+              // Non-vim mode: swap exists from a previous vim session
+              // Apply it, save to storage, and clean up
+              note.content = swap.content;
+              note.updatedAt = Date.now();
+              editor.value = swap.content;
+              saveState();
+              updateUrl();
+              deleteSwap(note.id);
+            }
+          } else if (swap) {
+            // Swap matches saved content — clean up
+            deleteSwap(note.id);
+          }
         } else {
           editor.value = "";
           editor.disabled = true;
@@ -2840,9 +2909,11 @@
         }
         const idx = state.notes.findIndex((n) => n.id === id);
         if (idx === -1) return;
+        deleteSwap(id);
         state.notes.splice(idx, 1);
         if (state.activeId === id) {
           state.activeId = state.notes.length ? state.notes[0].id : null;
+          vimState.bufferDirty = false;
         }
         saveState();
         scheduleDriveUpload(true);
@@ -2851,6 +2922,10 @@
       }
 
       function switchNote(id) {
+        if (vimState.enabled && vimState.bufferDirty) {
+          vimShowError("No write since last change (add ! to override)");
+          return;
+        }
         state.activeId = id;
         saveState();
         render();
@@ -3261,9 +3336,14 @@
         editor.focus();
         document.execCommand("insertText", false, replacement);
 
-        note.content = editor.value;
-        note.updatedAt = Date.now();
-        scheduleSave();
+        if (vimState.enabled) {
+          vimState.bufferDirty = true;
+          saveSwap(note.id, editor.value);
+        } else {
+          note.content = editor.value;
+          note.updatedAt = Date.now();
+          scheduleSave();
+        }
         scheduleHighlight();
         updateLineNumbers();
 
@@ -3297,9 +3377,14 @@
 
         if (count === 0) return;
         editor.value = result;
-        note.content = result;
-        note.updatedAt = Date.now();
-        saveState();
+        if (vimState.enabled) {
+          vimState.bufferDirty = true;
+          saveSwap(note.id, editor.value);
+        } else {
+          note.content = result;
+          note.updatedAt = Date.now();
+          saveState();
+        }
         refreshEditor();
         updateFindMatches();
       }
@@ -3481,16 +3566,25 @@
       }
 
       function toggleVim() {
+        // If disabling vim with unsaved changes, write them first
+        if (vimState.enabled && vimState.bufferDirty) {
+          vimWriteBuffer();
+        }
         vimState.enabled = !vimState.enabled;
+        vimState.bufferDirty = false;
         btnVim.classList.toggle("active", vimState.enabled);
         localStorage.setItem(VIM_KEY, vimState.enabled ? "true" : "false");
         if (vimState.enabled) {
           vimSetMode("normal");
+          editor.readOnly = false;
+          editor.focus();
+          editor.readOnly = true;
         } else {
           editor.readOnly = false;
           vimState.mode = "normal";
           vimState.count = "";
           vimState.pending = "";
+          editor.focus();
         }
         updateCursorPos();
       }
@@ -3549,7 +3643,7 @@
       function vimPushUndoOnce() {
         const note = getActiveNote();
         if (!note || vimState._undoPushed) return;
-        pushHistory(note.id, note.content);
+        pushHistory(note.id, editor.value);
         vimState._undoPushed = true;
       }
 
@@ -4771,18 +4865,79 @@
         vimUpdateBlockCursor();
       }
 
+      function vimShowError(msg) {
+        vimCommandBar.classList.add("visible", "error");
+        vimCommandInput.value = msg;
+        vimCommandInput.readOnly = true;
+        vimCommandInput.focus();
+        const dismiss = (e) => {
+          vimCommandBar.classList.remove("error");
+          vimCommandInput.readOnly = false;
+          vimCloseCommandBar();
+          vimCommandInput.removeEventListener("keydown", dismiss);
+        };
+        vimCommandInput.addEventListener("keydown", dismiss);
+      }
+
+      function vimWriteBuffer() {
+        const note = getActiveNote();
+        if (!note) return;
+        note.content = editor.value;
+        note.updatedAt = Date.now();
+        saveState();
+        scheduleDriveUpload(false);
+        updateUrl();
+        deleteSwap(note.id);
+        vimState.bufferDirty = false;
+        updateCursorPos();
+      }
+
+      function vimCheckDirty(onClean) {
+        if (vimState.bufferDirty) {
+          vimShowError("No write since last change (add ! to override)");
+          return false;
+        }
+        onClean();
+        return true;
+      }
+
+      function vimDiscardBuffer() {
+        const note = getActiveNote();
+        if (!note) return;
+        editor.value = note.content;
+        deleteSwap(note.id);
+        vimState.bufferDirty = false;
+        updateLineNumbers();
+        scheduleHighlight();
+        updateCursorPos();
+      }
+
       function vimExecCommand(cmd) {
         const trimmed = cmd.trim();
 
-        // :w — no-op (auto-saved)
+        // :w — write buffer to storage
         if (trimmed === "w") {
-          // already saved
+          vimWriteBuffer();
           return;
         }
 
-        // :q / :wq / :q! — exit vim mode
-        if (trimmed === "q" || trimmed === "wq" || trimmed === "q!") {
+        // :wq — write and exit vim
+        if (trimmed === "wq") {
+          vimWriteBuffer();
           toggleVim();
+          return;
+        }
+
+        // :q! — discard and exit vim
+        if (trimmed === "q!") {
+          vimDiscardBuffer();
+          toggleVim();
+          return;
+        }
+
+        // :q — exit vim (with dirty check)
+        if (trimmed === "q") {
+          vimCheckDirty(() => toggleVim());
           return;
         }
 
@@ -4802,6 +4957,10 @@
 
         // :new / :n — create new note
         if (trimmed === "new" || trimmed === "n") {
+          if (vimState.bufferDirty) {
+            vimShowError("No write since last change (add ! to override)");
+            return;
+          }
           createNote();
           return;
         }
@@ -5355,14 +5514,21 @@
             if (!historyTimeout) pushHistory(note.id, note.content);
           }
         }
-        note.content = editor.value;
-        note.updatedAt = Date.now();
+        if (vimActive) {
+          vimState.bufferDirty = true;
+          saveSwap(note.id, editor.value);
+        } else {
+          note.content = editor.value;
+          note.updatedAt = Date.now();
+        }
         updateLineNumbers();
         updateCursorPos();
         scheduleHighlight();
-        scheduleSave();
-        if (!vimActive) scheduleHistorySnapshot();
-        scheduleUrlUpdate();
+        if (!vimActive) {
+          scheduleSave();
+          scheduleHistorySnapshot();
+          scheduleUrlUpdate();
+        }
       });
 
       editor.addEventListener("scroll", () => {
