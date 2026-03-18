@@ -1733,6 +1733,7 @@
         lastAction: null, // for dot repeat: { fn, args }
         findChar: null, // for f/F/t/T repeat with ;/,
         visualLine: false, // V mode
+        visualHeadLine: 0, // tracked head line for V mode
       };
 
       function loadState() {
@@ -3729,10 +3730,14 @@
 
       function vimExecNormal(key, e) {
         // Temporarily allow editing for commands that modify text
-        const _wasRO = editor.readOnly;
         editor.readOnly = false;
         try { return _vimExecNormal(key, e); }
-        finally { editor.readOnly = _wasRO; }
+        finally {
+          // Restore readOnly only if still in a non-editable mode
+          if (vimState.mode === "normal" || vimState.mode === "visual") {
+            editor.readOnly = true;
+          }
+        }
       }
       function _vimExecNormal(key, e) {
         const val = editor.value;
@@ -4065,6 +4070,7 @@
         // V — visual line mode
         if (key === "V") {
           vimState.visualLine = true;
+          vimState.visualHeadLine = lineIdx;
           const ls = vimLineStart(lineIdx);
           const le = lineIdx < lines.length - 1 ? vimLineStart(lineIdx + 1) : vimLineEnd(lineIdx);
           vimState.visualAnchor = ls;
@@ -4281,10 +4287,13 @@
       }
 
       function vimExecVisual(key) {
-        const _wasRO = editor.readOnly;
         editor.readOnly = false;
         try { return _vimExecVisual(key); }
-        finally { editor.readOnly = _wasRO; }
+        finally {
+          if (vimState.mode === "normal" || vimState.mode === "visual") {
+            editor.readOnly = true;
+          }
+        }
       }
       function _vimExecVisual(key) {
         const pos = editor.selectionStart;
@@ -4310,10 +4319,20 @@
           const motionKey = key === "G" ? "G" : key;
           let newHead = vimMotion(motionKey, cnt);
           if (vimState.visualLine) {
-            // In visual line mode, extend to full lines
-            newHead = vimMotion(motionKey, cnt);
+            // In visual line mode, track head line directly
             const anchorLineIdx = editor.value.substring(0, anchor).split("\n").length - 1;
-            const newHeadLine = editor.value.substring(0, newHead).split("\n").length - 1;
+            let newHeadLine = vimState.visualHeadLine;
+            if (key === "j") newHeadLine = Math.min(newHeadLine + cnt, vimGetLines().length - 1);
+            else if (key === "k") newHeadLine = Math.max(newHeadLine - cnt, 0);
+            else if (key === "G") newHeadLine = vimGetLines().length - 1;
+            else if (key === "{" || key === "}") {
+              const targetPos = vimMotion(motionKey, cnt);
+              newHeadLine = editor.value.substring(0, targetPos).split("\n").length - 1;
+            } else {
+              const targetPos = vimMotion(motionKey, cnt);
+              newHeadLine = editor.value.substring(0, targetPos).split("\n").length - 1;
+            }
+            vimState.visualHeadLine = newHeadLine;
             const minLine = Math.min(anchorLineIdx, newHeadLine);
             const maxLine = Math.max(anchorLineIdx, newHeadLine);
             const selS = vimLineStart(minLine);
@@ -5615,7 +5634,13 @@
         render();
         updateUrl();
         startTimestampRefresh();
-        if (getActiveNote()) editor.focus();
+        if (getActiveNote()) {
+          editor.focus();
+          if (vimState.enabled) {
+            editor.selectionStart = editor.selectionEnd = 0;
+            updateCursorPos();
+          }
+        }
 
         // Auto-sync from Google Drive on load (quiet, no modals)
         if (gdriveConnected) driveSyncQuiet();
