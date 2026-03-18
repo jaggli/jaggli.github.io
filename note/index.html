@@ -1437,15 +1437,12 @@
                 sync <span class="sync-dot">&#9679;</span>
               </button>
               <div class="file-menu" id="syncMenu">
-                <div class="file-menu-label">
-                  connected to<br />google drive
-                </div>
-                <hr class="file-menu-separator" />
                 <button class="file-menu-item" onclick="driveSync()">
-                  force sync
+                  sync now
                 </button>
+                <hr class="file-menu-separator" />
                 <button class="file-menu-item" onclick="driveSignOut()">
-                  turn off sync
+                  disconnect
                 </button>
               </div>
             </div>
@@ -4172,7 +4169,7 @@
           await gdriveUploadState();
           gdriveDirty = false;
         } catch {
-          // Silently fail — will retry on next change or manual sync
+          // Silently fail — will retry on next change or sync now
         } finally {
           gdriveUploading = false;
         }
