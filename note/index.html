@@ -349,8 +349,7 @@
 
       .note-item-input.editing {
         cursor: text;
-        background: var(--overlay);
-        border-radius: 3px;
+        background: none;
         padding: 0 4px;
         margin: 0 -4px;
       }
@@ -510,9 +509,10 @@
         flex: 1;
         display: grid;
         overflow: hidden;
+        position: relative;
       }
 
-      .editor-area > * {
+      .editor-area > *:not(.vim-cursor) {
         grid-area: 1 / 1 / 2 / 2;
         font-family: var(--font);
         font-size: 14px;
@@ -881,6 +881,42 @@
         color: var(--blue);
       }
 
+      @media (pointer: coarse) {
+        #btnVim {
+          display: none;
+        }
+      }
+
+      .vim-cursor {
+        display: none;
+        position: absolute;
+        background: var(--text);
+        opacity: 0.7;
+        pointer-events: none;
+        z-index: 2;
+        animation: vim-blink 1s infinite;
+      }
+
+      @keyframes vim-blink {
+        0%, 42% { opacity: 0.7; }
+        50% { opacity: 0; }
+        92% { opacity: 0; }
+        100% { opacity: 0.7; }
+      }
+
+      .vim-mode-normal {
+        color: var(--blue);
+        font-weight: bold;
+      }
+      .vim-mode-insert {
+        color: var(--green);
+        font-weight: bold;
+      }
+      .vim-mode-visual {
+        color: var(--green);
+        font-weight: bold;
+      }
+
       /* Modal */
       .modal-overlay {
         display: none;
@@ -1133,7 +1169,7 @@
           padding: 4px 10px;
         }
 
-        .editor-area > * {
+        .editor-area > *:not(.vim-cursor) {
           font-size: 16px;
           padding: 12px 14px;
         }
@@ -1285,6 +1321,7 @@
               placeholder="Start typing..."
               spellcheck="false"
             ></textarea>
+            <div class="vim-cursor" id="vimCursor"></div>
           </div>
           <div class="empty-state" id="emptyState">
             <div class="empty-state-desktop">
@@ -1328,6 +1365,14 @@
             ></span>
             <button
               class="btn-wrap"
+              id="btnVim"
+              onclick="toggleVim()"
+              title="Toggle vim mode"
+            >
+              vim
+            </button>
+            <button
+              class="btn-wrap"
               id="btnWrap"
               onclick="toggleWrap()"
               title="Toggle word wrap"
@@ -1337,6 +1382,16 @@
             <div class="file-menu-container" id="fileMenuContainer">
               <button class="btn-share" onclick="toggleFileMenu()">file</button>
               <div class="file-menu" id="fileMenu">
+                <button
+                  class="file-menu-item"
+                  onclick="
+                    openHelp();
+                    closeFileMenu();
+                  "
+                >
+                  help
+                </button>
+                <hr class="file-menu-separator" />
                 <button
                   class="file-menu-item mobile-only"
                   onclick="
@@ -1629,8 +1684,21 @@
       const STORAGE_KEY = "notepad_data";
       const SIDEBAR_WIDTH_KEY = "notepad_sidebar_width";
       const WRAP_KEY = "notepad_wrap";
+      const VIM_KEY = "notepad_vim";
       let state = { notes: [], activeId: null };
       let saveTimeout = null;
+      let vimState = {
+        enabled: false,
+        mode: "normal",
+        count: "",
+        pending: "",
+        clipboard: "",
+        clipboardLinewise: false,
+        visualAnchor: 0,
+        lastAction: null, // for dot repeat: { fn, args }
+        findChar: null, // for f/F/t/T repeat with ;/,
+        visualLine: false, // V mode
+      };
 
       function loadState() {
         try {
@@ -2368,8 +2436,22 @@
         const line = before.split("\n").length;
         const col = pos - before.lastIndexOf("\n");
         currentLine = line;
-        cursorPos.textContent = "Ln " + line + ", Col " + col;
+        if (vimState.enabled) {
+          const m = vimState.mode.toUpperCase();
+          cursorPos.innerHTML =
+            '<span class="vim-mode-' +
+            vimState.mode +
+            '">' +
+            m +
+            "</span>  Ln " +
+            line +
+            ", Col " +
+            col;
+        } else {
+          cursorPos.textContent = "Ln " + line + ", Col " + col;
+        }
         updateGutterActive();
+        if (typeof vimUpdateBlockCursor === "function") vimUpdateBlockCursor();
       }
 
       function updateEmptyState() {
@@ -3186,6 +3268,1157 @@
       }).observe(editor);
 
       // ═══════════════════════════════════════════════════
+      //  Vim Mode
+      // ═══════════════════════════════════════════════════
+
+      const btnVim = document.getElementById("btnVim");
+      const vimCursorEl = document.getElementById("vimCursor");
+
+      const _editorCS = getComputedStyle(editor);
+      let _vimCharWidth = 8.4; // fallback
+
+      function vimMeasureCharWidth() {
+        const el = document.createElement("pre");
+        el.textContent = "XXXXXXXXXX";
+        el.style.cssText =
+          "position:absolute;visibility:hidden;white-space:pre;" +
+          "font-family:" + getComputedStyle(editor).fontFamily + ";" +
+          "font-size:" + getComputedStyle(editor).fontSize + ";" +
+          "padding:0;margin:0;border:none;display:inline;box-sizing:content-box;";
+        document.body.appendChild(el);
+        _vimCharWidth = el.getBoundingClientRect().width / 10;
+        document.body.removeChild(el);
+      }
+      document.fonts.ready.then(vimMeasureCharWidth);
+      vimMeasureCharWidth();
+
+      function vimUpdateBlockCursor() {
+        if (!vimState.enabled || vimState.mode === "insert") {
+          vimCursorEl.style.display = "none";
+          editor.style.caretColor = "var(--text)";
+          return;
+        }
+        editor.style.caretColor = "transparent";
+        vimCursorEl.style.display = "block";
+
+        const val = editor.value || "";
+        const pos = editor.selectionStart;
+        const before = val.substring(0, pos);
+        const lines = before.split("\n");
+        const lineIdx = lines.length - 1;
+        const col = lines[lineIdx].length;
+
+        const cw = _vimCharWidth;
+        const lineHeight = parseFloat(_editorCS.lineHeight) || 14 * 1.5;
+        const padTop = 10;
+        const padLeft = 16;
+        const colOffset = col * cw;
+
+        // Account for wrapped lines if wrap mode is on
+        let visualLine = lineIdx;
+        if (editorArea.classList.contains("wrap")) {
+          visualLine = 0;
+          const allLines = val.split("\n");
+          const editorWidth = editor.clientWidth - padLeft * 2;
+          const charsPerLine = Math.floor(editorWidth / cw) || 1;
+          for (let i = 0; i < lineIdx; i++) {
+            visualLine += Math.max(1, Math.ceil(allLines[i].length / charsPerLine));
+          }
+          if (charsPerLine > 0 && col >= charsPerLine) {
+            visualLine += Math.floor(col / charsPerLine);
+          }
+        }
+
+        const top = padTop + visualLine * lineHeight - editor.scrollTop;
+        const left =
+          padLeft +
+          (editorArea.classList.contains("wrap")
+            ? (col % (Math.floor((editor.clientWidth - padLeft * 2) / cw) || 1)) * cw
+            : colOffset) -
+          editor.scrollLeft;
+
+        vimCursorEl.style.top = top + "px";
+        vimCursorEl.style.left = left + "px";
+        vimCursorEl.style.width = cw + "px";
+        vimCursorEl.style.height = lineHeight + "px";
+      }
+
+      function vimSetMode(mode) {
+        vimState.mode = mode;
+        vimState.count = "";
+        vimState.pending = "";
+        if (mode === "normal") {
+          editor.readOnly = true;
+          vimState.visualLine = false;
+        } else if (mode === "visual") {
+          editor.readOnly = true;
+          vimState.visualAnchor = editor.selectionStart;
+        } else {
+          editor.readOnly = false;
+          vimState.visualLine = false;
+        }
+        updateCursorPos();
+        vimUpdateBlockCursor();
+      }
+
+      function loadVim() {
+        const saved = localStorage.getItem(VIM_KEY);
+        if (saved === "true") {
+          vimState.enabled = true;
+          btnVim.classList.add("active");
+          vimSetMode("normal");
+        }
+      }
+
+      function toggleVim() {
+        vimState.enabled = !vimState.enabled;
+        btnVim.classList.toggle("active", vimState.enabled);
+        localStorage.setItem(VIM_KEY, vimState.enabled ? "true" : "false");
+        if (vimState.enabled) {
+          vimSetMode("normal");
+        } else {
+          editor.readOnly = false;
+          vimState.mode = "normal";
+          vimState.count = "";
+          vimState.pending = "";
+        }
+        updateCursorPos();
+      }
+
+      // ── Vim helpers ──
+
+      function vimGetLines() {
+        return editor.value.split("\n");
+      }
+
+      function vimCursorLine() {
+        const before = editor.value.substring(0, editor.selectionStart);
+        return before.split("\n").length - 1;
+      }
+
+      function vimLineStart(lineIdx) {
+        const lines = vimGetLines();
+        let pos = 0;
+        for (let i = 0; i < lineIdx && i < lines.length; i++) {
+          pos += lines[i].length + 1;
+        }
+        return pos;
+      }
+
+      function vimLineEnd(lineIdx) {
+        const lines = vimGetLines();
+        if (lineIdx >= lines.length) return editor.value.length;
+        return vimLineStart(lineIdx) + lines[lineIdx].length;
+      }
+
+      function vimFirstNonBlank(lineIdx) {
+        const lines = vimGetLines();
+        if (lineIdx >= lines.length) return vimLineStart(lineIdx);
+        const match = lines[lineIdx].match(/^\s*/);
+        return vimLineStart(lineIdx) + (match ? match[0].length : 0);
+      }
+
+      function vimSetCursor(pos) {
+        pos = Math.max(0, Math.min(pos, editor.value.length));
+        editor.selectionStart = editor.selectionEnd = pos;
+      }
+
+      function vimSetSelection(anchor, head) {
+        const a = Math.max(0, Math.min(anchor, editor.value.length));
+        const h = Math.max(0, Math.min(head, editor.value.length));
+        if (a <= h) {
+          editor.selectionStart = a;
+          editor.selectionEnd = h;
+        } else {
+          editor.selectionStart = h;
+          editor.selectionEnd = a;
+          editor.selectionDirection = "backward";
+        }
+      }
+
+      function vimDeleteRange(start, end, linewise) {
+        const val = editor.value;
+        const s = Math.max(0, Math.min(start, val.length));
+        const e = Math.max(0, Math.min(end, val.length));
+        vimState.clipboard = val.substring(s, e);
+        vimState.clipboardLinewise = !!linewise;
+        editor.setRangeText("", s, e, "start");
+        editor.selectionStart = editor.selectionEnd = Math.min(
+          s,
+          editor.value.length
+        );
+        editor.dispatchEvent(new Event("input"));
+      }
+
+      function vimYankRange(start, end, linewise) {
+        const val = editor.value;
+        vimState.clipboard = val.substring(
+          Math.max(0, start),
+          Math.min(end, val.length)
+        );
+        vimState.clipboardLinewise = !!linewise;
+      }
+
+      function vimInsertText(pos, text) {
+        editor.setRangeText(text, pos, pos, "end");
+        editor.dispatchEvent(new Event("input"));
+      }
+
+      // ── Vim text objects ──
+      // Returns { start, end } for a text object at cursor
+
+      function vimTextObject(type, inner) {
+        const val = editor.value;
+        const pos = editor.selectionStart;
+
+        if (type === "w") {
+          // Word object
+          const wordRe = /\w/;
+          let s = pos, e = pos;
+          if (wordRe.test(val[pos] || "")) {
+            while (s > 0 && wordRe.test(val[s - 1])) s--;
+            while (e < val.length && wordRe.test(val[e])) e++;
+          } else {
+            // On non-word: select non-word non-space chars
+            const nw = /[^\w\s]/;
+            if (nw.test(val[pos] || "")) {
+              while (s > 0 && nw.test(val[s - 1])) s--;
+              while (e < val.length && nw.test(val[e])) e++;
+            }
+          }
+          if (!inner) {
+            // "a word" includes trailing whitespace
+            while (e < val.length && /\s/.test(val[e]) && val[e] !== "\n") e++;
+          }
+          return { start: s, end: e };
+        }
+
+        if (type === "W") {
+          // WORD object (whitespace-delimited)
+          let s = pos, e = pos;
+          while (s > 0 && !/\s/.test(val[s - 1])) s--;
+          while (e < val.length && !/\s/.test(val[e])) e++;
+          if (!inner) {
+            while (e < val.length && /\s/.test(val[e]) && val[e] !== "\n") e++;
+          }
+          return { start: s, end: e };
+        }
+
+        // Bracket pairs
+        const pairs = { "(": ")", ")": "(", "{": "}", "}": "{", "[": "]", "]": "[", "<": ">", ">": "<" };
+        if (pairs[type]) {
+          const open = "({[<".includes(type) ? type : pairs[type];
+          const close = pairs[open];
+          let depth = 0, s = -1, e = -1;
+          // Search backward for opening bracket
+          for (let i = pos; i >= 0; i--) {
+            if (val[i] === close) depth++;
+            if (val[i] === open) {
+              if (depth === 0) { s = i; break; }
+              depth--;
+            }
+          }
+          if (s === -1) return null;
+          // Search forward for closing bracket
+          depth = 0;
+          for (let i = s + 1; i < val.length; i++) {
+            if (val[i] === open) depth++;
+            if (val[i] === close) {
+              if (depth === 0) { e = i; break; }
+              depth--;
+            }
+          }
+          if (e === -1) return null;
+          return inner ? { start: s + 1, end: e } : { start: s, end: e + 1 };
+        }
+
+        // Quote pairs: ", ', `
+        if (type === '"' || type === "'" || type === "`") {
+          const q = type;
+          const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+          const lineEnd = val.indexOf("\n", pos);
+          const le = lineEnd === -1 ? val.length : lineEnd;
+          const line = val.substring(lineStart, le);
+          const colPos = pos - lineStart;
+          // Find quote pairs on the line
+          let s = -1, e = -1;
+          let i = 0;
+          while (i < line.length) {
+            if (line[i] === q && (i === 0 || line[i - 1] !== "\\")) {
+              const qStart = i;
+              i++;
+              while (i < line.length && !(line[i] === q && line[i - 1] !== "\\")) i++;
+              if (i < line.length) {
+                const qEnd = i;
+                if (colPos >= qStart && colPos <= qEnd) {
+                  s = qStart;
+                  e = qEnd;
+                  break;
+                }
+                if (s === -1 && qEnd > colPos) {
+                  s = qStart;
+                  e = qEnd;
+                  break;
+                }
+              }
+            }
+            i++;
+          }
+          if (s === -1 || e === -1) return null;
+          return inner
+            ? { start: lineStart + s + 1, end: lineStart + e }
+            : { start: lineStart + s, end: lineStart + e + 1 };
+        }
+
+        return null;
+      }
+
+      // ── Vim f/F/t/T motions ──
+
+      function vimFindChar(char, direction, before, count) {
+        const val = editor.value;
+        const pos = editor.selectionStart;
+        const lineIdx = vimCursorLine();
+        const ls = vimLineStart(lineIdx);
+        const le = vimLineEnd(lineIdx);
+        let c = count || 1;
+        let p = pos;
+
+        for (let i = 0; i < c; i++) {
+          if (direction === 1) {
+            // Forward
+            const idx = val.indexOf(char, p + 1);
+            if (idx === -1 || idx > le) return pos; // not found on line
+            p = idx;
+          } else {
+            // Backward
+            const idx = val.lastIndexOf(char, p - 1);
+            if (idx === -1 || idx < ls) return pos;
+            p = idx;
+          }
+        }
+        if (before) {
+          p -= direction; // t = one before, T = one after
+        }
+        return p;
+      }
+
+      // ── Vim motions ──
+      // Returns the new cursor position after applying a motion
+
+      function vimMotion(motion, count) {
+        const val = editor.value;
+        const pos = editor.selectionStart;
+        const lineIdx = vimCursorLine();
+        const lines = vimGetLines();
+        let c = count || 1;
+
+        switch (motion) {
+          case "h": return Math.max(pos - c, vimLineStart(lineIdx));
+          case "l": return Math.min(pos + c, vimLineEnd(lineIdx));
+          case "j": {
+            const col = pos - vimLineStart(lineIdx);
+            const target = Math.min(lineIdx + c, lines.length - 1);
+            return Math.min(
+              vimLineStart(target) + col,
+              vimLineEnd(target)
+            );
+          }
+          case "k": {
+            const col = pos - vimLineStart(lineIdx);
+            const target = Math.max(lineIdx - c, 0);
+            return Math.min(
+              vimLineStart(target) + col,
+              vimLineEnd(target)
+            );
+          }
+          case "w": {
+            let p = pos;
+            for (let i = 0; i < c; i++) {
+              const m = val.substring(p).match(/^(\w+|\W)\s*/);
+              p += m ? m[0].length : 1;
+            }
+            return Math.min(p, val.length);
+          }
+          case "b": {
+            let p = pos;
+            for (let i = 0; i < c; i++) {
+              const before = val.substring(0, p);
+              const m = before.match(/\s*(\w+|\W)$/);
+              p -= m ? m[0].length : 1;
+            }
+            return Math.max(p, 0);
+          }
+          case "e": {
+            let p = pos;
+            for (let i = 0; i < c; i++) {
+              if (p < val.length) p++;
+              const m = val.substring(p).match(/^(\s*\S*)/);
+              if (m && m[0].length > 0) p += m[0].length;
+            }
+            return Math.min(p > pos ? p - 1 : p, val.length);
+          }
+          case "0": return vimLineStart(lineIdx);
+          case "$": return vimLineEnd(lineIdx);
+          case "^": return vimFirstNonBlank(lineIdx);
+          case "gg": return 0;
+          case "G": return vimLineStart(lines.length - 1);
+          case "{": {
+            let li = lineIdx;
+            for (let i = 0; i < c; i++) {
+              li--;
+              while (li > 0 && lines[li].trim() !== "") li--;
+            }
+            return vimLineStart(Math.max(li, 0));
+          }
+          case "}": {
+            let li = lineIdx;
+            for (let i = 0; i < c; i++) {
+              li++;
+              while (li < lines.length - 1 && lines[li].trim() !== "") li++;
+            }
+            return vimLineStart(Math.min(li, lines.length - 1));
+          }
+          default: return pos;
+        }
+      }
+
+      // ── Vim command execution ──
+
+      function vimExecNormal(key, e) {
+        const val = editor.value;
+        const pos = editor.selectionStart;
+        const lineIdx = vimCursorLine();
+        const lines = vimGetLines();
+        const cnt = parseInt(vimState.count) || 1;
+        const pending = vimState.pending;
+
+        // Accumulate count digits
+        if (
+          key >= "1" && key <= "9" && !pending ||
+          key >= "0" && key <= "9" && vimState.count
+        ) {
+          vimState.count += key;
+          return;
+        }
+
+        // Handle pending operator + motion
+        if (pending === "d" || pending === "c" || pending === "y") {
+          let start, end, linewise = false;
+          if (
+            (pending === "d" && key === "d") ||
+            (pending === "c" && key === "c") ||
+            (pending === "y" && key === "y")
+          ) {
+            // dd, cc, yy — line-wise
+            const firstLine = lineIdx;
+            const lastLine = Math.min(lineIdx + cnt - 1, lines.length - 1);
+            start = vimLineStart(firstLine);
+            end = lastLine < lines.length - 1
+              ? vimLineStart(lastLine + 1)
+              : vimLineEnd(lastLine);
+            linewise = true;
+          } else if ("hjklwbe0$^{}".includes(key) || key === "g" || key === "G") {
+            if (key === "g") {
+              vimState.pending = pending + "g";
+              return;
+            }
+            const target = vimMotion(key === "G" ? "G" : key, cnt);
+            start = Math.min(pos, target);
+            end = Math.max(pos, target);
+          } else if (key === "f" || key === "F" || key === "t" || key === "T") {
+            // Wait for the character
+            vimState.pending = pending + key;
+            return;
+          } else if (key === "i" || key === "a") {
+            // Text object: wait for object type
+            vimState.pending = pending + key;
+            return;
+          } else {
+            vimState.pending = "";
+            vimState.count = "";
+            return;
+          }
+
+          if (pending === "d") {
+            vimDeleteRange(start, end, linewise);
+            if (linewise) {
+              vimSetCursor(vimFirstNonBlank(Math.min(lineIdx, vimGetLines().length - 1)));
+            }
+            vimState.lastAction = { type: "operator", op: "d", motion: key, cnt, linewise };
+          } else if (pending === "y") {
+            vimYankRange(start, end, linewise);
+            vimSetCursor(start);
+          } else if (pending === "c") {
+            vimDeleteRange(start, end, linewise);
+            vimSetMode("insert");
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+
+        // Handle operator + f/F/t/T + char
+        const fMatch = pending.match(/^([dyc])([fFtT])$/);
+        if (fMatch) {
+          const op = fMatch[1];
+          const fType = fMatch[2];
+          const dir = (fType === "f" || fType === "t") ? 1 : -1;
+          const before = (fType === "t" || fType === "T");
+          const target = vimFindChar(key, dir, before, cnt);
+          if (target !== pos) {
+            const start = Math.min(pos, dir === 1 ? target + 1 : target);
+            const end = Math.max(pos, dir === 1 ? target + 1 : target);
+            vimState.findChar = { char: key, dir, before };
+            if (op === "d") { vimDeleteRange(start, end); vimState.lastAction = { type: "raw", fn: () => { vimDeleteRange(Math.min(editor.selectionStart, vimFindChar(key, dir, before, cnt) + (dir === 1 ? 1 : 0)), Math.max(editor.selectionStart, vimFindChar(key, dir, before, cnt) + (dir === 1 ? 1 : 0))); } }; }
+            else if (op === "y") { vimYankRange(start, end); vimSetCursor(Math.min(pos, target)); }
+            else if (op === "c") { vimDeleteRange(start, end); vimSetMode("insert"); }
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+
+        // Handle operator + text object (di, da, ci, ca, yi, ya + type)
+        const tMatch = pending.match(/^([dyc])([ia])$/);
+        if (tMatch) {
+          const op = tMatch[1];
+          const inner = tMatch[2] === "i";
+          const obj = vimTextObject(key, inner);
+          if (obj) {
+            if (op === "d") { vimDeleteRange(obj.start, obj.end); vimState.lastAction = { type: "textobj", op, inner, objType: key }; }
+            else if (op === "y") { vimYankRange(obj.start, obj.end); vimSetCursor(obj.start); }
+            else if (op === "c") { vimDeleteRange(obj.start, obj.end); vimSetMode("insert"); vimState.lastAction = { type: "textobj", op, inner, objType: key }; }
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+
+        // Handle dg → dgg
+        if (pending === "dg" || pending === "cg" || pending === "yg") {
+          if (key === "g") {
+            const op = pending[0];
+            const target = 0;
+            const start = Math.min(pos, target);
+            const end = Math.max(pos, target);
+            if (op === "d") vimDeleteRange(start, end);
+            else if (op === "y") { vimYankRange(start, end); vimSetCursor(start); }
+            else if (op === "c") { vimDeleteRange(start, end); vimSetMode("insert"); }
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+
+        // gg (standalone)
+        if (pending === "g" && key === "g") {
+          vimSetCursor(0);
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+        if (pending === "g") {
+          vimState.pending = "";
+          vimState.count = "";
+          return;
+        }
+
+        // Standalone f/F/t/T + char
+        if (pending === "f" || pending === "F" || pending === "t" || pending === "T") {
+          const dir = (pending === "f" || pending === "t") ? 1 : -1;
+          const before = (pending === "t" || pending === "T");
+          const target = vimFindChar(key, dir, before, cnt);
+          if (target !== pos) {
+            vimSetCursor(target);
+            vimState.findChar = { char: key, dir, before };
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+
+        // Standalone r + char
+        if (pending === "r") {
+          if (pos < val.length && key.length === 1) {
+            const before = val.substring(0, pos);
+            const after = val.substring(pos + 1);
+            editor.value = before + key + after;
+            vimSetCursor(pos);
+            editor.dispatchEvent(new Event("input"));
+            vimState.lastAction = { type: "replace", char: key };
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          updateCursorPos();
+          return;
+        }
+
+        // >> and <<
+        if (pending === ">" && key === ">") {
+          for (let i = 0; i < cnt; i++) {
+            const li = vimCursorLine();
+            const ls = vimLineStart(li);
+            editor.setRangeText("  ", ls, ls, "end");
+            editor.dispatchEvent(new Event("input"));
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          vimState.lastAction = { type: "simple", key: ">>", cnt };
+          updateCursorPos();
+          return;
+        }
+        if (pending === "<" && key === "<") {
+          for (let i = 0; i < cnt; i++) {
+            const li = vimCursorLine();
+            const ls = vimLineStart(li);
+            const line = vimGetLines()[li];
+            if (line.startsWith("  ")) editor.setRangeText("", ls, ls + 2, "start");
+            else if (line.startsWith("\t")) editor.setRangeText("", ls, ls + 1, "start");
+            editor.dispatchEvent(new Event("input"));
+          }
+          vimState.pending = "";
+          vimState.count = "";
+          vimState.lastAction = { type: "simple", key: "<<", cnt };
+          updateCursorPos();
+          return;
+        }
+        if (pending === ">" || pending === "<") {
+          vimState.pending = "";
+          vimState.count = "";
+          return;
+        }
+
+        // Reset pending/count before executing
+        vimState.pending = "";
+        vimState.count = "";
+
+        // Movement commands
+        if ("hjkl0$^wbe".includes(key)) {
+          vimSetCursor(vimMotion(key, cnt));
+          updateCursorPos();
+          return;
+        }
+        if (key === "G") {
+          vimSetCursor(vimMotion("G", cnt));
+          updateCursorPos();
+          return;
+        }
+        if (key === "g") {
+          vimState.pending = "g";
+          return;
+        }
+        if (key === "{" || key === "}") {
+          vimSetCursor(vimMotion(key, cnt));
+          updateCursorPos();
+          return;
+        }
+
+        // f/F/t/T — find char on line (wait for next key)
+        if (key === "f" || key === "F" || key === "t" || key === "T") {
+          vimState.pending = key;
+          return;
+        }
+        // ; and , — repeat f/F/t/T
+        if (key === ";" || key === ",") {
+          if (vimState.findChar) {
+            const fc = vimState.findChar;
+            const dir = key === ";" ? fc.dir : -fc.dir;
+            const target = vimFindChar(fc.char, dir, fc.before, cnt);
+            if (target !== pos) vimSetCursor(target);
+            updateCursorPos();
+          }
+          return;
+        }
+
+        // r — replace character (wait for next key)
+        if (key === "r") {
+          vimState.pending = "r";
+          return;
+        }
+
+        // J — join lines
+        if (key === "J") {
+          for (let i = 0; i < cnt; i++) {
+            const li = vimCursorLine();
+            const allLines = vimGetLines();
+            if (li < allLines.length - 1) {
+              const le = vimLineEnd(li);
+              const nextLineStart = le + 1;
+              const nextLine = allLines[li + 1];
+              const trimmed = nextLine.replace(/^\s+/, "");
+              const joinStr = (allLines[li].length > 0 ? " " : "") + trimmed;
+              editor.setRangeText(joinStr, le, nextLineStart + nextLine.length, "end");
+              vimSetCursor(le + (allLines[li].length > 0 ? 1 : 0));
+              editor.dispatchEvent(new Event("input"));
+            }
+          }
+          vimState.lastAction = { type: "simple", key: "J", cnt };
+          updateCursorPos();
+          return;
+        }
+
+        // ~ — toggle case
+        if (key === "~") {
+          for (let i = 0; i < cnt; i++) {
+            const p = editor.selectionStart;
+            if (p < editor.value.length) {
+              const ch = editor.value[p];
+              const toggled = ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase();
+              editor.setRangeText(toggled, p, p + 1, "end");
+            }
+          }
+          editor.dispatchEvent(new Event("input"));
+          updateCursorPos();
+          return;
+        }
+
+        // C — change to end of line
+        if (key === "C") {
+          vimDeleteRange(pos, vimLineEnd(lineIdx));
+          vimSetMode("insert");
+          return;
+        }
+
+        // * — search word under cursor forward
+        if (key === "*" || key === "#") {
+          const obj = vimTextObject("w", true);
+          if (obj) {
+            const word = val.substring(obj.start, obj.end);
+            if (word) {
+              openFindReplace();
+              findInput.value = word;
+              findInput.dispatchEvent(new Event("input"));
+              if (key === "*") findNext(); else findPrev();
+              editor.focus();
+              updateCursorPos();
+            }
+          }
+          return;
+        }
+
+        // >> and << — indent/dedent
+        if (key === ">") { vimState.pending = ">"; return; }
+        if (key === "<") { vimState.pending = "<"; return; }
+
+        // V — visual line mode
+        if (key === "V") {
+          vimState.visualLine = true;
+          const ls = vimLineStart(lineIdx);
+          const le = lineIdx < lines.length - 1 ? vimLineStart(lineIdx + 1) : vimLineEnd(lineIdx);
+          vimState.visualAnchor = ls;
+          vimState.mode = "visual";
+          vimState.count = "";
+          vimState.pending = "";
+          editor.readOnly = true;
+          vimSetSelection(ls, le);
+          updateCursorPos();
+          vimUpdateBlockCursor();
+          return;
+        }
+
+        // . — dot repeat
+        if (key === ".") {
+          const la = vimState.lastAction;
+          if (la) {
+            if (la.type === "replace") {
+              const p = editor.selectionStart;
+              if (p < editor.value.length) {
+                const before = editor.value.substring(0, p);
+                const after = editor.value.substring(p + 1);
+                editor.value = before + la.char + after;
+                vimSetCursor(p);
+                editor.dispatchEvent(new Event("input"));
+              }
+            } else if (la.type === "simple") {
+              if (la.key === ">>") {
+                const li = vimCursorLine();
+                const ls = vimLineStart(li);
+                editor.setRangeText("  ", ls, ls, "end");
+                editor.dispatchEvent(new Event("input"));
+              } else if (la.key === "<<") {
+                const li = vimCursorLine();
+                const ls = vimLineStart(li);
+                const line = vimGetLines()[li];
+                if (line.startsWith("  ")) editor.setRangeText("", ls, ls + 2, "start");
+                else if (line.startsWith("\t")) editor.setRangeText("", ls, ls + 1, "start");
+                editor.dispatchEvent(new Event("input"));
+              } else if (la.key === "J") {
+                const li = vimCursorLine();
+                const allLines = vimGetLines();
+                if (li < allLines.length - 1) {
+                  const le = vimLineEnd(li);
+                  const nextLine = allLines[li + 1];
+                  const trimmed = nextLine.replace(/^\s+/, "");
+                  const joinStr = (allLines[li].length > 0 ? " " : "") + trimmed;
+                  editor.setRangeText(joinStr, le, le + 1 + nextLine.length, "end");
+                  editor.dispatchEvent(new Event("input"));
+                }
+              }
+            } else if (la.type === "textobj") {
+              const obj = vimTextObject(la.objType, la.inner);
+              if (obj) {
+                if (la.op === "d") vimDeleteRange(obj.start, obj.end);
+                else if (la.op === "c") { vimDeleteRange(obj.start, obj.end); vimSetMode("insert"); }
+              }
+            }
+          }
+          updateCursorPos();
+          return;
+        }
+
+        // Mode entry
+        if (key === "i") { vimSetMode("insert"); return; }
+        if (key === "a") {
+          vimSetCursor(Math.min(pos + 1, val.length));
+          vimSetMode("insert");
+          return;
+        }
+        if (key === "I") {
+          vimSetCursor(vimFirstNonBlank(lineIdx));
+          vimSetMode("insert");
+          return;
+        }
+        if (key === "A") {
+          vimSetCursor(vimLineEnd(lineIdx));
+          vimSetMode("insert");
+          return;
+        }
+        if (key === "o") {
+          const end = vimLineEnd(lineIdx);
+          vimInsertText(end, "\n");
+          vimSetCursor(end + 1);
+          vimSetMode("insert");
+          return;
+        }
+        if (key === "O") {
+          const start = vimLineStart(lineIdx);
+          vimInsertText(start, "\n");
+          vimSetCursor(start);
+          vimSetMode("insert");
+          return;
+        }
+        if (key === "s") {
+          if (pos < val.length) vimDeleteRange(pos, pos + 1);
+          vimSetMode("insert");
+          return;
+        }
+        if (key === "S") {
+          const ls = vimLineStart(lineIdx);
+          const le = vimLineEnd(lineIdx);
+          vimDeleteRange(ls, le);
+          vimSetMode("insert");
+          return;
+        }
+
+        // Operators (wait for motion)
+        if (key === "d" || key === "c" || key === "y") {
+          vimState.pending = key;
+          vimState.count = cnt > 1 ? String(cnt) : "";
+          return;
+        }
+
+        // Single-key editing
+        if (key === "x") {
+          for (let i = 0; i < cnt; i++) {
+            if (editor.selectionStart < editor.value.length) {
+              vimDeleteRange(editor.selectionStart, editor.selectionStart + 1);
+            }
+          }
+          updateCursorPos();
+          return;
+        }
+        if (key === "D") {
+          vimDeleteRange(pos, vimLineEnd(lineIdx));
+          updateCursorPos();
+          return;
+        }
+        if (key === "p") {
+          if (vimState.clipboard) {
+            if (vimState.clipboardLinewise) {
+              const le = lineIdx < lines.length - 1
+                ? vimLineStart(lineIdx + 1)
+                : vimLineEnd(lineIdx);
+              const nl = lineIdx >= lines.length - 1 ? "\n" : "";
+              const text = vimState.clipboard.replace(/\n$/, "");
+              vimInsertText(le, nl + text + (lineIdx < lines.length - 1 ? "\n" : ""));
+              vimSetCursor(le + nl.length);
+            } else {
+              vimInsertText(pos + 1, vimState.clipboard);
+              vimSetCursor(pos + vimState.clipboard.length);
+            }
+          }
+          updateCursorPos();
+          return;
+        }
+        if (key === "P") {
+          if (vimState.clipboard) {
+            if (vimState.clipboardLinewise) {
+              const ls = vimLineStart(lineIdx);
+              const text = vimState.clipboard.replace(/\n$/, "");
+              vimInsertText(ls, text + "\n");
+              vimSetCursor(ls);
+            } else {
+              vimInsertText(pos, vimState.clipboard);
+              vimSetCursor(pos + vimState.clipboard.length - 1);
+            }
+          }
+          updateCursorPos();
+          return;
+        }
+
+        // Undo/redo
+        if (key === "u") { undo(); updateCursorPos(); return; }
+
+        // Visual mode
+        if (key === "v") {
+          vimSetMode("visual");
+          return;
+        }
+
+        // Search
+        if (key === "/" || key === "?") {
+          openFindReplace();
+          findInput.focus();
+          findInput.select();
+          return;
+        }
+        if (key === "n") {
+          findNext();
+          updateCursorPos();
+          return;
+        }
+        if (key === "N") {
+          findPrev();
+          updateCursorPos();
+          return;
+        }
+      }
+
+      function vimExecVisual(key) {
+        const pos = editor.selectionStart;
+        const anchor = vimState.visualAnchor;
+        const head =
+          editor.selectionDirection === "backward"
+            ? editor.selectionStart
+            : editor.selectionEnd;
+        const cnt = parseInt(vimState.count) || 1;
+
+        // Count accumulation
+        if (
+          key >= "1" && key <= "9" && !vimState.pending ||
+          key >= "0" && key <= "9" && vimState.count
+        ) {
+          vimState.count += key;
+          return;
+        }
+        vimState.count = "";
+
+        // Movement extends selection
+        if ("hjkl0$^wbe".includes(key) || key === "G" || key === "{" || key === "}") {
+          const motionKey = key === "G" ? "G" : key;
+          let newHead = vimMotion(motionKey, cnt);
+          if (vimState.visualLine) {
+            // In visual line mode, extend to full lines
+            const headLine = vimCursorLine();
+            const targetLine = (key === "j" || key === "G" || key === "}") ?
+              Math.min(headLine + cnt, vimGetLines().length - 1) :
+              (key === "k" || key === "{") ? Math.max(headLine - cnt, 0) : headLine;
+            // Recalc: anchor stays at line start, head extends to line end
+            const anchorLine = Math.floor(anchor / (editor.value.length + 1)); // approximate
+            newHead = vimMotion(motionKey, cnt);
+            const newHeadLine = editor.value.substring(0, newHead).split("\n").length - 1;
+            const anchorLineIdx = editor.value.substring(0, anchor).split("\n").length - 1;
+            const minLine = Math.min(anchorLineIdx, newHeadLine);
+            const maxLine = Math.max(anchorLineIdx, newHeadLine);
+            const selS = vimLineStart(minLine);
+            const selE = maxLine < vimGetLines().length - 1 ? vimLineStart(maxLine + 1) : vimLineEnd(maxLine);
+            vimState.visualAnchor = selS;
+            vimSetSelection(selS, selE);
+          } else {
+            vimSetSelection(anchor, newHead);
+          }
+          updateCursorPos();
+          return;
+        }
+        if (key === "g") {
+          vimState.pending = "g";
+          return;
+        }
+        if (vimState.pending === "g" && key === "g") {
+          vimState.pending = "";
+          vimSetSelection(anchor, 0);
+          updateCursorPos();
+          return;
+        }
+
+        // Actions on selection
+        const selStart = Math.min(anchor, head);
+        const selEnd = Math.max(anchor, head);
+
+        if (key === "d" || key === "x") {
+          vimDeleteRange(selStart, selEnd);
+          vimSetMode("normal");
+          updateCursorPos();
+          return;
+        }
+        if (key === "y") {
+          vimYankRange(selStart, selEnd);
+          vimSetCursor(selStart);
+          vimSetMode("normal");
+          updateCursorPos();
+          return;
+        }
+        if (key === "c") {
+          vimDeleteRange(selStart, selEnd);
+          vimSetMode("insert");
+          updateCursorPos();
+          return;
+        }
+
+        // > and < in visual — indent/dedent selection
+        if (key === ">" || key === "<") {
+          const val = editor.value;
+          const startLine = val.substring(0, selStart).split("\n").length - 1;
+          const endLine = val.substring(0, selEnd).split("\n").length - 1;
+          for (let li = startLine; li <= endLine; li++) {
+            const ls = vimLineStart(li);
+            if (key === ">") {
+              editor.setRangeText("  ", ls, ls, "end");
+            } else {
+              const line = vimGetLines()[li];
+              if (line && line.startsWith("  ")) editor.setRangeText("", ls, ls + 2, "start");
+              else if (line && line.startsWith("\t")) editor.setRangeText("", ls, ls + 1, "start");
+            }
+          }
+          editor.dispatchEvent(new Event("input"));
+          vimState.visualLine = false;
+          vimSetMode("normal");
+          updateCursorPos();
+          return;
+        }
+
+        // J in visual — join all lines in selection
+        if (key === "J") {
+          const val = editor.value;
+          const startLine = val.substring(0, selStart).split("\n").length - 1;
+          const endLine = val.substring(0, selEnd).split("\n").length - 1;
+          vimSetCursor(vimLineEnd(startLine));
+          for (let i = startLine; i < endLine; i++) {
+            const li = vimCursorLine();
+            const allLines = vimGetLines();
+            if (li < allLines.length - 1) {
+              const le = vimLineEnd(li);
+              const nextLine = allLines[li + 1];
+              const trimmed = nextLine.replace(/^\s+/, "");
+              const joinStr = (allLines[li].length > 0 ? " " : "") + trimmed;
+              editor.setRangeText(joinStr, le, le + 1 + nextLine.length, "end");
+            }
+          }
+          editor.dispatchEvent(new Event("input"));
+          vimState.visualLine = false;
+          vimSetMode("normal");
+          updateCursorPos();
+          return;
+        }
+
+        // Escape back to normal
+        if (key === "Escape") {
+          vimSetCursor(pos);
+          vimSetMode("normal");
+          updateCursorPos();
+          return;
+        }
+      }
+
+      // ── Vim keydown handler ──
+
+      function vimHandleKeydown(e) {
+        if (!vimState.enabled) return;
+
+        // Don't intercept when a non-editor input is focused
+        const active = document.activeElement;
+        if (active && active !== editor && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+
+        // Let Ctrl/Cmd combos pass through (except Ctrl+R, Ctrl+D, Ctrl+U in normal)
+        if (e.metaKey) return;
+        if (e.ctrlKey && e.key !== "r" && e.key !== "d" && e.key !== "u") return;
+
+        if (vimState.mode === "insert") {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            // Move cursor back one (vim behavior)
+            if (editor.selectionStart > 0) {
+              vimSetCursor(editor.selectionStart - 1);
+            }
+            vimSetMode("normal");
+            return;
+          }
+          // In insert mode, let all other keys pass through
+          return;
+        }
+
+        // Normal and visual modes: prevent default for most keys
+        if (vimState.mode === "normal") {
+          // Ctrl+R = redo
+          if (e.ctrlKey && e.key === "r") {
+            e.preventDefault();
+            redo();
+            updateCursorPos();
+            return;
+          }
+          // Ctrl+D / Ctrl+U = half-page scroll
+          if (e.ctrlKey && (e.key === "d" || e.key === "u")) {
+            e.preventDefault();
+            const lineHeight = parseFloat(_editorCS.lineHeight) || 21;
+            const pageLines = Math.floor(editor.clientHeight / lineHeight / 2);
+            const motion = e.key === "d" ? "j" : "k";
+            vimSetCursor(vimMotion(motion, pageLines));
+            updateCursorPos();
+            return;
+          }
+
+          // Let these keys pass through
+          if (e.key === "Tab" || e.key === "Shift") return;
+          if (e.key.startsWith("F") && e.key.length > 1) return;
+          // Escape in normal mode: let it bubble to close panels/sidebars
+          if (e.key === "Escape") return;
+
+          // Map arrow keys to hjkl
+          const arrowMap = {
+            ArrowLeft: "h", ArrowDown: "j",
+            ArrowUp: "k", ArrowRight: "l",
+          };
+          const mappedKey = arrowMap[e.key] || e.key;
+
+          e.preventDefault();
+          e.stopPropagation();
+          vimExecNormal(mappedKey, e);
+          return;
+        }
+
+        if (vimState.mode === "visual") {
+          if (e.key === "Tab" || e.key === "Shift") return;
+          const arrowMapV = {
+            ArrowLeft: "h", ArrowDown: "j",
+            ArrowUp: "k", ArrowRight: "l",
+          };
+          const mappedKeyV = arrowMapV[e.key] || e.key;
+          e.preventDefault();
+          e.stopPropagation();
+          vimExecVisual(mappedKeyV);
+          return;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════
       //  File Menu
       // ═══════════════════════════════════════════════════
 
@@ -3506,6 +4739,18 @@
           editorArea.classList.toggle("wrap", isWrap);
           btnWrap.classList.toggle("active", isWrap);
         }
+        if (e.key === VIM_KEY && e.newValue) {
+          const isVim = e.newValue === "true";
+          vimState.enabled = isVim;
+          btnVim.classList.toggle("active", isVim);
+          if (isVim) {
+            vimSetMode("normal");
+          } else {
+            editor.readOnly = false;
+            vimState.mode = "normal";
+          }
+          updateCursorPos();
+        }
       });
 
       // ═══════════════════════════════════════════════════
@@ -3533,6 +4778,7 @@
         gutter.scrollTop = editor.scrollTop;
         highlightLayer.scrollTop = editor.scrollTop;
         highlightLayer.scrollLeft = editor.scrollLeft;
+        vimUpdateBlockCursor();
       });
 
       // Track cursor position for line/col and current line highlight
@@ -3540,7 +4786,11 @@
       editor.addEventListener("keyup", updateCursorPos);
       editor.addEventListener("select", updateCursorPos);
 
+      editor.addEventListener("keydown", vimHandleKeydown);
+
       editor.addEventListener("keydown", (e) => {
+        // Skip tab handling in vim normal/visual mode
+        if (vimState.enabled && vimState.mode !== "insert") return;
         // Tab / Shift+Tab for indent/dedent
         if (e.key === "Tab") {
           e.preventDefault();
@@ -3578,14 +4828,18 @@
       });
 
       document.addEventListener("keydown", (e) => {
-        // Find & Replace
-        if ((e.metaKey || e.ctrlKey) && e.key === "h") {
+        const inInput = document.activeElement &&
+          document.activeElement !== editor &&
+          (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA");
+
+        // Find & Replace (skip if typing in an input)
+        if (!inInput && (e.metaKey || e.ctrlKey) && e.key === "h") {
           e.preventDefault();
           openFindReplace();
           return;
         }
-        // Open search
-        if ((e.metaKey || e.ctrlKey) && (e.key === "p" || e.key === "f")) {
+        // Open search (skip if typing in an input)
+        if (!inInput && (e.metaKey || e.ctrlKey) && (e.key === "p" || e.key === "f")) {
           e.preventDefault();
           openSearch();
           searchInput.select();
@@ -3802,6 +5056,7 @@
           ...state,
           settings: {
             wrap: localStorage.getItem(WRAP_KEY),
+            vim: localStorage.getItem(VIM_KEY),
             sidebarWidth: localStorage.getItem(SIDEBAR_WIDTH_KEY),
           },
         });
@@ -3815,6 +5070,19 @@
           editorArea.classList.toggle("wrap", wrapOn);
           btnWrap.classList.toggle("active", wrapOn);
           updateLineNumbers();
+        }
+        if (settings.vim !== null && settings.vim !== undefined) {
+          localStorage.setItem(VIM_KEY, settings.vim);
+          const vimOn = settings.vim === "true";
+          vimState.enabled = vimOn;
+          btnVim.classList.toggle("active", vimOn);
+          if (vimOn) {
+            vimSetMode("normal");
+          } else {
+            editor.readOnly = false;
+            vimState.mode = "normal";
+          }
+          updateCursorPos();
         }
         if (settings.sidebarWidth) {
           localStorage.setItem(SIDEBAR_WIDTH_KEY, settings.sidebarWidth);
@@ -4083,10 +5351,28 @@
       //  Init
       // ═══════════════════════════════════════════════════
 
+      const HELP_DESKTOP =
+        "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap and vim mode in status bar\n- Syncs across tabs automatically\n\n## Vim mode\nToggle vim mode from the status bar for modal editing.\n- Normal mode — hjkl navigation, w/b/e word motions, dd/yy/p editing\n- Insert mode — i, a, o, O, A, I, s, S\n- Visual mode — v to select, V for line select, then d/y/c to act\n- Text objects — ciw, di\", da(, etc.\n- Find on line — f/F/t/T + char, repeat with ;/,\n- r to replace char, J to join lines, ~ to toggle case\n- >> / << to indent/dedent, Ctrl+D/U for half-page scroll\n- . to repeat last change\n- Repeat counts — 3j, 5dd, 2w\n- Search — / or ? to find, n/N to cycle, * to search word";
+      const HELP_MOBILE =
+        "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Getting started\n- Tap \"notes\" to open the sidebar\n- Tap + to create a new note\n- Tap a file to open, tap again to rename\n- Long press a note to pin or delete it\n\n## Tips\n- Your notes stay in your browser\n- URL updates as you type — copy to share\n- Download all notes as a zip backup\n- Syncs across tabs automatically";
+
+      async function openHelp() {
+        const existing = state.notes.find((n) => n.name === "help.md");
+        if (existing) {
+          switchNote(existing.id);
+        } else {
+          await createNote(
+            "help.md",
+            isMobile() ? HELP_MOBILE : HELP_DESKTOP,
+          );
+        }
+      }
+
       async function init() {
         const isFirstVisit = !localStorage.getItem(STORAGE_KEY);
         loadState();
         loadWrap();
+        loadVim();
 
         // Restore Google Drive session
         if (restoreToken()) {
@@ -4096,13 +5382,9 @@
         }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
-          const welcomeDesktop =
-            "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap in status bar\n- Syncs across tabs automatically";
-          const welcomeMobile =
-            "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Getting started\n- Tap \"notes\" to open the sidebar\n- Tap + to create a new note\n- Tap a file to open, tap again to rename\n- Long press a note to pin or delete it\n\n## Tips\n- Your notes stay in your browser\n- URL updates as you type — copy to share\n- Download all notes as a zip backup\n- Syncs across tabs automatically";
           createNote(
-            "welcome.md",
-            isMobile() ? welcomeMobile : welcomeDesktop,
+            "help.md",
+            isMobile() ? HELP_MOBILE : HELP_DESKTOP,
           );
         }
         render();
