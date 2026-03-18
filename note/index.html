@@ -1428,23 +1428,23 @@
                 </a>
               </div>
             </div>
-            <div class="file-menu-container" id="syncMenuContainer" style="display: none">
-              <button class="btn-share" onclick="toggleSyncMenu()">sync <span class="sync-dot">&#9679;</span></button>
+            <div
+              class="file-menu-container"
+              id="syncMenuContainer"
+              style="display: none"
+            >
+              <button class="btn-share" onclick="toggleSyncMenu()">
+                sync <span class="sync-dot">&#9679;</span>
+              </button>
               <div class="file-menu" id="syncMenu">
                 <div class="file-menu-label">
                   connected to<br />google drive
                 </div>
                 <hr class="file-menu-separator" />
-                <button
-                  class="file-menu-item"
-                  onclick="driveSync()"
-                >
-                  manual sync
+                <button class="file-menu-item" onclick="driveSync()">
+                  force sync
                 </button>
-                <button
-                  class="file-menu-item"
-                  onclick="driveSignOut()"
-                >
+                <button class="file-menu-item" onclick="driveSignOut()">
                   turn off sync
                 </button>
               </div>
@@ -3232,7 +3232,10 @@
       }
 
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".file-menu-container") && !e.target.closest("#syncMenuContainer")) {
+        if (
+          !e.target.closest(".file-menu-container") &&
+          !e.target.closest("#syncMenuContainer")
+        ) {
           closeAllMenus();
         }
       });
@@ -4126,7 +4129,10 @@
             const remote = remoteById.get(local.id);
             if (!remote) {
               merged.push(local);
-            } else if (local.content === remote.content && local.name === remote.name) {
+            } else if (
+              local.content === remote.content &&
+              local.name === remote.name
+            ) {
               merged.push(local);
             } else {
               const remoteTime = remote.updatedAt || 0;
