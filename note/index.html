@@ -3246,16 +3246,24 @@
       //  Sharing & Download
       // ═══════════════════════════════════════════════════
 
-      function downloadNote() {
-        const note = getActiveNote();
-        if (!note) return;
-        const blob = new Blob([note.content], { type: "text/plain" });
+      function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = note.name;
+        a.download = filename;
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }
+
+      function downloadNote() {
+        const note = getActiveNote();
+        if (!note) return;
+        triggerDownload(
+          new Blob([note.content], { type: "text/plain" }),
+          note.name,
+        );
       }
 
       function downloadAll() {
@@ -3265,13 +3273,10 @@
           content: n.content,
         }));
         const zip = buildZip(files);
-        const blob = new Blob([zip], { type: "application/zip" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "notes.zip";
-        a.click();
-        URL.revokeObjectURL(url);
+        triggerDownload(
+          new Blob([zip], { type: "application/zip" }),
+          "notes.zip",
+        );
       }
 
       async function shareNote() {
