@@ -372,7 +372,7 @@
       }
 
       .note-item .btn-rename {
-        display: none;
+        display: flex;
         background: none;
         border: none;
         color: var(--gutter);
@@ -412,6 +412,7 @@
       /* Pointer: fine (mouse) — hide icons, reveal on hover */
       @media (pointer: fine) {
         .note-item .btn-delete,
+        .note-item .btn-rename,
         .note-item .btn-pin:not(.pinned) {
           color: transparent;
         }
@@ -421,8 +422,7 @@
         .note-item .btn-delete:hover {
           color: var(--red);
         }
-        .note-item:hover .btn-rename,
-        .note-item.active .btn-rename {
+        .note-item:hover .btn-rename {
           color: var(--gutter);
         }
         .note-item .btn-rename:hover {
@@ -1120,7 +1120,6 @@
         }
 
         .note-item .btn-rename {
-          display: flex;
           width: 44px;
         }
 
