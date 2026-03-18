@@ -67,7 +67,7 @@ Supported modes: **Normal**, **Insert**, **Visual**,
 Features include:
 - Modal editing with block cursor in normal mode
 - Motions: `h` `j` `k` `l` `w` `b` `e` `0` `$` `^`
-  `gg` `G` `{` `}` `f`/`F`/`t`/`T` with `;` `,` repeat
+  `gg` `G` `{` `}` `_` `f`/`F`/`t`/`T` with `;` `,` repeat
 - Operators: `d` `c` `y` with motions and text objects
   (`iw` `aw` `i"` `a(` etc.)
 - Line operations: `dd` `cc` `yy` `>>` `<<` `J` `p` `P`
