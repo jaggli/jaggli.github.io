@@ -1746,6 +1746,7 @@
         findChar: null, // for f/F/t/T repeat with ;/,
         visualLine: false, // V mode
         visualHeadLine: 0, // tracked head line for V mode
+        insertEntry: null, // { key, pos } — how insert mode was entered
       };
 
       function loadState() {
@@ -2865,6 +2866,9 @@
           if (vimCommandBar.classList.contains("visible")) vimCloseCommandBar();
           if (vimState.mode !== "normal") vimSetMode("normal");
           editor.selectionStart = editor.selectionEnd = 0;
+          editor.readOnly = false;
+          editor.focus();
+          editor.readOnly = true;
           updateCursorPos();
         }
       }
@@ -3439,6 +3443,15 @@
         if (mode === "insert" && vimState.mode !== "insert") {
           const note = getActiveNote();
           if (note) pushHistory(note.id, note.content);
+        }
+        // When leaving insert mode, capture typed text for dot repeat
+        if (vimState.mode === "insert" && mode !== "insert" && vimState.insertEntry) {
+          const ie = vimState.insertEntry;
+          const insertedText = editor.value.substring(ie.pos, editor.selectionStart);
+          if (insertedText || ie.key === "s" || ie.key === "S" || ie.key === "C") {
+            vimState.lastAction = { type: "insert", key: ie.key, text: insertedText, cnt: ie.cnt || 1 };
+          }
+          vimState.insertEntry = null;
         }
         vimState.mode = mode;
         vimState.count = "";
@@ -4076,6 +4089,7 @@
           vimState.pending = "";
           vimState.count = "";
           vimState.lastAction = { type: "simple", key: ">>", cnt };
+          vimSetCursor(vimFirstNonBlank(startLine));
           updateCursorPos();
           return;
         }
@@ -4097,6 +4111,7 @@
           vimState.pending = "";
           vimState.count = "";
           vimState.lastAction = { type: "simple", key: "<<", cnt };
+          vimSetCursor(vimFirstNonBlank(startLine));
           updateCursorPos();
           return;
         }
@@ -4263,6 +4278,10 @@
                 else if (line.startsWith("\t"))
                   editor.setRangeText("", ls, ls + 1, "start");
                 editor.dispatchEvent(new Event("input"));
+              } else if (la.key === "p" || la.key === "P") {
+                // Re-execute paste using current state
+                vimExecNormal(la.key, null);
+                return;
               } else if (la.key === "J") {
                 const li = vimCursorLine();
                 const allLines = vimGetLines();
@@ -4417,11 +4436,14 @@
                 le,
                 nl + text + (lineIdx < lines.length - 1 ? "\n" : ""),
               );
-              vimSetCursor(le + nl.length);
+              const newLineStart = le + nl.length;
+              const firstNonBlank = text.match(/^\s*/)[0].length;
+              vimSetCursor(newLineStart + firstNonBlank);
             } else {
               vimInsertText(pos + 1, vimState.clipboard);
               vimSetCursor(pos + vimState.clipboard.length);
             }
+            vimState.lastAction = { type: "simple", key: "p" };
           }
           updateCursorPos();
           return;
@@ -4432,11 +4454,13 @@
               const ls = vimLineStart(lineIdx);
               const text = vimState.clipboard.replace(/\n$/, "");
               vimInsertText(ls, text + "\n");
-              vimSetCursor(ls);
+              const firstNonBlank = text.match(/^\s*/)[0].length;
+              vimSetCursor(ls + firstNonBlank);
             } else {
               vimInsertText(pos, vimState.clipboard);
               vimSetCursor(pos + vimState.clipboard.length - 1);
             }
+            vimState.lastAction = { type: "simple", key: "P" };
           }
           updateCursorPos();
           return;
