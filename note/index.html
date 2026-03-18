@@ -1970,9 +1970,9 @@
 
       function pushHistory(id, content) {
         const h = getHistory(id);
-        const last = h.past.length ? h.past[h.past.length - 1] : null;
-        if (content === last) return;
-        h.past.push(content);
+        const lastContent = h.past.length ? h.past[h.past.length - 1].content : null;
+        if (content === lastContent) return;
+        h.past.push({ content });
         if (h.past.length > 200) h.past.shift();
         h.future = [];
       }
@@ -1993,14 +1993,27 @@
         scheduleUrlUpdate();
       }
 
+      function findFirstDiff(a, b) {
+        const len = Math.min(a.length, b.length);
+        for (let i = 0; i < len; i++) {
+          if (a[i] !== b[i]) return i;
+        }
+        return len;
+      }
+
       function undo() {
         const note = getActiveNote();
         if (!note) return;
         const h = getHistory(note.id);
         if (!h.past.length) return;
-        h.future.push(note.content);
-        note.content = h.past.pop();
+        const oldContent = note.content;
+        h.future.push({ content: oldContent });
+        const entry = h.past.pop();
+        note.content = entry.content;
         editor.value = note.content;
+        // Place cursor at the first difference (where the change was)
+        const diffPos = findFirstDiff(oldContent, note.content);
+        editor.selectionStart = editor.selectionEnd = Math.min(diffPos, note.content.length);
         note.updatedAt = Date.now();
         saveState();
         refreshEditor();
@@ -2011,9 +2024,13 @@
         if (!note) return;
         const h = getHistory(note.id);
         if (!h.future.length) return;
-        h.past.push(note.content);
-        note.content = h.future.pop();
+        const oldContent = note.content;
+        h.past.push({ content: oldContent });
+        const entry = h.future.pop();
+        note.content = entry.content;
         editor.value = note.content;
+        const diffPos = findFirstDiff(oldContent, note.content);
+        editor.selectionStart = editor.selectionEnd = Math.min(diffPos, note.content.length);
         note.updatedAt = Date.now();
         saveState();
         refreshEditor();
@@ -3387,6 +3404,11 @@
       }
 
       function vimSetMode(mode) {
+        // When entering insert mode, snapshot current state as the undo point
+        if (mode === "insert" && vimState.mode !== "insert") {
+          const note = getActiveNote();
+          if (note) pushHistory(note.id, note.content);
+        }
         vimState.mode = mode;
         vimState.count = "";
         vimState.pending = "";
@@ -4026,21 +4048,6 @@
           return;
         }
 
-        // ~ — toggle case
-        if (key === "~") {
-          for (let i = 0; i < cnt; i++) {
-            const p = editor.selectionStart;
-            if (p < editor.value.length) {
-              const ch = editor.value[p];
-              const toggled = ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase();
-              editor.setRangeText(toggled, p, p + 1, "end");
-            }
-          }
-          editor.dispatchEvent(new Event("input"));
-          updateCursorPos();
-          return;
-        }
-
         // C — change to end of line
         if (key === "C") {
           vimDeleteRange(pos, vimLineEnd(lineIdx));
@@ -4630,8 +4637,8 @@
             ArrowUp: "k", ArrowRight: "l",
           };
           let mappedKey = arrowMap[e.key] || e.key;
-          // Dead key or _ → treat as ^ (first non-blank)
-          if (e.key === "Dead" || e.key === "_") mappedKey = "^";
+          // _ → ^ (first non-blank), standard vim alias
+          if (e.key === "_") mappedKey = "^";
 
           e.preventDefault();
           e.stopPropagation();
@@ -4658,7 +4665,7 @@
             ArrowUp: "k", ArrowRight: "l",
           };
           let mappedKeyV = arrowMapV[e.key] || e.key;
-          if (e.key === "Dead" || e.key === "_") mappedKeyV = "^";
+          if (e.key === "_") mappedKeyV = "^";
           e.preventDefault();
           e.stopPropagation();
           vimExecVisual(mappedKeyV);
@@ -5008,9 +5015,14 @@
       editor.addEventListener("input", () => {
         const note = getActiveNote();
         if (!note) return;
-        const h = getHistory(note.id);
-        if (!h.past.length || h.past[h.past.length - 1] !== note.content) {
-          if (!historyTimeout) pushHistory(note.id, note.content);
+        // In vim insert mode, skip history — the whole insert session is one undo step
+        const vimInsert = vimState.enabled && vimState.mode === "insert";
+        if (!vimInsert) {
+          const h = getHistory(note.id);
+          const lastContent = h.past.length ? h.past[h.past.length - 1].content : null;
+          if (lastContent !== note.content) {
+            if (!historyTimeout) pushHistory(note.id, note.content);
+          }
         }
         note.content = editor.value;
         note.updatedAt = Date.now();
@@ -5018,7 +5030,7 @@
         updateCursorPos();
         scheduleHighlight();
         scheduleSave();
-        scheduleHistorySnapshot();
+        if (!vimInsert) scheduleHistorySnapshot();
         scheduleUrlUpdate();
       });
 
@@ -5600,7 +5612,7 @@
       // ═══════════════════════════════════════════════════
 
       const HELP_DESKTOP =
-        "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap and vim mode in status bar\n- Syncs across tabs automatically\n\n## Vim mode\nToggle vim mode from the status bar. Vim uses modes — keys do different things depending on the mode.\n\n### Modes\n- **Normal** (default) — keys are commands, not text. Press Esc to return here.\n- **Insert** — type text normally. Enter with i (before cursor), a (after cursor), o (new line below), O (new line above), A (end of line), I (start of line), s (replace char), S (replace line).\n- **Visual** — select text. Enter with v (characters) or V (whole lines). Use movement keys to extend selection, then d to delete, y to copy, c to change, > / < to indent.\n\n### Movement\n- h/j/k/l — left/down/up/right\n- w/b/e — next word / previous word / end of word\n- 0 / $ / _ — start of line / end of line / first non-space\n- gg / G — top / bottom of file\n- { / } — previous / next blank line\n- f/F + char — jump to char on line (forward/backward), t/T stops one before\n- ; / , — repeat last f/F/t/T forward / backward\n- Ctrl+D / Ctrl+U — half page down / up\n\n### Editing\n- x — delete character under cursor\n- dd — delete line, D — delete to end of line\n- yy — copy line, p — paste after, P — paste before\n- r + char — replace character under cursor\n- J — join current line with next\n- ~ — toggle uppercase/lowercase\n- u — undo, Ctrl+R — redo\n- >> / << — indent / dedent line\n- . — repeat last change\n\n### Operators + motions\nCombine d (delete), c (change), or y (copy) with any motion:\n- dw — delete word, cw — change word, yw — copy word\n- d$ — delete to end of line, d0 — delete to start\n- 3dd — delete 3 lines, 2dw — delete 2 words\n\n### Text objects\nUse i (inner) or a (around) with operators:\n- ciw — change inner word, diw — delete inner word\n- ci\" — change inside quotes, da( — delete around parens\n- Works with \", ', `, (, ), {, }, [, ], <, >\n\n### Search\n- / or ? — open find, n/N — next/previous match\n- * — search for word under cursor\n\n### Command mode\nPress : to open the command bar.\n- :w — save (auto-saves already), :q — exit vim mode\n- :set wrap / :set nowrap / :set wrap! — toggle word wrap\n- :new — new note, :e name — open note by name\n- :d — delete current line, :42 — jump to line 42\n- :help — open this help page\n- :%s/find/replace/g — find and replace";
+        "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Shortcuts\n- Ctrl+N — new note\n- Ctrl+P — search all notes\n- Ctrl+H — find & replace\n- Ctrl+Shift+D — delete note\n- Tab / Shift+Tab — indent / dedent\n\n## Basics\n- Click a file to open, click again to rename\n- Drag notes in sidebar to reorder\n- Pin notes to keep them at the top\n- Drop files to import them\n- Download all notes as a zip backup\n- URL updates as you type — copy to share\n- Toggle word wrap and vim mode in status bar\n- Syncs across tabs automatically\n\n## Vim mode\nToggle vim mode from the status bar. Vim uses modes — keys do different things depending on the mode.\n\n### Modes\n- **Normal** (default) — keys are commands, not text. Press Esc to return here.\n- **Insert** — type text normally. Enter with i (before cursor), a (after cursor), o (new line below), O (new line above), A (end of line), I (start of line), s (replace char), S (replace line).\n- **Visual** — select text. Enter with v (characters) or V (whole lines). Use movement keys to extend selection, then d to delete, y to copy, c to change, > / < to indent.\n\n### Movement\n- h/j/k/l — left/down/up/right\n- w/b/e — next word / previous word / end of word\n- 0 / $ / _ — start of line / end of line / first non-space\n- gg / G — top / bottom of file\n- { / } — previous / next blank line\n- f/F + char — jump to char on line (forward/backward), t/T stops one before\n- ; / , — repeat last f/F/t/T forward / backward\n- Ctrl+D / Ctrl+U — half page down / up\n\n### Editing\n- x — delete character under cursor\n- dd — delete line, D — delete to end of line\n- yy — copy line, p — paste after, P — paste before\n- r + char — replace character under cursor\n- J — join current line with next\n- u — undo, Ctrl+R — redo\n- >> / << — indent / dedent line\n- . — repeat last change\n\n### Operators + motions\nCombine d (delete), c (change), or y (copy) with any motion:\n- dw — delete word, cw — change word, yw — copy word\n- d$ — delete to end of line, d0 — delete to start\n- 3dd — delete 3 lines, 2dw — delete 2 words\n\n### Text objects\nUse i (inner) or a (around) with operators:\n- ciw — change inner word, diw — delete inner word\n- ci\" — change inside quotes, da( — delete around parens\n- Works with \", ', `, (, ), {, }, [, ], <, >\n\n### Search\n- / or ? — open find, n/N — next/previous match\n- * — search for word under cursor\n\n### Command mode\nPress : to open the command bar.\n- :w — save (auto-saves already), :q — exit vim mode\n- :set wrap / :set nowrap / :set wrap! — toggle word wrap\n- :new — new note, :e name — open note by name\n- :d — delete current line, :42 — jump to line 42\n- :help — open this help page\n- :%s/find/replace/g — find and replace";
       const HELP_MOBILE =
         "# Welcome to note.\n\nFast, private, local-first notes. No servers, no accounts. Nothing leaves your browser.\n\n## Getting started\n- Tap \"notes\" to open the sidebar\n- Tap + to create a new note\n- Tap a file to open, tap again to rename\n- Long press a note to pin or delete it\n\n## Tips\n- Your notes stay in your browser\n- URL updates as you type — copy to share\n- Download all notes as a zip backup\n- Syncs across tabs automatically";
 
