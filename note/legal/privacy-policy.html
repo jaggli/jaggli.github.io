@@ -40,9 +40,9 @@
     <h2>Google Drive Sync</h2>
     <p>If you choose to sign in with Google, the application requests access to a hidden, app-specific folder on your Google Drive (<code>drive.appdata</code> scope). This means:</p>
     <ul>
-      <li>We can only read and write our own app data — we cannot access any other files on your Drive.</li>
-      <li>Your notes are stored in your own Google Drive account, under your own storage quota.</li>
-      <li>We do not see, store, or process your Google credentials. Authentication is handled entirely by Google.</li>
+      <li>The app can only read and write its own hidden folder — it has no access to any other files on your Drive.</li>
+      <li>Your notes are stored in your own Google Drive account, under your own storage quota. There is no server involved.</li>
+      <li>Your Google credentials are never seen or stored by the app. Authentication is handled entirely by Google in your browser.</li>
       <li>You can revoke access at any time via your <a href="https://myaccount.google.com/permissions">Google Account permissions</a>.</li>
     </ul>
 
