@@ -3440,9 +3440,9 @@
 
       function vimSetMode(mode) {
         // When entering insert mode, snapshot current state as the undo point
+        // (only if no edit command already pushed — e.g. plain i/a/I/A)
         if (mode === "insert" && vimState.mode !== "insert") {
-          const note = getActiveNote();
-          if (note) pushHistory(note.id, note.content);
+          vimPushUndoOnce();
         }
         // When leaving insert mode, capture typed text for dot repeat
         if (vimState.mode === "insert" && mode !== "insert" && vimState.insertEntry) {
@@ -3545,7 +3545,15 @@
         }
       }
 
+      function vimPushUndoOnce() {
+        const note = getActiveNote();
+        if (!note || vimState._undoPushed) return;
+        pushHistory(note.id, note.content);
+        vimState._undoPushed = true;
+      }
+
       function vimDeleteRange(start, end, linewise) {
+        vimPushUndoOnce();
         const val = editor.value;
         const s = Math.max(0, Math.min(start, val.length));
         const e = Math.max(0, Math.min(end, val.length));
@@ -3569,6 +3577,7 @@
       }
 
       function vimInsertText(pos, text) {
+        vimPushUndoOnce();
         editor.setRangeText(text, pos, pos, "end");
         editor.dispatchEvent(new Event("input"));
       }
@@ -3823,6 +3832,7 @@
       function vimExecNormal(key, e) {
         // Temporarily allow editing for commands that modify text
         editor.readOnly = false;
+        vimState._undoPushed = false;
         try {
           return _vimExecNormal(key, e);
         } finally {
@@ -4062,9 +4072,8 @@
         // Standalone r + char
         if (pending === "r") {
           if (pos < val.length && key.length === 1) {
-            vimEditGuard(() => {
-              editor.setRangeText(key, pos, pos + 1, "end");
-            });
+            vimPushUndoOnce();
+            editor.setRangeText(key, pos, pos + 1, "end");
             vimSetCursor(pos);
             editor.dispatchEvent(new Event("input"));
             vimState.lastAction = { type: "replace", char: key };
@@ -4077,6 +4086,7 @@
 
         // >> and <<
         if (pending === ">" && key === ">") {
+          vimPushUndoOnce();
           const startLine = vimCursorLine();
           const endLine = Math.min(
             startLine + cnt - 1,
@@ -4095,6 +4105,7 @@
           return;
         }
         if (pending === "<" && key === "<") {
+          vimPushUndoOnce();
           const startLine = vimCursorLine();
           const endLine = Math.min(
             startLine + cnt - 1,
@@ -4172,6 +4183,7 @@
 
         // J — join lines
         if (key === "J") {
+          vimPushUndoOnce();
           for (let i = 0; i < cnt; i++) {
             const li = vimCursorLine();
             const allLines = vimGetLines();
@@ -4259,6 +4271,7 @@
             if (la.type === "replace") {
               const p = editor.selectionStart;
               if (p < editor.value.length) {
+                vimPushUndoOnce();
                 const before = editor.value.substring(0, p);
                 const after = editor.value.substring(p + 1);
                 editor.value = before + la.char + after;
@@ -4267,11 +4280,13 @@
               }
             } else if (la.type === "simple") {
               if (la.key === ">>") {
+                vimPushUndoOnce();
                 const li = vimCursorLine();
                 const ls = vimLineStart(li);
                 editor.setRangeText("  ", ls, ls, "end");
                 editor.dispatchEvent(new Event("input"));
               } else if (la.key === "<<") {
+                vimPushUndoOnce();
                 const li = vimCursorLine();
                 const ls = vimLineStart(li);
                 const line = vimGetLines()[li];
@@ -4292,6 +4307,7 @@
                 const li = vimCursorLine();
                 vimDeleteRange(editor.selectionStart, vimLineEnd(li));
               } else if (la.key === "J") {
+                vimPushUndoOnce();
                 const li = vimCursorLine();
                 const allLines = vimGetLines();
                 if (li < allLines.length - 1) {
@@ -4347,6 +4363,7 @@
                 }
               }
             } else if (la.type === "insert") {
+              vimPushUndoOnce();
               // Replay the insert: re-do the entry action, then insert the captured text
               const p = editor.selectionStart;
               const li = vimCursorLine();
@@ -4559,6 +4576,7 @@
 
       function vimExecVisual(key) {
         editor.readOnly = false;
+        vimState._undoPushed = false;
         try {
           return _vimExecVisual(key);
         } finally {
@@ -4668,6 +4686,7 @@
 
         // > and < in visual — indent/dedent selection
         if (key === ">" || key === "<") {
+          vimPushUndoOnce();
           const val = editor.value;
           const startLine = val.substring(0, selStart).split("\n").length - 1;
           const endLine = val.substring(0, selEnd).split("\n").length - 1;
@@ -4692,6 +4711,7 @@
 
         // J in visual — join all lines in selection
         if (key === "J") {
+          vimPushUndoOnce();
           const val = editor.value;
           const startLine = val.substring(0, selStart).split("\n").length - 1;
           const endLine = val.substring(0, selEnd).split("\n").length - 1;
@@ -5306,9 +5326,9 @@
       editor.addEventListener("input", () => {
         const note = getActiveNote();
         if (!note) return;
-        // In vim insert mode, skip history — the whole insert session is one undo step
-        const vimInsert = vimState.enabled && vimState.mode === "insert";
-        if (!vimInsert) {
+        // In vim mode, skip automatic history — vim commands handle their own undo
+        const vimActive = vimState.enabled;
+        if (!vimActive) {
           const h = getHistory(note.id);
           const lastContent = h.past.length
             ? h.past[h.past.length - 1].content
@@ -5323,7 +5343,7 @@
         updateCursorPos();
         scheduleHighlight();
         scheduleSave();
-        if (!vimInsert) scheduleHistorySnapshot();
+        if (!vimActive) scheduleHistorySnapshot();
         scheduleUrlUpdate();
       });
 
