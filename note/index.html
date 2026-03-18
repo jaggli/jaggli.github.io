@@ -282,7 +282,7 @@
 
       .search-result-snippet mark {
         background: none;
-        color: var(--yellow);
+        color: var(--blue);
       }
 
       .search-no-results {
@@ -429,11 +429,15 @@
       }
 
       .note-item .btn-pin.pinned {
-        color: var(--yellow);
+        color: var(--blue);
       }
 
       .note-item .btn-pin:hover {
-        color: var(--yellow);
+        color: var(--subtext);
+      }
+
+      .note-item .btn-pin.pinned:hover {
+        color: var(--blue);
       }
 
       /* Note metadata (name + timestamp) */
@@ -1141,7 +1145,7 @@
         }
 
         .note-item .btn-pin.pinned {
-          color: var(--yellow);
+          color: var(--blue);
         }
 
         .sidebar-resize {
@@ -2560,7 +2564,7 @@
           const pinBtn = document.createElement("button");
           pinBtn.className = "btn-pin" + (note.pinned ? " pinned" : "");
           pinBtn.title = note.pinned ? "Unpin" : "Pin";
-          pinBtn.innerHTML = "&#9733;";
+          pinBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>';
           pinBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             note.pinned = !note.pinned;
