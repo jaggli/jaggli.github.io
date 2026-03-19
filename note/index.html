@@ -3526,6 +3526,9 @@
 
         let top, left;
 
+        // Absolute cursor position (relative to editor content, not viewport)
+        let absTop, absLeft;
+
         if (editorArea.classList.contains("wrap")) {
           // Use the measurement div for accurate wrapped positioning
           const cs = window.getComputedStyle(editor);
@@ -3548,22 +3551,16 @@
             yOffset += _wrapMeasure.offsetHeight;
           }
 
-          // Height of text on cursor line up to cursor column vs full column+1
-          // to find which visual row and x offset the cursor sits on
+          // Height of text on cursor line up to cursor column
           const curLine = allLines[lineIdx];
           const textBefore = curLine.substring(0, col);
           _wrapMeasure.textContent = textBefore || " ";
           const hBefore = _wrapMeasure.offsetHeight;
-          // The cursor is on the last visual row of textBefore
           yOffset += hBefore - lineHeight;
 
-          // Measure x: width of the last visual row fragment
-          // Create a span to measure just the last visual line's text
-          const lastNewlineVisual = hBefore > lineHeight ? col : 0;
           // Find where the last visual row starts by binary search
           let rowStart = 0;
           if (hBefore > lineHeight) {
-            // Walk forward to find where the last row begins
             let lo = 0, hi = col;
             while (lo < hi) {
               const mid = (lo + hi) >>> 1;
@@ -3587,12 +3584,37 @@
 
           document.body.removeChild(_wrapMeasure);
 
-          top = padTop + yOffset - editor.scrollTop;
-          left = parseFloat(cs.paddingLeft) + xOffset - editor.scrollLeft;
+          absTop = padTop + yOffset;
+          absLeft = parseFloat(cs.paddingLeft) + xOffset;
         } else {
-          top = padTop + lineIdx * lineHeight - editor.scrollTop;
-          left = padLeft + col * cw - editor.scrollLeft;
+          absTop = padTop + lineIdx * lineHeight;
+          absLeft = padLeft + col * cw;
         }
+
+        // Vim-like scrolling: keep cursor visible with scrolloff margin
+        const scrolloff = 3 * lineHeight;
+        const viewH = editor.clientHeight;
+        // Cursor above visible area (account for scrolloff)
+        if (absTop - scrolloff < editor.scrollTop) {
+          editor.scrollTop = Math.max(0, absTop - scrolloff);
+        }
+        // Cursor below visible area (account for scrolloff + cursor height)
+        if (absTop + lineHeight + scrolloff > editor.scrollTop + viewH) {
+          editor.scrollTop = absTop + lineHeight + scrolloff - viewH;
+        }
+        // Horizontal scroll (no wrap only)
+        if (!editorArea.classList.contains("wrap")) {
+          const viewW = editor.clientWidth;
+          if (absLeft < editor.scrollLeft + padLeft) {
+            editor.scrollLeft = Math.max(0, absLeft - padLeft);
+          }
+          if (absLeft + cw > editor.scrollLeft + viewW - padLeft) {
+            editor.scrollLeft = absLeft + cw - viewW + padLeft;
+          }
+        }
+
+        top = absTop - editor.scrollTop;
+        left = absLeft - editor.scrollLeft;
 
         vimCursorEl.style.top = top + "px";
         vimCursorEl.style.left = left + "px";
