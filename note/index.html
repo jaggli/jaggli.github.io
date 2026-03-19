@@ -3329,13 +3329,13 @@
       function selectFindMatch(focusEditor) {
         if (findMatchIdx < 0 || findMatchIdx >= findMatches.length) return;
         const m = findMatches[findMatchIdx];
-        if (focusEditor) editor.focus();
+        // Set selection, then scroll match into view.
+        // blur+focus after setSelectionRange makes the browser
+        // natively scroll the caret into the viewport (works with wrap).
         editor.setSelectionRange(m.start, m.end);
-        // Scroll to match
-        const textBefore = editor.value.substring(0, m.start);
-        const lineNum = textBefore.split("\n").length;
-        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
-        editor.scrollTop = Math.max(0, (lineNum - 3) * lineHeight);
+        editor.blur();
+        editor.focus();
+        if (!focusEditor) findInput.focus();
         findReplaceCount.textContent =
           findMatchIdx + 1 + " of " + findMatches.length;
       }
