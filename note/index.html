@@ -3326,10 +3326,10 @@
         selectFindMatch();
       }
 
-      function selectFindMatch() {
+      function selectFindMatch(focusEditor) {
         if (findMatchIdx < 0 || findMatchIdx >= findMatches.length) return;
         const m = findMatches[findMatchIdx];
-        editor.focus();
+        if (focusEditor) editor.focus();
         editor.setSelectionRange(m.start, m.end);
         // Scroll to match
         const textBefore = editor.value.substring(0, m.start);
@@ -3346,7 +3346,7 @@
           return;
         }
         findMatchIdx = (findMatchIdx + 1) % findMatches.length;
-        selectFindMatch();
+        selectFindMatch(true);
       }
 
       function findPrev() {
@@ -3356,7 +3356,7 @@
         }
         findMatchIdx =
           (findMatchIdx - 1 + findMatches.length) % findMatches.length;
-        selectFindMatch();
+        selectFindMatch(true);
       }
 
       function replaceCurrent() {
@@ -3386,7 +3386,7 @@
         if (findMatches.length && findMatchIdx >= findMatches.length) {
           findMatchIdx = 0;
         }
-        if (findMatches.length) selectFindMatch();
+        if (findMatches.length) selectFindMatch(true);
       }
 
       function replaceAll() {
