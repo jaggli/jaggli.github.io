@@ -4896,7 +4896,7 @@
         note.content = editor.value;
         note.updatedAt = Date.now();
         saveState();
-        scheduleDriveUpload(false);
+        scheduleDriveUpload(true);
         updateUrl();
         deleteSwap(note.id);
         vimState.bufferDirty = false;
