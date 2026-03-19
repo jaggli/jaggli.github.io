@@ -5920,9 +5920,9 @@
               client.requestAccessToken({ prompt: "" });
             });
           } catch {
-            // Silent refresh failed — prompt user to re-auth
+            // Silent refresh failed — don't disconnect, just clear the token.
+            // The session stays "connected" and will re-auth on next user action.
             clearToken();
-            promptReconnect();
           }
         }, refreshIn);
       }
@@ -5951,6 +5951,10 @@
       }
 
       async function gdriveFetch(url, opts = {}) {
+        // If token is already expired, try to re-auth first
+        if (!gdriveToken || Date.now() >= gdriveTokenExpiry) {
+          await gdriveAuth();
+        }
         const res = await fetch(url, {
           ...opts,
           headers: {
@@ -5959,8 +5963,19 @@
           },
         });
         if (res.status === 401) {
+          // Token rejected — clear and re-auth once
           clearToken();
-          throw new Error("Session expired — please sign in again");
+          await gdriveAuth();
+          const retry = await fetch(url, {
+            ...opts,
+            headers: {
+              Authorization: "Bearer " + gdriveToken,
+              ...opts.headers,
+            },
+          });
+          if (!retry.ok)
+            throw new Error("Drive error: " + retry.status);
+          return retry;
         }
         if (!res.ok) throw new Error("Drive error: " + res.status);
         return res;
@@ -6166,7 +6181,7 @@
       let gdriveUploading = false;
 
       function scheduleDriveUpload(immediate) {
-        if (!gdriveConnected || !gdriveToken) return;
+        if (!gdriveConnected) return;
         gdriveDirty = true;
         clearTimeout(gdriveSyncTimeout);
         if (immediate) {
@@ -6178,7 +6193,7 @@
       }
 
       async function driveSyncQuiet() {
-        if (!gdriveConnected || !gdriveToken) return;
+        if (!gdriveConnected) return;
         try {
           const file = await gdriveFindFile();
           if (!file) return;
@@ -6238,22 +6253,18 @@
           // Push to Drive if any local notes were newer
           if (localNewer) drivePushQuiet();
         } catch {
-          if (!gdriveToken) {
-            promptReconnect();
-          }
+          // Auth failed or Drive error — will re-auth on next attempt
         }
       }
 
       async function drivePushQuiet() {
-        if (!gdriveDirty || !gdriveToken || gdriveUploading) return;
+        if (!gdriveDirty || gdriveUploading) return;
         gdriveUploading = true;
         try {
           await gdriveUploadState();
           gdriveDirty = false;
         } catch {
-          if (!gdriveToken) {
-            promptReconnect();
-          }
+          // Auth failed or Drive error — will re-auth on next attempt
         } finally {
           gdriveUploading = false;
         }
@@ -6420,7 +6431,10 @@
           showSyncConnected();
           scheduleTokenRefresh();
         } else if (tokenState === "expired") {
-          promptReconnect();
+          // Token expired but user was connected — stay connected,
+          // gdriveFetch will transparently re-auth on next operation
+          gdriveConnected = true;
+          showSyncConnected();
         }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
