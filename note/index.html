@@ -6031,11 +6031,8 @@
           gdriveDirty = false;
           showSyncConnected();
 
-          // Dismiss progress modal, then show result
+          // Dismiss progress modal
           modalOverlay.classList.remove("visible");
-          if (driveSyncAborted) return;
-
-          showModal("Google Drive synced.", "ok", null);
         } catch (e) {
           modalOverlay.classList.remove("visible");
           if (!driveSyncAborted) {
