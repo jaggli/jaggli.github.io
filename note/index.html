@@ -9,12 +9,24 @@
     <title>note — minimal text editor</title>
     <meta
       name="description"
-      content="A minimal, local-first text editor in the browser. No signup, no cloud — your notes stay in your browser."
+      content="A minimal, local-first text editor in the browser. No signup — your data stays local, unless you say otherwise."
     />
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://accounts.google.com; font-src 'self'; img-src 'self' data:; connect-src https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com; frame-src https://accounts.google.com; manifest-src 'self';"
     />
+    <meta property="og:title" content="note — minimal text editor" />
+    <meta
+      property="og:description"
+      content="A minimal, local-first text editor in the browser. No signup — your data stays local, unless you say otherwise."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.jaggli.com/note/" />
+    <meta
+      property="og:image"
+      content="https://www.jaggli.com/note/img/logo.png"
+    />
+    <link rel="canonical" href="https://www.jaggli.com/note/" />
     <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#1e1e2e" />
     <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
@@ -34,6 +46,13 @@
       rel="apple-touch-icon"
       sizes="180x180"
       href="img/apple-touch-icon.png"
+    />
+    <link
+      rel="preload"
+      href="victor-mono/VictorMono-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
     <link rel="manifest" href="manifest.json" />
     <style>
