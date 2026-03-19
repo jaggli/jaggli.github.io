@@ -3175,29 +3175,53 @@
             const snippetDiv = document.createElement("div");
             snippetDiv.className = "search-result-snippet";
             const prefix = lm.lineNum + ": ";
-            const trimmed =
-              lm.line.length > 120 ? lm.line.slice(0, 120) : lm.line;
+            const maxLen = 120;
+            let snippetText = lm.line;
+            let indices = lm.lineIndices;
+            if (snippetText.length > maxLen && indices.length) {
+              // Center snippet around the first match index
+              const firstIdx = indices[0];
+              let start = Math.max(0, firstIdx - 30);
+              // Snap to a word boundary
+              if (start > 0) {
+                const sp = snippetText.lastIndexOf(" ", start);
+                if (sp > start - 15) start = sp + 1;
+              }
+              let end = Math.min(snippetText.length, start + maxLen);
+              snippetText =
+                (start > 0 ? "\u2026" : "") +
+                snippetText.slice(start, end) +
+                (end < lm.line.length ? "\u2026" : "");
+              // Shift indices to match the sliced text
+              const offset = start - (start > 0 ? 1 : 0);
+              indices = indices
+                .map((i) => i - start + (start > 0 ? 1 : 0))
+                .filter((i) => i >= 0 && i < snippetText.length);
+            }
             snippetDiv.innerHTML =
               '<span style="color:var(--gutter)">' +
               escapeHtml(prefix) +
               "</span>" +
-              highlightFuzzy(trimmed, lm.lineIndices);
+              highlightFuzzy(snippetText, indices);
             div.appendChild(snippetDiv);
           }
           const target = linesToShow[0] || null;
           div.addEventListener("click", () => {
+            const query = searchInput.value.trim();
             switchNote(r.note.id);
             closeSearch();
             searchInput.value = "";
             editor.focus();
             if (target && target.charOffset > 0) {
               editor.setSelectionRange(target.charOffset, target.charOffset);
-              const textBefore = editor.value.substring(0, target.charOffset);
-              const lineNum = textBefore.split("\n").length;
-              const lineHeight = parseFloat(
-                getComputedStyle(editor).lineHeight,
-              );
-              editor.scrollTop = Math.max(0, (lineNum - 3) * lineHeight);
+            }
+            // Populate find state like vim / search so n/N work
+            if (query) {
+              findInput.value = query;
+              vimState.searchDirection = 1;
+              updateFindMatches();
+              if (findMatches.length) selectFindMatch(true);
+              updateCursorPos();
             }
           });
           searchResultsList.appendChild(div);
