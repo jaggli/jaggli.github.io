@@ -3772,13 +3772,6 @@
         vimState._undoPushed = true;
       }
 
-      function vimCopySelection() {
-        const wasReadOnly = editor.readOnly;
-        editor.readOnly = false;
-        document.execCommand("copy");
-        editor.readOnly = wasReadOnly;
-      }
-
       function vimDeleteRange(start, end, linewise) {
         vimPushUndoOnce();
         const val = editor.value;
@@ -3786,8 +3779,7 @@
         const e = Math.max(0, Math.min(end, val.length));
         vimState.clipboard = val.substring(s, e);
         vimState.clipboardLinewise = !!linewise;
-        editor.setSelectionRange(s, e);
-        vimCopySelection();
+        navigator.clipboard.writeText(vimState.clipboard).catch(() => {});
         editor.setRangeText("", s, e, "start");
         editor.selectionStart = editor.selectionEnd = Math.min(
           s,
@@ -3798,12 +3790,12 @@
 
       function vimYankRange(start, end, linewise) {
         const val = editor.value;
-        const s = Math.max(0, start);
-        const e = Math.min(end, val.length);
-        vimState.clipboard = val.substring(s, e);
+        vimState.clipboard = val.substring(
+          Math.max(0, start),
+          Math.min(end, val.length),
+        );
         vimState.clipboardLinewise = !!linewise;
-        editor.setSelectionRange(s, e);
-        vimCopySelection();
+        navigator.clipboard.writeText(vimState.clipboard).catch(() => {});
       }
 
       function vimInsertText(pos, text) {
