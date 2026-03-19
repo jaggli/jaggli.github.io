@@ -3392,10 +3392,13 @@
         const note = getActiveNote();
         if (!note) return;
 
+        // Temporarily lift readOnly for vim mode so the edit goes through
+        const wasReadOnly = editor.readOnly;
+        editor.readOnly = false;
         editor.setSelectionRange(m.start, m.end);
-        // Use execCommand to maintain undo stack where supported, fall back to manual
         editor.focus();
         document.execCommand("insertText", false, replacement);
+        editor.readOnly = wasReadOnly;
 
         if (vimState.enabled) {
           vimState.bufferDirty = true;
@@ -3769,6 +3772,13 @@
         vimState._undoPushed = true;
       }
 
+      function vimCopySelection() {
+        const wasReadOnly = editor.readOnly;
+        editor.readOnly = false;
+        document.execCommand("copy");
+        editor.readOnly = wasReadOnly;
+      }
+
       function vimDeleteRange(start, end, linewise) {
         vimPushUndoOnce();
         const val = editor.value;
@@ -3776,6 +3786,8 @@
         const e = Math.max(0, Math.min(end, val.length));
         vimState.clipboard = val.substring(s, e);
         vimState.clipboardLinewise = !!linewise;
+        editor.setSelectionRange(s, e);
+        vimCopySelection();
         editor.setRangeText("", s, e, "start");
         editor.selectionStart = editor.selectionEnd = Math.min(
           s,
@@ -3786,11 +3798,12 @@
 
       function vimYankRange(start, end, linewise) {
         const val = editor.value;
-        vimState.clipboard = val.substring(
-          Math.max(0, start),
-          Math.min(end, val.length),
-        );
+        const s = Math.max(0, start);
+        const e = Math.min(end, val.length);
+        vimState.clipboard = val.substring(s, e);
         vimState.clipboardLinewise = !!linewise;
+        editor.setSelectionRange(s, e);
+        vimCopySelection();
       }
 
       function vimInsertText(pos, text) {
