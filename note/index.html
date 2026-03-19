@@ -3208,6 +3208,8 @@
           const target = linesToShow[0] || null;
           div.addEventListener("click", () => {
             const query = searchInput.value.trim();
+            // Auto-save dirty vim buffer before switching
+            if (vimState.enabled && vimState.bufferDirty) vimWriteBuffer();
             switchNote(r.note.id);
             closeSearch();
             searchInput.value = "";
