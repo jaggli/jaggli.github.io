@@ -3523,35 +3523,76 @@
         const lineHeight = parseFloat(_editorCS.lineHeight) || 14 * 1.5;
         const padTop = 10;
         const padLeft = 16;
-        const colOffset = col * cw;
 
-        // Account for wrapped lines if wrap mode is on
-        let visualLine = lineIdx;
+        let top, left;
+
         if (editorArea.classList.contains("wrap")) {
-          visualLine = 0;
-          const allLines = val.split("\n");
-          const editorWidth = editor.clientWidth - padLeft * 2;
-          const charsPerLine = Math.floor(editorWidth / cw) || 1;
-          for (let i = 0; i < lineIdx; i++) {
-            visualLine += Math.max(
-              1,
-              Math.ceil(allLines[i].length / charsPerLine),
-            );
-          }
-          if (charsPerLine > 0 && col >= charsPerLine) {
-            visualLine += Math.floor(col / charsPerLine);
-          }
-        }
+          // Use the measurement div for accurate wrapped positioning
+          const cs = window.getComputedStyle(editor);
+          const contentWidth =
+            editor.clientWidth -
+            parseFloat(cs.paddingLeft) -
+            parseFloat(cs.paddingRight);
+          _wrapMeasure.style.font = cs.font;
+          _wrapMeasure.style.letterSpacing = cs.letterSpacing;
+          _wrapMeasure.style.tabSize = cs.tabSize;
+          _wrapMeasure.style.lineHeight = cs.lineHeight;
+          _wrapMeasure.style.width = contentWidth + "px";
+          document.body.appendChild(_wrapMeasure);
 
-        const top = padTop + visualLine * lineHeight - editor.scrollTop;
-        const left =
-          padLeft +
-          (editorArea.classList.contains("wrap")
-            ? (col %
-                (Math.floor((editor.clientWidth - padLeft * 2) / cw) || 1)) *
-              cw
-            : colOffset) -
-          editor.scrollLeft;
+          // Height of all lines before the cursor line
+          const allLines = val.split("\n");
+          let yOffset = 0;
+          for (let i = 0; i < lineIdx; i++) {
+            _wrapMeasure.textContent = allLines[i] || " ";
+            yOffset += _wrapMeasure.offsetHeight;
+          }
+
+          // Height of text on cursor line up to cursor column vs full column+1
+          // to find which visual row and x offset the cursor sits on
+          const curLine = allLines[lineIdx];
+          const textBefore = curLine.substring(0, col);
+          _wrapMeasure.textContent = textBefore || " ";
+          const hBefore = _wrapMeasure.offsetHeight;
+          // The cursor is on the last visual row of textBefore
+          yOffset += hBefore - lineHeight;
+
+          // Measure x: width of the last visual row fragment
+          // Create a span to measure just the last visual line's text
+          const lastNewlineVisual = hBefore > lineHeight ? col : 0;
+          // Find where the last visual row starts by binary search
+          let rowStart = 0;
+          if (hBefore > lineHeight) {
+            // Walk forward to find where the last row begins
+            let lo = 0, hi = col;
+            while (lo < hi) {
+              const mid = (lo + hi) >>> 1;
+              _wrapMeasure.textContent = textBefore.substring(0, mid + 1) || " ";
+              if (_wrapMeasure.offsetHeight >= hBefore) {
+                hi = mid;
+              } else {
+                lo = mid + 1;
+              }
+            }
+            rowStart = lo;
+          }
+          // Measure the width of text from rowStart to col
+          const rowText = curLine.substring(rowStart, col);
+          _wrapMeasure.style.width = "max-content";
+          _wrapMeasure.style.whiteSpace = "pre";
+          _wrapMeasure.textContent = rowText;
+          const xOffset = _wrapMeasure.offsetWidth;
+          _wrapMeasure.style.width = contentWidth + "px";
+          _wrapMeasure.style.whiteSpace = "pre-wrap";
+
+          document.body.removeChild(_wrapMeasure);
+
+          top = padTop + yOffset - editor.scrollTop;
+          left = parseFloat(cs.paddingLeft) + xOffset - editor.scrollLeft;
+        } else {
+          top = padTop + lineIdx * lineHeight - editor.scrollTop;
+          left = padLeft + col * cw - editor.scrollLeft;
+        }
 
         vimCursorEl.style.top = top + "px";
         vimCursorEl.style.left = left + "px";
