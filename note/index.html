@@ -725,6 +725,12 @@
         color: var(--subtext);
       }
 
+      @media (max-width: 1100px) {
+        .status-hint kbd {
+          display: none;
+        }
+      }
+
       .status-right {
         margin-left: auto;
         display: flex;
@@ -1409,6 +1415,13 @@
             style="cursor: pointer"
             >replace <kbd>ctrl+h</kbd></span
           >
+          <span
+            class="status-hint"
+            id="btnVim"
+            onclick="toggleVim()"
+            style="cursor: pointer"
+            >vim <kbd>ctrl+shift+m</kbd></span
+          >
           <div class="status-right">
             <span class="status-info">
               <span id="cursorPos">Ln 1, Col 1</span>
@@ -1418,14 +1431,6 @@
               class="storage-meter"
               title="localStorage usage"
             ></span>
-            <button
-              class="btn-wrap"
-              id="btnVim"
-              onclick="toggleVim()"
-              title="Toggle vim mode"
-            >
-              vim
-            </button>
             <button
               class="btn-wrap"
               id="btnWrap"
@@ -3571,19 +3576,17 @@
         const saved = localStorage.getItem(VIM_KEY);
         if (saved === "true") {
           vimState.enabled = true;
-          btnVim.classList.add("active");
           vimSetMode("normal");
         }
       }
 
       function toggleVim() {
-        // If disabling vim with unsaved changes, write them first
+        // If disabling vim, save buffer first (like :wq)
         if (vimState.enabled && vimState.bufferDirty) {
           vimWriteBuffer();
         }
         vimState.enabled = !vimState.enabled;
         vimState.bufferDirty = false;
-        btnVim.classList.toggle("active", vimState.enabled);
         localStorage.setItem(VIM_KEY, vimState.enabled ? "true" : "false");
         if (vimState.enabled) {
           vimSetMode("normal");
@@ -5496,7 +5499,6 @@
         if (e.key === VIM_KEY && e.newValue) {
           const isVim = e.newValue === "true";
           vimState.enabled = isVim;
-          btnVim.classList.toggle("active", isVim);
           if (isVim) {
             vimSetMode("normal");
           } else {
@@ -5676,6 +5678,11 @@
         if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === "n") {
           e.preventDefault();
           createNote();
+        }
+        // Toggle vim mode
+        if (e.ctrlKey && !e.metaKey && e.shiftKey && e.key === "M") {
+          e.preventDefault();
+          toggleVim();
         }
       });
 
@@ -5880,7 +5887,6 @@
           localStorage.setItem(VIM_KEY, settings.vim);
           const vimOn = settings.vim === "true";
           vimState.enabled = vimOn;
-          btnVim.classList.toggle("active", vimOn);
           if (vimOn) {
             vimSetMode("normal");
           } else {
