@@ -572,7 +572,7 @@
       .editor::selection {
         -webkit-text-fill-color: transparent;
         color: transparent;
-        background: rgba(137, 180, 250, 0.4);
+        background: transparent;
       }
 
       .highlight-layer {
@@ -581,6 +581,18 @@
         overflow: hidden;
         pointer-events: none;
         z-index: 0;
+      }
+
+      .selection-layer {
+        pointer-events: none;
+        z-index: 0;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .selection-layer span {
+        position: absolute;
+        background: rgba(137, 180, 250, 0.3);
       }
 
       /* Markdown tab bar */
@@ -1579,6 +1591,7 @@
               id="highlightLayer"
               aria-hidden="true"
             ></pre>
+            <div class="selection-layer" id="selectionLayer" aria-hidden="true"></div>
             <textarea
               class="editor"
               id="editor"
@@ -6248,13 +6261,87 @@
         gutter.scrollTop = editor.scrollTop;
         highlightLayer.scrollTop = editor.scrollTop;
         highlightLayer.scrollLeft = editor.scrollLeft;
+        selectionLayer.scrollTop = editor.scrollTop;
+        selectionLayer.scrollLeft = editor.scrollLeft;
         vimUpdateBlockCursor();
       });
 
+      // ── Selection overlay ──
+      const selectionLayer = document.getElementById("selectionLayer");
+      let selCharWidth = 0;
+
+      function measureCharWidth() {
+        const span = document.createElement("span");
+        span.style.cssText = "font-family:var(--font);font-size:14px;position:absolute;visibility:hidden;white-space:pre";
+        span.textContent = "x".repeat(100);
+        document.body.appendChild(span);
+        selCharWidth = span.offsetWidth / 100;
+        document.body.removeChild(span);
+      }
+      measureCharWidth();
+
+      function renderSelection() {
+        const s = editor.selectionStart;
+        const e = editor.selectionEnd;
+        if (s === e) {
+          if (selectionLayer.innerHTML) selectionLayer.innerHTML = "";
+          return;
+        }
+        const text = editor.value;
+        const lineHeight = 21; // 14px * 1.5
+        const padTop = 10;
+        const padLeft = 16;
+        const tabSize = 2;
+
+        // Find start/end line and column
+        let line = 0, col = 0;
+        let startLine = 0, startCol = 0, endLine = 0, endCol = 0;
+        for (let i = 0; i < Math.max(s, e); i++) {
+          if (i === s) { startLine = line; startCol = col; }
+          if (i === e) { endLine = line; endCol = col; }
+          if (text[i] === "\n") { line++; col = 0; }
+          else if (text[i] === "\t") { col += tabSize - (col % tabSize); }
+          else { col++; }
+        }
+        if (e === text.length || e > s) { endLine = line; endCol = col; }
+        if (s === e) return;
+        // Ensure end is set if at the end
+        if (e >= text.length) { endLine = line; endCol = col; }
+
+        // Also need line lengths for full-line selection rects
+        const lines = text.split("\n");
+        let html = "";
+        for (let ln = startLine; ln <= endLine; ln++) {
+          const lc = ln === startLine ? startCol : 0;
+          let rc;
+          if (ln === endLine) {
+            rc = endCol;
+          } else {
+            // Expand to end of line content + 1 for the newline
+            let visualLen = 0;
+            for (let ci = 0; ci < lines[ln].length; ci++) {
+              if (lines[ln][ci] === "\t") visualLen += tabSize - (visualLen % tabSize);
+              else visualLen++;
+            }
+            rc = visualLen + 1;
+          }
+          if (rc <= lc && ln !== endLine) rc = lc + 1;
+          const top = padTop + ln * lineHeight;
+          const left = padLeft + lc * selCharWidth;
+          const width = (rc - lc) * selCharWidth;
+          html += '<span style="top:' + top + 'px;left:' + left + 'px;width:' + width + 'px;height:' + lineHeight + 'px"></span>';
+        }
+        selectionLayer.innerHTML = html;
+      }
+
+      document.addEventListener("selectionchange", () => {
+        if (document.activeElement === editor) renderSelection();
+      });
+
       // Track cursor position for line/col and current line highlight
-      editor.addEventListener("click", updateCursorPos);
-      editor.addEventListener("keyup", updateCursorPos);
-      editor.addEventListener("select", updateCursorPos);
+      editor.addEventListener("click", () => { updateCursorPos(); renderSelection(); });
+      editor.addEventListener("keyup", () => { updateCursorPos(); renderSelection(); });
+      editor.addEventListener("select", () => { updateCursorPos(); renderSelection(); });
 
       editor.addEventListener("keydown", vimHandleKeydown);
 
