@@ -579,6 +579,187 @@
         z-index: 0;
       }
 
+      /* Markdown tab bar */
+      .md-tab-bar {
+        display: none;
+        border-bottom: 1px solid var(--border);
+        background: var(--sidebar);
+        padding: 0 8px;
+        gap: 0;
+      }
+
+      .md-tab-bar.visible {
+        display: flex;
+      }
+
+      .md-tab {
+        background: none;
+        border: none;
+        color: var(--subtext);
+        font-family: var(--font);
+        font-size: 13px;
+        padding: 6px 14px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+
+      .md-tab:hover {
+        color: var(--text);
+      }
+
+      .md-tab.active {
+        color: var(--blue);
+        border-bottom-color: var(--blue);
+      }
+
+      /* Markdown preview */
+      .md-preview {
+        display: none;
+        flex: 1;
+        overflow: auto;
+        padding: 32px 24px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+        color: var(--text);
+        background: var(--bg);
+        user-select: text;
+      }
+
+      .md-preview > * {
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .md-preview.visible {
+        display: block;
+      }
+
+      .md-preview h1,
+      .md-preview h2,
+      .md-preview h3,
+      .md-preview h4,
+      .md-preview h5,
+      .md-preview h6 {
+        color: var(--blue);
+        margin: 1.4em 0 0.5em;
+        line-height: 1.3;
+        max-width: 68ch;
+      }
+
+      .md-preview h1 { font-size: 1.7em; }
+      .md-preview h2 { font-size: 1.4em; }
+      .md-preview h3 { font-size: 1.2em; }
+      .md-preview h4 { font-size: 1.05em; }
+
+      .md-preview p {
+        margin: 0.7em 0;
+        max-width: 68ch;
+      }
+
+      .md-preview a {
+        color: var(--blue);
+        text-decoration: underline;
+      }
+
+      .md-preview code {
+        font-family: var(--font);
+        background: var(--overlay);
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-size: 0.85em;
+      }
+
+      .md-preview pre {
+        font-family: var(--font);
+        background: var(--overlay);
+        padding: 12px 16px;
+        border-radius: 4px;
+        overflow-x: auto;
+        margin: 0.8em 0;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .md-preview pre code {
+        background: none;
+        padding: 0;
+        border-radius: 0;
+      }
+
+      .md-preview blockquote {
+        border-left: 3px solid var(--blue);
+        padding-left: 12px;
+        color: var(--subtext);
+        margin: 0.7em 0;
+        max-width: 68ch;
+      }
+
+      .md-preview ul,
+      .md-preview ol {
+        padding-left: 24px;
+        margin: 0.7em 0;
+        max-width: 68ch;
+      }
+
+      .md-preview li {
+        margin: 0.25em 0;
+      }
+
+      .md-preview hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 1.4em 0;
+        max-width: 68ch;
+      }
+
+      .md-preview img {
+        max-width: 100%;
+      }
+
+      .md-preview details {
+        max-width: 68ch;
+      }
+
+      .md-preview table {
+        border-collapse: collapse;
+        margin: 0.8em 0;
+      }
+
+      .md-preview th,
+      .md-preview td {
+        border: 1px solid var(--border);
+        padding: 6px 12px;
+        text-align: left;
+      }
+
+      .md-preview th {
+        background: var(--overlay);
+      }
+
+      .md-preview details {
+        margin: 0.6em 0;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 8px 12px;
+      }
+
+      .md-preview details summary {
+        cursor: pointer;
+        font-weight: bold;
+        color: var(--blue);
+      }
+
+      .md-preview details[open] summary {
+        margin-bottom: 8px;
+      }
+
+      .md-preview li > input[type="checkbox"] {
+        margin-right: 6px;
+      }
+
       /* Syntax highlighting tokens */
       .hl-kw {
         color: #cba6f7;
@@ -1386,6 +1567,10 @@
             &times;
           </button>
         </div>
+        <div class="md-tab-bar" id="mdTabBar">
+          <button class="md-tab active" id="mdTabEdit" onclick="switchMdTab('edit')">edit</button>
+          <button class="md-tab" id="mdTabView" onclick="switchMdTab('view')">view</button>
+        </div>
         <div class="editor-wrap">
           <div class="gutter" id="gutter"></div>
           <div class="editor-area" id="editorArea">
@@ -1403,6 +1588,7 @@
             ></textarea>
             <div class="vim-cursor" id="vimCursor"></div>
           </div>
+          <div class="md-preview" id="mdPreview"></div>
           <div class="empty-state" id="emptyState">
             <div class="empty-state-desktop">
               ctrl+n or drop a file to start
@@ -1766,6 +1952,10 @@
       const findInput = document.getElementById("findInput");
       const replaceInput = document.getElementById("replaceInput");
       const findReplaceCount = document.getElementById("findReplaceCount");
+      const mdTabBar = document.getElementById("mdTabBar");
+      const mdTabEdit = document.getElementById("mdTabEdit");
+      const mdTabView = document.getElementById("mdTabView");
+      const mdPreview = document.getElementById("mdPreview");
 
       // ═══════════════════════════════════════════════════
       //  State & Storage
@@ -1914,6 +2104,7 @@
           const params = new URLSearchParams();
           params.set("note", compressed);
           params.set("name", note.name);
+          if (mdViewActive) params.set("view", "md");
           history.replaceState(
             null,
             "",
@@ -2773,6 +2964,7 @@
             scheduleUrlUpdate();
             scheduleHighlight();
             updateTitle();
+            updateMdTabBar();
           });
           input.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
@@ -2870,6 +3062,223 @@
         updateCursorPos();
         updateTitle();
         updateStorageUsage();
+        updateMdTabBar();
+      }
+
+      // ═══════════════════════════════════════════════════
+      //  Markdown Preview
+      // ═══════════════════════════════════════════════════
+
+      let mdViewActive = false;
+
+      function isMarkdownFile(name) {
+        if (!name) return false;
+        const ext = getExtension(name);
+        return ext === "md" || ext === "markdown";
+      }
+
+      // Secure markdown-to-HTML renderer.
+      // Strategy: escape ALL HTML first (so no raw tags survive),
+      // then parse markdown syntax on the escaped text,
+      // then selectively re-enable <details> and <summary> only.
+      function renderMarkdown(src) {
+        // Step 1: escape everything to prevent XSS
+        let text = src.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;");
+
+        // Step 2: parse markdown on the escaped text
+
+        // Fenced code blocks (``` ... ```)
+        const codeBlocks = [];
+        text = text.replace(/^(`{3,})(\S*)\n([\s\S]*?)^\1/gm, (_, fence, lang, code) => {
+          const idx = codeBlocks.length;
+          codeBlocks.push("<pre><code>" + code + "</code></pre>");
+          return "\x00CB" + idx + "\x00";
+        });
+
+        // Inline code (must come before other inline formatting)
+        const inlineCodes = [];
+        text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+          const idx = inlineCodes.length;
+          inlineCodes.push("<code>" + code + "</code>");
+          return "\x00IC" + idx + "\x00";
+        });
+
+        // Headings
+        text = text.replace(/^######\s+(.+)$/gm, "<h6>$1</h6>");
+        text = text.replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>");
+        text = text.replace(/^####\s+(.+)$/gm, "<h4>$1</h4>");
+        text = text.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>");
+        text = text.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
+        text = text.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
+
+        // Horizontal rules
+        text = text.replace(/^([-*_]){3,}\s*$/gm, "<hr>");
+
+        // Blockquotes (single-level)
+        text = text.replace(/^&gt;\s?(.*)$/gm, "<blockquote>$1</blockquote>");
+        // Merge adjacent blockquotes
+        text = text.replace(/<\/blockquote>\n<blockquote>/g, "\n");
+
+        // Task list items (before regular lists)
+        text = text.replace(/^(\s*)[-*+]\s+\[x\]\s+(.+)$/gm,
+          '$1<li><input type="checkbox" checked disabled> $2</li>');
+        text = text.replace(/^(\s*)[-*+]\s+\[\s\]\s+(.+)$/gm,
+          '$1<li><input type="checkbox" disabled> $2</li>');
+
+        // Unordered lists
+        text = text.replace(/^[-*+]\s+(.+)$/gm, "<li>$1</li>");
+        // Wrap adjacent <li> in <ul>
+        text = text.replace(/((?:<li>[\s\S]*?<\/li>\n?)+)/g, (m) => {
+          return "<ul>" + m.trim() + "</ul>";
+        });
+
+        // Ordered lists
+        text = text.replace(/^\d+\.\s+(.+)$/gm, "<oli>$1</oli>");
+        text = text.replace(/((?:<oli>[\s\S]*?<\/oli>\n?)+)/g, (m) => {
+          return "<ol>" + m.replace(/<\/?oli>/g, (t) => t.replace("oli", "li")) + "</ol>";
+        });
+
+        // Tables
+        text = text.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
+          const ths = header.split("|").filter(c => c.trim()).map(c => "<th>" + c.trim() + "</th>").join("");
+          const rows = body.trim().split("\n").map(row => {
+            const tds = row.split("|").filter(c => c.trim()).map(c => "<td>" + c.trim() + "</td>").join("");
+            return "<tr>" + tds + "</tr>";
+          }).join("");
+          return "<table><thead><tr>" + ths + "</tr></thead><tbody>" + rows + "</tbody></table>";
+        });
+
+        // Images (before links to avoid conflict) — ![alt](src)
+        // src was escaped, so &amp; needs reverting for protocol check
+        text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
+          const cleanSrc = src.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
+          // Only allow http(s), relative paths, and data:image/* for images
+          if (/^https?:\/\//i.test(cleanSrc) || /^(\/|\.\/|\.\.\/)/.test(cleanSrc) || !/[:]/.test(cleanSrc)) {
+            return '<img alt="' + alt + '" src="' + src + '">';
+          }
+          return "![" + alt + "](" + src + ")";
+        });
+
+        // Links — [text](url)
+        text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+          const cleanUrl = url.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
+          // Only allow http(s), mailto, relative paths, and fragment links
+          if (/^https?:\/\//i.test(cleanUrl) || /^mailto:/i.test(cleanUrl) || /^#/.test(cleanUrl) || /^(\/|\.\/|\.\.\/)/.test(cleanUrl) || !/[:]/.test(cleanUrl)) {
+            return '<a href="' + url + '" rel="noopener noreferrer">' + label + "</a>";
+          }
+          return "[" + label + "](" + url + ")";
+        });
+
+        // Bold & italic
+        text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+        text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
+        text = text.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
+        text = text.replace(/__(.+?)__/g, "<strong>$1</strong>");
+        text = text.replace(/_(.+?)_/g, "<em>$1</em>");
+
+        // Strikethrough
+        text = text.replace(/~~(.+?)~~/g, "<del>$1</del>");
+
+        // Paragraphs: wrap standalone lines that aren't already block elements
+        const lines = text.split("\n");
+        let result = "";
+        let inParagraph = false;
+        const blockTag = /^<(h[1-6]|ul|ol|li|blockquote|pre|hr|table|thead|tbody|tr|th|td|\x00)/;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const trimmed = line.trim();
+          if (trimmed === "") {
+            if (inParagraph) { result += "</p>\n"; inParagraph = false; }
+            else result += "\n";
+          } else if (blockTag.test(trimmed)) {
+            if (inParagraph) { result += "</p>\n"; inParagraph = false; }
+            result += line + "\n";
+          } else {
+            if (!inParagraph) { result += "<p>"; inParagraph = true; }
+            else result += "<br>";
+            result += line;
+          }
+        }
+        if (inParagraph) result += "</p>";
+
+        text = result;
+
+        // Step 3: restore code blocks and inline codes
+        text = text.replace(/\x00CB(\d+)\x00/g, (_, idx) => codeBlocks[+idx]);
+        text = text.replace(/\x00IC(\d+)\x00/g, (_, idx) => inlineCodes[+idx]);
+
+        // Step 4: selectively re-enable <details> and <summary> ONLY
+        // These were escaped in step 1. We match the escaped forms exactly.
+        text = text.replace(/&lt;details&gt;/gi, "<details>");
+        text = text.replace(/&lt;\/details&gt;/gi, "</details>");
+        text = text.replace(/&lt;summary&gt;/gi, "<summary>");
+        text = text.replace(/&lt;\/summary&gt;/gi, "</summary>");
+        // Also handle details with attributes (but strip all attributes for safety)
+        text = text.replace(/&lt;details\s[^&]*&gt;/gi, "<details>");
+        text = text.replace(/&lt;summary\s[^&]*&gt;/gi, "<summary>");
+
+        return text;
+      }
+
+      function updateMdTabBar() {
+        const note = getActiveNote();
+        const isMd = note && isMarkdownFile(note.name);
+        mdTabBar.classList.toggle("visible", isMd);
+        if (!isMd && mdViewActive) {
+          switchMdTab("edit");
+        }
+      }
+
+      function switchMdTab(tab) {
+        mdViewActive = tab === "view";
+        mdTabEdit.classList.toggle("active", !mdViewActive);
+        mdTabView.classList.toggle("active", mdViewActive);
+
+        const editorWrap = document.querySelector(".editor-wrap");
+        if (mdViewActive) {
+          const note = getActiveNote();
+          if (note) {
+            mdPreview.innerHTML = renderMarkdown(note.content);
+          }
+          // Hide editor elements, show preview
+          gutter.style.display = "none";
+          editorArea.style.display = "none";
+          emptyState.style.display = "none";
+          mdPreview.classList.add("visible");
+        } else {
+          // Show editor elements, hide preview
+          gutter.style.display = "";
+          editorArea.style.display = "";
+          mdPreview.classList.remove("visible");
+          mdPreview.innerHTML = "";
+          updateEmptyState();
+          editor.focus();
+        }
+        updateMdViewUrl();
+      }
+
+      function updateMdViewUrl() {
+        const params = new URLSearchParams(location.search);
+        if (mdViewActive) {
+          params.set("view", "md");
+        } else {
+          params.delete("view");
+        }
+        history.replaceState(null, "", location.pathname + "?" + params.toString());
+      }
+
+      function checkMdViewParam() {
+        const params = new URLSearchParams(location.search);
+        if (params.get("view") === "md") {
+          const note = getActiveNote();
+          if (note && isMarkdownFile(note.name)) {
+            switchMdTab("view");
+          }
+        }
       }
 
       // ═══════════════════════════════════════════════════
@@ -2961,6 +3370,8 @@
           vimShowError("No write since last change (add ! to override)");
           return;
         }
+        // Close markdown preview when switching notes
+        if (mdViewActive) switchMdTab("edit");
         state.activeId = id;
         saveState();
         render();
@@ -6442,6 +6853,7 @@
         }
         render();
         updateUrl();
+        checkMdViewParam();
         startTimestampRefresh();
         if (getActiveNote()) {
           editor.focus();
