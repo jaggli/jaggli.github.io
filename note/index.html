@@ -3306,6 +3306,25 @@
         }
       }
 
+      // Navigate to a note without creating a history entry
+      function navigateToNote(id, viewMd) {
+        if (vimState.enabled && vimState.bufferDirty) vimWriteBuffer();
+        // Bypass switchNote's "close md view" behavior
+        state.activeId = id;
+        saveState();
+        render();
+        if (viewMd) {
+          switchMdTab("view");
+        } else if (mdViewActive) {
+          switchMdTab("edit");
+        }
+        updateUrl();
+        editor.scrollTop = 0;
+        gutter.scrollTop = 0;
+        highlightLayer.scrollTop = 0;
+        highlightLayer.scrollLeft = 0;
+      }
+
       // Intercept clicks on local note links in preview
       mdPreview.addEventListener("click", (e) => {
         const a = e.target.closest("a");
@@ -3321,10 +3340,29 @@
           state.notes.find((n) => n.name.toLowerCase() === clean.toLowerCase());
         if (target) {
           e.preventDefault();
-          if (vimState.enabled && vimState.bufferDirty) vimWriteBuffer();
-          switchNote(target.id);
-          if (isMarkdownFile(target.name)) {
-            switchMdTab("view");
+          // Push current state before navigating
+          history.pushState(
+            { noteId: state.activeId, view: mdViewActive },
+            "",
+            location.href,
+          );
+          const wantView = isMarkdownFile(target.name);
+          navigateToNote(target.id, wantView);
+          // Replace the new entry's URL with the target note's URL
+          history.replaceState(
+            { noteId: target.id, view: wantView },
+            "",
+            location.href,
+          );
+        }
+      });
+
+      // Handle browser back/forward
+      window.addEventListener("popstate", (e) => {
+        if (e.state && e.state.noteId) {
+          const note = state.notes.find((n) => n.id === e.state.noteId);
+          if (note) {
+            navigateToNote(note.id, e.state.view && isMarkdownFile(note.name));
           }
         }
       });
