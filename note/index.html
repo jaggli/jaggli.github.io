@@ -715,10 +715,6 @@
         max-width: 68ch;
       }
 
-      .md-preview img {
-        max-width: 100%;
-      }
-
       .md-preview details {
         max-width: 68ch;
       }
@@ -3151,23 +3147,12 @@
           return "<table><thead><tr>" + ths + "</tr></thead><tbody>" + rows + "</tbody></table>";
         });
 
-        // Images (before links to avoid conflict) — ![alt](src)
-        // src was escaped, so &amp; needs reverting for protocol check
-        text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
-          const cleanSrc = src.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
-          // Only allow http(s), relative paths, and data:image/* for images
-          if (/^https?:\/\//i.test(cleanSrc) || /^(\/|\.\/|\.\.\/)/.test(cleanSrc) || !/[:]/.test(cleanSrc)) {
-            return '<img alt="' + alt + '" src="' + src + '">';
-          }
-          return "![" + alt + "](" + src + ")";
-        });
-
         // Links — [text](url)
         text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
           const cleanUrl = url.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
           // Only allow http(s), mailto, relative paths, and fragment links
           if (/^https?:\/\//i.test(cleanUrl) || /^mailto:/i.test(cleanUrl) || /^#/.test(cleanUrl) || /^(\/|\.\/|\.\.\/)/.test(cleanUrl) || !/[:]/.test(cleanUrl)) {
-            return '<a href="' + url + '" rel="noopener noreferrer">' + label + "</a>";
+            return '<a href="' + url + '" title="' + url + '" rel="noopener noreferrer">' + label + "</a>";
           }
           return "[" + label + "](" + url + ")";
         });
