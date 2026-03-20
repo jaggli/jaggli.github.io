@@ -555,7 +555,8 @@
 
       .editor {
         background: transparent;
-        color: transparent;
+        color: rgba(0, 0, 0, 0);
+        -webkit-text-fill-color: transparent;
         caret-color: var(--text);
         outline: none;
         resize: none;
@@ -564,11 +565,14 @@
       }
 
       .editor::placeholder {
+        -webkit-text-fill-color: var(--gutter);
         color: var(--gutter);
       }
 
       .editor::selection {
-        background: rgba(137, 180, 250, 0.45);
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        background: rgba(137, 180, 250, 0.4);
       }
 
       .highlight-layer {
