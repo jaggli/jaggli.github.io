@@ -3274,6 +3274,11 @@
           btnReplace.style.display = "none";
           btnWrap.style.display = "none";
         } else {
+          // Estimate source line from preview scroll position
+          const scrollRatio = mdPreview.scrollHeight > mdPreview.clientHeight
+            ? mdPreview.scrollTop / (mdPreview.scrollHeight - mdPreview.clientHeight)
+            : 0;
+
           // Show editor elements, hide preview
           gutter.style.display = "";
           editorArea.style.display = "";
@@ -3282,15 +3287,33 @@
           btnReplace.style.display = "";
           btnWrap.style.display = "";
           updateEmptyState();
+
+          // Jump editor to corresponding position
+          const lines = editor.value.split("\n");
+          const targetLine = Math.min(
+            Math.floor(scrollRatio * lines.length),
+            lines.length - 1,
+          );
+          let charOffset = 0;
+          for (let i = 0; i < targetLine; i++) charOffset += lines[i].length + 1;
+          editor.selectionStart = editor.selectionEnd = charOffset;
+
           if (vimState.enabled) {
             vimSetMode("normal");
             editor.readOnly = false;
             editor.focus();
             editor.readOnly = true;
-            updateCursorPos();
           } else {
             editor.focus();
           }
+
+          // Scroll editor to match preview position
+          const editorScrollMax = editor.scrollHeight - editor.clientHeight;
+          editor.scrollTop = Math.round(scrollRatio * editorScrollMax);
+          gutter.scrollTop = editor.scrollTop;
+          highlightLayer.scrollTop = editor.scrollTop;
+          updateCursorPos();
+          updateLineNumbers();
         }
         updateMdViewUrl();
       }
