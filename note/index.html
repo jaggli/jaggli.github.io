@@ -3451,6 +3451,7 @@
         state.activeId = note.id;
         saveState();
         scheduleDriveUpload(true);
+        if (mdViewActive) switchMdTab("edit");
         render();
         if (focusName && !isMobile()) {
           const input = noteList.querySelector(
