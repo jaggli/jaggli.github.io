@@ -2090,7 +2090,7 @@
         return await new Response(stream).text();
       }
 
-      const URL_MAX_LENGTH = 2 * 1024 * 1024;
+      const URL_MAX_LENGTH = 8000;
 
       async function updateUrl() {
         const note = getActiveNote();
@@ -3293,7 +3293,12 @@
         } else {
           params.delete("view");
         }
-        history.replaceState(null, "", location.pathname + "?" + params.toString());
+        const note = getActiveNote();
+        history.replaceState(
+          { noteId: note ? note.id : null, view: mdViewActive },
+          "",
+          location.pathname + "?" + params.toString(),
+        );
       }
 
       function checkMdViewParam() {
@@ -3307,7 +3312,7 @@
       }
 
       // Navigate to a note without creating a history entry
-      function navigateToNote(id, viewMd) {
+      function navigateToNote(id, viewMd, skipUrlUpdate) {
         if (vimState.enabled && vimState.bufferDirty) vimWriteBuffer();
         // Bypass switchNote's "close md view" behavior
         state.activeId = id;
@@ -3318,7 +3323,7 @@
         } else if (mdViewActive) {
           switchMdTab("edit");
         }
-        updateUrl();
+        if (!skipUrlUpdate) updateUrl();
         editor.scrollTop = 0;
         gutter.scrollTop = 0;
         highlightLayer.scrollTop = 0;
@@ -3358,11 +3363,18 @@
       });
 
       // Handle browser back/forward
-      window.addEventListener("popstate", (e) => {
+      window.addEventListener("popstate", async (e) => {
         if (e.state && e.state.noteId) {
           const note = state.notes.find((n) => n.id === e.state.noteId);
           if (note) {
-            navigateToNote(note.id, e.state.view && isMarkdownFile(note.name));
+            navigateToNote(note.id, e.state.view && isMarkdownFile(note.name), true);
+          }
+        } else {
+          // Fallback: try to load from URL params
+          const loaded = await loadFromUrl();
+          if (loaded) {
+            render();
+            checkMdViewParam();
           }
         }
       });
