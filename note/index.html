@@ -3274,6 +3274,7 @@
           mdPreview.classList.add("visible");
           btnReplace.style.display = "none";
           btnWrap.style.display = "none";
+          cursorPos.style.display = "none";
         } else {
           // Estimate source line from preview scroll position
           const scrollRatio = mdPreview.scrollHeight > mdPreview.clientHeight
@@ -3287,6 +3288,7 @@
           mdPreview.innerHTML = "";
           btnReplace.style.display = "";
           btnWrap.style.display = "";
+          cursorPos.style.display = "";
           updateEmptyState();
 
           // Jump editor to corresponding position
