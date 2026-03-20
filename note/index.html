@@ -3174,9 +3174,10 @@
 
         // Tables
         text = text.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
-          const ths = header.split("|").filter(c => c.trim()).map(c => "<th>" + c.trim() + "</th>").join("");
+          const splitRow = r => r.split("|").slice(1, -1);
+          const ths = splitRow(header).map(c => "<th>" + c.trim() + "</th>").join("");
           const rows = body.trim().split("\n").map(row => {
-            const tds = row.split("|").filter(c => c.trim()).map(c => "<td>" + c.trim() + "</td>").join("");
+            const tds = splitRow(row).map(c => "<td>" + c.trim() + "</td>").join("");
             return "<tr>" + tds + "</tr>";
           }).join("");
           return "<table><thead><tr>" + ths + "</tr></thead><tbody>" + rows + "</tbody></table>";
