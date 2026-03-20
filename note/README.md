@@ -21,9 +21,9 @@ across devices via Google Drive.
   changes to notes, sidebar width, word wrap, vim mode,
   and pin state sync instantly via `storage` events.
 - **URL sharing**: Notes can be shared via URL using zlib
-  compression encoded in the hash fragment. The shared
+  compression encoded in query parameters. The shared
   note is embedded in the link itself — no server
-  involved.
+  involved (~8kB size limit).
 - **Google Drive sync**: Optionally sign in with Google
   to sync notes across devices. Files are stored in your
   Google Drive's hidden app folder — no storage cost to
@@ -78,8 +78,9 @@ Features include:
 - Search with `/` (forward) and `?` (backward), `n`/`N`
   to navigate matches, `*`/`#` to search word under cursor
 - Command mode (`:`) with `:set wrap`, `:set nowrap`,
-  `:new`, `:e <name>`, `:help`, `:<number>` (jump to
-  line), `:%s/find/replace/g` (opens find & replace)
+  `:new`, `:e <name>`, `:view` (markdown preview),
+  `:help`, `:<number>` (jump to line),
+  `:%s/find/replace/g` (opens find & replace)
 - Count prefixes (e.g. `3dw`, `5j`, `2>>`)
 
 ## Keyboard shortcuts
@@ -94,6 +95,7 @@ Features include:
 | Ctrl+Shift+Z    | Redo                               |
 | Tab             | Insert 2 spaces / indent selection |
 | Shift+Tab       | Dedent selection                   |
+| e               | Switch from view to edit (in markdown preview) |
 | Escape          | Close search / sidebar / find bar  |
 
 When vim mode is active, standard vim keybindings take
