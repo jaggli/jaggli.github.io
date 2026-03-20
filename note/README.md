@@ -5,14 +5,14 @@ in your browser. No signup, no backend, no dependencies.
 Just open the page and start typing.
 
 Built as a single `index.html` file with vanilla JS and
-CSS (~5500 lines). Your notes are stored in `localStorage`
+CSS (~7000 lines). Your notes are stored in `localStorage`
 by default. Optionally, sign in with Google to sync notes
 across devices via Google Drive.
 
 ## How it works
 
 - **Single file**: The entire app is one self-contained
-  HTML file (~5500 lines). No build step, no bundler,
+  HTML file (~7000 lines). No build step, no bundler,
   no framework.
 - **Local storage**: Notes are persisted in your
   browser's `localStorage` (5MB limit). A storage meter
