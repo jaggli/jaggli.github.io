@@ -3118,6 +3118,26 @@
         // Merge adjacent blockquotes
         text = text.replace(/<\/blockquote>\n<blockquote>/g, "\n");
 
+        // Fold continuation lines (indented 2+ spaces after a list item) with <br>
+        {
+          const srcLines = text.split("\n");
+          const out = [];
+          let inListItem = false;
+          for (let i = 0; i < srcLines.length; i++) {
+            const isListStart = /^\s*[-*+]\s|^\s*\d+\.\s/.test(srcLines[i]);
+            if (isListStart) {
+              inListItem = true;
+              out.push(srcLines[i]);
+            } else if (inListItem && /^ {2,}\S/.test(srcLines[i])) {
+              out[out.length - 1] += "<br>" + srcLines[i].trim();
+            } else {
+              inListItem = false;
+              out.push(srcLines[i]);
+            }
+          }
+          text = out.join("\n");
+        }
+
         // Task list items (before regular lists)
         text = text.replace(/^(\s*)[-*+]\s+\[x\]\s+(.+)$/gm,
           '$1<li><input type="checkbox" checked disabled> $2</li>');
