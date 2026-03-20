@@ -2098,9 +2098,9 @@
         try {
           const compressed = await compress(note.content);
           const params = new URLSearchParams();
-          params.set("note", compressed);
           params.set("name", note.name);
           if (mdViewActive) params.set("view", "md");
+          params.set("note", compressed);
           history.replaceState(
             null,
             "",
@@ -5788,8 +5788,9 @@
         try {
           const compressed = await compress(note.content);
           const params = new URLSearchParams();
-          params.set("note", compressed);
           params.set("name", note.name);
+          if (mdViewActive) params.set("view", "md");
+          params.set("note", compressed);
           const url =
             location.origin + location.pathname + "?" + params.toString();
           await navigator.clipboard.writeText(url);
@@ -6859,8 +6860,8 @@
           createNote("help.md", isMobile() ? HELP_MOBILE : HELP_DESKTOP);
         }
         render();
-        updateUrl();
         checkMdViewParam();
+        updateUrl();
         startTimestampRefresh();
         if (getActiveNote()) {
           editor.focus();
