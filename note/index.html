@@ -3281,7 +3281,15 @@
           btnReplace.style.display = "";
           btnWrap.style.display = "";
           updateEmptyState();
-          editor.focus();
+          if (vimState.enabled) {
+            vimSetMode("normal");
+            editor.readOnly = false;
+            editor.focus();
+            editor.readOnly = true;
+            updateCursorPos();
+          } else {
+            editor.focus();
+          }
         }
         updateMdViewUrl();
       }
@@ -5612,6 +5620,18 @@
           return;
         }
 
+        // :view — open markdown preview
+        if (trimmed === "view") {
+          const note = getActiveNote();
+          if (note && isMarkdownFile(note.name)) {
+            if (vimState.bufferDirty) vimWriteBuffer();
+            switchMdTab("view");
+          } else {
+            vimShowError("Not a markdown file");
+          }
+          return;
+        }
+
         // :d — delete current line
         if (trimmed === "d") {
           const lineIdx = vimCursorLine();
@@ -6256,6 +6276,12 @@
           (document.activeElement.tagName === "INPUT" ||
             document.activeElement.tagName === "TEXTAREA");
 
+        // Switch from view to edit tab with "e"
+        if (!inInput && mdViewActive && e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          switchMdTab("edit");
+          return;
+        }
         // Find & Replace (skip if typing in an input)
         if (!inInput && (e.metaKey || e.ctrlKey) && e.key === "h") {
           e.preventDefault();
@@ -6844,6 +6870,8 @@
         "- Drop files to import, download zip to backup",
         "- Word wrap and vim mode in the status bar",
         "- .md files get edit/view tabs for markdown preview",
+        "- Link between notes: [label](other.md)",
+        "- Sharing embeds the note in the URL (~8kB limit)",
         "- Syncs across tabs automatically",
         "",
         "## Shortcuts",
@@ -6853,6 +6881,7 @@
         "- Ctrl+H — find & replace",
         "- Ctrl+Shift+D — delete note",
         "- Tab / Shift+Tab — indent / dedent",
+        "- e — switch from view to edit (in markdown preview)",
         "",
         "## Vim",
         "",
@@ -6914,6 +6943,7 @@
         "- :set wrap / :set nowrap / :set wrap!",
         "- :new — new note, :e name — open note",
         "- :d — delete line, :42 — jump to line",
+        "- :view — markdown preview",
         "- :help — this page",
         "- :%s/find/replace/g — find & replace",
       ].join("\n");
@@ -6932,6 +6962,8 @@
         "",
         "- Download zip to backup",
         "- .md files get edit/view tabs for markdown preview",
+        "- Link between notes: [label](other.md)",
+        "- Sharing embeds the note in the URL (~8kB limit)",
         "- Syncs across tabs automatically",
         "",
         "## Getting started",
