@@ -1612,6 +1612,7 @@
           >
           <span
             class="status-hint"
+            id="btnReplace"
             onclick="openFindReplace()"
             style="cursor: pointer"
             >replace <kbd>ctrl+h</kbd></span
@@ -3244,6 +3245,7 @@
         mdTabView.classList.toggle("active", mdViewActive);
 
         const editorWrap = document.querySelector(".editor-wrap");
+        const btnReplace = document.getElementById("btnReplace");
         if (mdViewActive) {
           const note = getActiveNote();
           if (note) {
@@ -3254,12 +3256,16 @@
           editorArea.style.display = "none";
           emptyState.style.display = "none";
           mdPreview.classList.add("visible");
+          btnReplace.style.display = "none";
+          btnWrap.style.display = "none";
         } else {
           // Show editor elements, hide preview
           gutter.style.display = "";
           editorArea.style.display = "";
           mdPreview.classList.remove("visible");
           mdPreview.innerHTML = "";
+          btnReplace.style.display = "";
+          btnWrap.style.display = "";
           updateEmptyState();
           editor.focus();
         }
@@ -4108,6 +4114,11 @@
       }
 
       function toggleVim() {
+        // In view mode, switch to edit tab first
+        if (mdViewActive) {
+          switchMdTab("edit");
+          if (vimState.enabled) return; // already in vim, just switch to edit
+        }
         // If disabling vim, save buffer first (like :wq)
         if (vimState.enabled && vimState.bufferDirty) {
           vimWriteBuffer();
@@ -5899,10 +5910,21 @@
         dropOverlay.classList.remove("visible");
         const files = e.dataTransfer.files;
         if (!files.length) return;
+        // Save vim buffer before switching
+        if (vimState.enabled && vimState.bufferDirty) vimWriteBuffer();
+        const wasInView = mdViewActive;
         const unsupported = [];
+        let remaining = 0;
         for (const file of files) {
           if (!file.type.startsWith("text/") && !isTextFilename(file.name)) {
             unsupported.push(file.name);
+            continue;
+          }
+          remaining++;
+        }
+        const totalValid = remaining;
+        for (const file of files) {
+          if (!file.type.startsWith("text/") && !isTextFilename(file.name)) {
             continue;
           }
           const reader = new FileReader();
@@ -5913,6 +5935,7 @@
                 "ok",
                 null,
               );
+              remaining--;
               return;
             }
             const existing = state.notes.find((n) => n.name === file.name);
@@ -5941,6 +5964,13 @@
               }
             } else {
               createNote(file.name, reader.result);
+            }
+            remaining--;
+            if (remaining === 0 && wasInView) {
+              const note = getActiveNote();
+              if (note && isMarkdownFile(note.name)) {
+                switchMdTab("view");
+              }
             }
           };
           reader.readAsText(file);
