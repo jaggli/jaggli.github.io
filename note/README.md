@@ -48,6 +48,7 @@ across devices via Google Drive.
 - Vim mode (toggle in toolbar, desktop only)
 - Word wrap toggle with wrap-aware line numbers
 - Current line highlighting
+- Markdown preview (edit/view tabs for `.md` files)
 - Cursor position (line/column) and vim mode indicator in status bar
 - Indent/dedent selection with Tab/Shift+Tab
 - Undo/redo with per-note history
