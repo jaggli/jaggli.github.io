@@ -1740,7 +1740,7 @@
               style="display: none"
             >
               <button class="btn-share" onclick="toggleSyncMenu()">
-                sync <span class="sync-dot">&#9679;</span>
+                <span id="syncLabel">sync</span> <span class="sync-dot">&#9679;</span>
               </button>
               <div class="file-menu" id="syncMenu">
                 <div id="syncMenuConnected">
@@ -6435,10 +6435,10 @@
           redo();
           return;
         }
-        // Suppress browser save dialog
+        // Ctrl+S: suppress browser save, force sync (not in vim — use :w)
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
-          if (gdriveConnected) driveSync();
+          if (!vimState.enabled && gdriveConnected) driveSync();
           return;
         }
         // New note
@@ -6731,31 +6731,55 @@
         }
       }
 
-      let driveSyncAborted = false;
 
+      let syncDotCount = 0;
+      let syncDotTimer = null;
+      let syncOkTimer = null;
       function setSyncDotSyncing(on) {
         const dot = document.querySelector(".sync-dot");
-        if (dot) dot.classList.toggle("syncing", on);
+        const label = document.getElementById("syncLabel");
+        if (!dot || !label) return;
+        if (on) {
+          syncDotCount++;
+          clearTimeout(syncDotTimer);
+          clearTimeout(syncOkTimer);
+          dot.classList.add("syncing");
+          dot.classList.remove("disconnected");
+          label.textContent = "syncing";
+        } else {
+          syncDotCount = Math.max(0, syncDotCount - 1);
+          if (syncDotCount === 0) {
+            // Keep blinking for at least one full cycle (1.4s)
+            syncDotTimer = setTimeout(() => {
+              if (syncDotCount === 0) dot.classList.remove("syncing");
+            }, 1400);
+          }
+        }
+      }
+      function setSyncResult(success, errorMsg) {
+        const dot = document.querySelector(".sync-dot");
+        const label = document.getElementById("syncLabel");
+        if (!dot || !label) return;
+        clearTimeout(syncOkTimer);
+        if (success) {
+          label.textContent = "sync ok";
+          dot.classList.remove("disconnected");
+          syncOkTimer = setTimeout(() => {
+            label.textContent = "sync";
+          }, 4000);
+        } else {
+          label.textContent = "sync";
+          dot.classList.add("disconnected");
+          if (errorMsg) showModal("Sync failed: " + errorMsg, "ok", null);
+        }
       }
 
       async function driveSync() {
         closeAllMenus();
-        driveSyncAborted = false;
         setSyncDotSyncing(true);
-
-        // Show progress modal
-        const progressDone = showModal(
-          "Google Drive sync in progress…",
-          "cancel",
-          null,
-        );
-        progressDone.then((confirmed) => {
-          if (confirmed) driveSyncAborted = true;
-        });
 
         try {
           await gdriveAuth();
-          if (driveSyncAborted) return;
 
           // Load remote state
           const file = await gdriveFindFile();
@@ -6825,15 +6849,11 @@
           gdriveDirty = false;
           showSyncConnected();
 
-          // Dismiss progress modal
-          modalOverlay.classList.remove("visible");
           setSyncDotSyncing(false);
+          setSyncResult(true);
         } catch (e) {
-          modalOverlay.classList.remove("visible");
           setSyncDotSyncing(false);
-          if (!driveSyncAborted) {
-            showModal("Sync failed: " + e.message, "ok", null);
-          }
+          setSyncResult(false, e.message);
         }
       }
 
@@ -6915,9 +6935,13 @@
 
           // Push to Drive if any local notes were newer
           if (localNewer) drivePushQuiet();
-          else setSyncDotSyncing(false);
+          else {
+            setSyncDotSyncing(false);
+            setSyncResult(true);
+          }
         } catch {
           setSyncDotSyncing(false);
+          setSyncResult(false);
         }
       }
 
@@ -6928,8 +6952,9 @@
         try {
           await gdriveUploadState();
           gdriveDirty = false;
+          setSyncResult(true);
         } catch {
-          // Auth failed or Drive error — will re-auth on next attempt
+          setSyncResult(false);
         } finally {
           gdriveUploading = false;
           setSyncDotSyncing(false);
