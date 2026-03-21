@@ -52,6 +52,7 @@ across devices via Google Drive.
   with inter-note linking (`[label](other.md)`)
 - Cursor position (line/column) and vim mode indicator in status bar
 - Indent/dedent selection with Tab/Shift+Tab
+- Move lines up/down with Alt+Arrow keys
 - Undo/redo with per-note history
 - Delete confirmation dialog
 - Built-in help page (accessible from file menu)
@@ -95,6 +96,7 @@ Features include:
 | Ctrl+Shift+Z    | Redo                               |
 | Tab             | Insert 2 spaces / indent selection |
 | Shift+Tab       | Dedent selection                   |
+| Alt+↑ / Alt+↓   | Move line up / down                |
 | e               | Switch from view to edit (in markdown preview) |
 | Escape          | Close search / sidebar / find bar  |
 

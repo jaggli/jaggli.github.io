@@ -6259,8 +6259,40 @@
       editor.addEventListener("keydown", vimHandleKeydown);
 
       editor.addEventListener("keydown", (e) => {
-        // Skip tab handling in vim normal/visual mode
+        // Skip in vim normal/visual mode
         if (vimState.enabled && vimState.mode !== "insert") return;
+
+        // Alt+Arrow Up/Down — move line up/down
+        if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+          e.preventDefault();
+          const val = editor.value;
+          const cursor = editor.selectionStart;
+          const selEnd = editor.selectionEnd;
+          const lineStart = val.lastIndexOf("\n", cursor - 1) + 1;
+          const lineEnd = val.indexOf("\n", selEnd);
+          const actualLineEnd = lineEnd === -1 ? val.length : lineEnd;
+          const currentLine = val.substring(lineStart, actualLineEnd);
+
+          if (e.key === "ArrowUp" && lineStart > 0) {
+            const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
+            const prevLine = val.substring(prevLineStart, lineStart - 1);
+            const newVal = val.substring(0, prevLineStart) + currentLine + "\n" + prevLine + val.substring(actualLineEnd);
+            editor.value = newVal;
+            const offset = cursor - lineStart;
+            editor.selectionStart = editor.selectionEnd = prevLineStart + offset;
+          } else if (e.key === "ArrowDown" && lineEnd !== -1) {
+            const nextLineEnd = val.indexOf("\n", actualLineEnd + 1);
+            const actualNextEnd = nextLineEnd === -1 ? val.length : nextLineEnd;
+            const nextLine = val.substring(actualLineEnd + 1, actualNextEnd);
+            const newVal = val.substring(0, lineStart) + nextLine + "\n" + currentLine + val.substring(actualNextEnd);
+            editor.value = newVal;
+            const offset = cursor - lineStart;
+            editor.selectionStart = editor.selectionEnd = lineStart + nextLine.length + 1 + offset;
+          }
+          editor.dispatchEvent(new Event("input"));
+          return;
+        }
+
         // Tab / Shift+Tab for indent/dedent
         if (e.key === "Tab") {
           e.preventDefault();
@@ -6909,6 +6941,7 @@
         "- Ctrl+H — find & replace",
         "- Ctrl+Shift+D — delete note",
         "- Tab / Shift+Tab — indent / dedent",
+        "- Alt+↑ / Alt+↓ — move line up / down",
         "- e — switch from view to edit (in markdown preview)",
         "",
         "## Vim",
