@@ -1132,6 +1132,15 @@
         }
       }
 
+      .vim-cursor.moving {
+        animation: vim-blink-moving 0.6s infinite;
+      }
+
+      @keyframes vim-blink-moving {
+        0%, 100% { opacity: 0.7; }
+        50% { opacity: 0.4; }
+      }
+
       .vim-command-bar {
         display: none;
         background: var(--sidebar);
@@ -2803,6 +2812,7 @@
         const col = pos - before.lastIndexOf("\n");
         currentLine = line;
         if (vimState.enabled) {
+          if (typeof vimCursorMoving === "function") vimCursorMoving();
           const m = vimState.mode.toUpperCase();
           const dirty = vimState.bufferDirty
             ? '<span class="vim-dirty-indicator">[+]</span>'
@@ -4086,6 +4096,15 @@
       }
       document.fonts.ready.then(vimMeasureCharWidth);
       vimMeasureCharWidth();
+
+      let vimCursorMoveTimer = null;
+      function vimCursorMoving() {
+        const cur = document.getElementById("vimCursor");
+        if (!cur) return;
+        cur.classList.add("moving");
+        clearTimeout(vimCursorMoveTimer);
+        vimCursorMoveTimer = setTimeout(() => cur.classList.remove("moving"), 150);
+      }
 
       function vimUpdateBlockCursor() {
         if (!vimState.enabled || vimState.mode === "insert") {
