@@ -1072,12 +1072,12 @@
       }
 
       .sync-dot.syncing {
-        animation: sync-blink 1.4s ease-in-out infinite;
+        animation: sync-blink 0.9s ease-in-out infinite;
       }
 
       @keyframes sync-blink {
         0%, 100% { opacity: 1; text-shadow: none; }
-        50% { opacity: 0.25; text-shadow: 0 0 6px var(--green), 0 0 12px var(--green); }
+        50% { opacity: 0.08; text-shadow: 0 0 6px var(--green), 0 0 12px var(--green); }
       }
 
       .btn-wrap {
@@ -6752,7 +6752,7 @@
             // Keep blinking for at least one full cycle (1.4s)
             syncDotTimer = setTimeout(() => {
               if (syncDotCount === 0) dot.classList.remove("syncing");
-            }, 1400);
+            }, 900);
           }
         }
       }
