@@ -579,7 +579,6 @@
         z-index: 0;
       }
 
-
       /* Markdown tab bar */
       .md-tab-bar {
         display: none;
@@ -620,7 +619,9 @@
         flex: 1;
         overflow: auto;
         padding: 32px 24px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
         font-size: 15px;
         line-height: 1.7;
         color: var(--text);
@@ -650,10 +651,18 @@
         max-width: 68ch;
       }
 
-      .md-preview h1 { font-size: 1.7em; }
-      .md-preview h2 { font-size: 1.4em; }
-      .md-preview h3 { font-size: 1.2em; }
-      .md-preview h4 { font-size: 1.05em; }
+      .md-preview h1 {
+        font-size: 1.7em;
+      }
+      .md-preview h2 {
+        font-size: 1.4em;
+      }
+      .md-preview h3 {
+        font-size: 1.2em;
+      }
+      .md-preview h4 {
+        font-size: 1.05em;
+      }
 
       .md-preview p {
         margin: 0.7em 0;
@@ -1134,8 +1143,17 @@
       }
 
       @keyframes sync-blink {
-        0%, 100% { opacity: 1; text-shadow: none; }
-        50% { opacity: 0.08; text-shadow: 0 0 6px var(--green), 0 0 12px var(--green); }
+        0%,
+        100% {
+          opacity: 1;
+          text-shadow: none;
+        }
+        50% {
+          opacity: 0.08;
+          text-shadow:
+            0 0 6px var(--green),
+            0 0 12px var(--green);
+        }
       }
 
       .btn-wrap {
@@ -1195,8 +1213,13 @@
       }
 
       @keyframes vim-blink-moving {
-        0%, 100% { opacity: 0.7; }
-        50% { opacity: 0.4; }
+        0%,
+        100% {
+          opacity: 0.7;
+        }
+        50% {
+          opacity: 0.4;
+        }
       }
 
       .vim-command-bar {
@@ -1244,9 +1267,15 @@
         font-weight: bold;
         margin-right: 16px;
       }
-      .vim-mode-normal { color: var(--blue); }
-      .vim-mode-insert { color: var(--green); }
-      .vim-mode-visual { color: var(--green); }
+      .vim-mode-normal {
+        color: var(--blue);
+      }
+      .vim-mode-insert {
+        color: var(--green);
+      }
+      .vim-mode-visual {
+        color: var(--green);
+      }
 
       /* Modal */
       .modal-overlay {
@@ -1638,8 +1667,16 @@
           </button>
         </div>
         <div class="md-tab-bar" id="mdTabBar">
-          <button class="md-tab active" id="mdTabEdit" onclick="switchMdTab('edit')">edit</button>
-          <button class="md-tab" id="mdTabView" onclick="switchMdTab('view')">view</button>
+          <button
+            class="md-tab active"
+            id="mdTabEdit"
+            onclick="switchMdTab('edit')"
+          >
+            edit
+          </button>
+          <button class="md-tab" id="mdTabView" onclick="switchMdTab('view')">
+            view
+          </button>
         </div>
         <div class="editor-wrap">
           <div class="gutter" id="gutter"></div>
@@ -1804,7 +1841,8 @@
               style="display: none"
             >
               <button class="btn-share" onclick="toggleSyncMenu()">
-                <span id="syncLabel">sync</span> <span class="sync-dot">&#9679;</span>
+                <span id="syncLabel">sync</span>
+                <span class="sync-dot">&#9679;</span>
               </button>
               <div class="file-menu" id="syncMenu">
                 <div id="syncMenuConnected">
@@ -3176,20 +3214,24 @@
       function renderMarkdown(src) {
         let taskIdx = 0;
         // Step 1: escape everything to prevent XSS
-        let text = src.replace(/&/g, "&amp;")
-                      .replace(/</g, "&lt;")
-                      .replace(/>/g, "&gt;")
-                      .replace(/"/g, "&quot;");
+        let text = src
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
 
         // Step 2: parse markdown on the escaped text
 
         // Fenced code blocks (``` ... ```)
         const codeBlocks = [];
-        text = text.replace(/^(`{3,})(\S*)\n([\s\S]*?)^\1/gm, (_, fence, lang, code) => {
-          const idx = codeBlocks.length;
-          codeBlocks.push("<pre><code>" + code + "</code></pre>");
-          return "\x00CB" + idx + "\x00";
-        });
+        text = text.replace(
+          /^(`{3,})(\S*)\n([\s\S]*?)^\1/gm,
+          (_, fence, lang, code) => {
+            const idx = codeBlocks.length;
+            codeBlocks.push("<pre><code>" + code + "</code></pre>");
+            return "\x00CB" + idx + "\x00";
+          },
+        );
 
         // Inline code (must come before other inline formatting)
         const inlineCodes = [];
@@ -3250,25 +3292,44 @@
               if (taskChecked) {
                 isTask = true;
                 isChecked = true;
-                itemHtml = '<input type="checkbox" checked data-task="' + taskIdx + '"><span>' + taskChecked[1];
+                itemHtml =
+                  '<input type="checkbox" checked data-task="' +
+                  taskIdx +
+                  '"><span>' +
+                  taskChecked[1];
                 taskIdx++;
               } else if (taskUnchecked) {
                 isTask = true;
-                itemHtml = '<input type="checkbox" data-task="' + taskIdx + '"><span>' + taskUnchecked[1];
+                itemHtml =
+                  '<input type="checkbox" data-task="' +
+                  taskIdx +
+                  '"><span>' +
+                  taskUnchecked[1];
                 taskIdx++;
               } else {
                 itemHtml = content;
               }
               i++;
               // Fold continuation lines (indented text that isn't a new list item)
-              while (i < lines.length && !listRe.test(lines[i]) && lines[i].match(/^\s+\S/)) {
+              while (
+                i < lines.length &&
+                !listRe.test(lines[i]) &&
+                lines[i].match(/^\s+\S/)
+              ) {
                 itemHtml += "<br>" + lines[i].trim();
                 i++;
               }
               if (isTask) {
                 itemHtml += "</span>";
                 const cls = "task-item" + (isChecked ? " checked" : "");
-                html += '<li class="' + cls + '" data-task="' + (taskIdx - 1) + '">' + itemHtml + "</li>";
+                html +=
+                  '<li class="' +
+                  cls +
+                  '" data-task="' +
+                  (taskIdx - 1) +
+                  '">' +
+                  itemHtml +
+                  "</li>";
               } else {
                 html += "<li>" + itemHtml + "</li>";
               }
@@ -3290,28 +3351,65 @@
         }
 
         // Tables
-        text = text.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
-          const splitRow = r => r.split("|").slice(1, -1);
-          const ths = splitRow(header).map(c => "<th>" + c.trim() + "</th>").join("");
-          const rows = body.trim().split("\n").map(row => {
-            const tds = splitRow(row).map(c => "<td>" + c.trim() + "</td>").join("");
-            return "<tr>" + tds + "</tr>";
-          }).join("");
-          return "<table><thead><tr>" + ths + "</tr></thead><tbody>" + rows + "</tbody></table>";
-        });
+        text = text.replace(
+          /^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm,
+          (_, header, sep, body) => {
+            const splitRow = (r) => r.split("|").slice(1, -1);
+            const ths = splitRow(header)
+              .map((c) => "<th>" + c.trim() + "</th>")
+              .join("");
+            const rows = body
+              .trim()
+              .split("\n")
+              .map((row) => {
+                const tds = splitRow(row)
+                  .map((c) => "<td>" + c.trim() + "</td>")
+                  .join("");
+                return "<tr>" + tds + "</tr>";
+              })
+              .join("");
+            return (
+              "<table><thead><tr>" +
+              ths +
+              "</tr></thead><tbody>" +
+              rows +
+              "</tbody></table>"
+            );
+          },
+        );
 
         // Links — [text](url)
         text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
-          const cleanUrl = url.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
+          const cleanUrl = url
+            .replace(/&amp;/g, "&")
+            .replace(/&quot;/g, '"')
+            .trim();
           // Only allow http(s), mailto, relative paths, and fragment links
-          if (/^https?:\/\//i.test(cleanUrl) || /^mailto:/i.test(cleanUrl) || /^#/.test(cleanUrl) || /^(\/|\.\/|\.\.\/)/.test(cleanUrl) || !/[:]/.test(cleanUrl)) {
-            return '<a href="' + url + '" title="' + url + '" rel="noopener noreferrer">' + label + "</a>";
+          if (
+            /^https?:\/\//i.test(cleanUrl) ||
+            /^mailto:/i.test(cleanUrl) ||
+            /^#/.test(cleanUrl) ||
+            /^(\/|\.\/|\.\.\/)/.test(cleanUrl) ||
+            !/[:]/.test(cleanUrl)
+          ) {
+            return (
+              '<a href="' +
+              url +
+              '" title="' +
+              url +
+              '" rel="noopener noreferrer">' +
+              label +
+              "</a>"
+            );
           }
           return "[" + label + "](" + url + ")";
         });
 
         // Bold & italic
-        text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+        text = text.replace(
+          /\*\*\*(.+?)\*\*\*/g,
+          "<strong><em>$1</em></strong>",
+        );
         text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
         text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
         text = text.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
@@ -3325,19 +3423,27 @@
         const lines = text.split("\n");
         let result = "";
         let inParagraph = false;
-        const blockTag = /^<(h[1-6]|ul|ol|li|blockquote|pre|hr|table|thead|tbody|tr|th|td|\x00)/;
+        const blockTag =
+          /^<(h[1-6]|ul|ol|li|blockquote|pre|hr|table|thead|tbody|tr|th|td|\x00)/;
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           const trimmed = line.trim();
           if (trimmed === "") {
-            if (inParagraph) { result += "</p>\n"; inParagraph = false; }
-            else result += "\n";
+            if (inParagraph) {
+              result += "</p>\n";
+              inParagraph = false;
+            } else result += "\n";
           } else if (blockTag.test(trimmed)) {
-            if (inParagraph) { result += "</p>\n"; inParagraph = false; }
+            if (inParagraph) {
+              result += "</p>\n";
+              inParagraph = false;
+            }
             result += line + "\n";
           } else {
-            if (!inParagraph) { result += "<p>"; inParagraph = true; }
-            else result += " ";
+            if (!inParagraph) {
+              result += "<p>";
+              inParagraph = true;
+            } else result += " ";
             result += line;
           }
         }
@@ -3386,7 +3492,11 @@
           // Task checkbox toggle handler
           mdPreview.onclick = (e) => {
             const li = e.target.closest("li.task-item");
-            const input = e.target.tagName === "INPUT" && e.target.dataset.task !== undefined ? e.target : null;
+            const input =
+              e.target.tagName === "INPUT" &&
+              e.target.dataset.task !== undefined
+                ? e.target
+                : null;
             if (!li && !input) return;
             e.preventDefault();
             const note = getActiveNote();
@@ -3398,16 +3508,24 @@
               const items = [];
               let m;
               while ((m = re.exec(content)) !== null)
-                items.push({ idx: items.length, indent: m[1].length, checked: m[3] === "x" });
+                items.push({
+                  idx: items.length,
+                  indent: m[1].length,
+                  checked: m[3] === "x",
+                });
               return items;
             }
 
             function setTasks(content, indices, checked) {
               let count = 0;
-              return content.replace(/^(\s*[-*+]\s+)\[([ x])\]/gm, (match, prefix) => {
-                if (indices.has(count++)) return prefix + (checked ? "[x]" : "[ ]");
-                return match;
-              });
+              return content.replace(
+                /^(\s*[-*+]\s+)\[([ x])\]/gm,
+                (match, prefix) => {
+                  if (indices.has(count++))
+                    return prefix + (checked ? "[x]" : "[ ]");
+                  return match;
+                },
+              );
             }
 
             const tasks = parseTasks(note.content);
@@ -3429,7 +3547,10 @@
               const child = items[fromIdx];
               let parentIdx = -1;
               for (let i = fromIdx - 1; i >= 0; i--) {
-                if (items[i].indent < child.indent) { parentIdx = i; break; }
+                if (items[i].indent < child.indent) {
+                  parentIdx = i;
+                  break;
+                }
               }
               if (parentIdx === -1) return content;
               const parent = items[parentIdx];
@@ -3439,7 +3560,7 @@
                 if (items[i].indent <= parent.indent) break;
                 if (items[i].indent === child.indent) siblings.push(items[i]);
               }
-              const allChecked = siblings.every(s => s.checked);
+              const allChecked = siblings.every((s) => s.checked);
               if (parent.checked !== allChecked) {
                 content = setTasks(content, new Set([parentIdx]), allChecked);
                 content = cascadeUp(content, parentIdx);
@@ -3465,9 +3586,11 @@
           cursorPos.style.display = "none";
         } else {
           // Estimate source line from preview scroll position
-          const scrollRatio = mdPreview.scrollHeight > mdPreview.clientHeight
-            ? mdPreview.scrollTop / (mdPreview.scrollHeight - mdPreview.clientHeight)
-            : 0;
+          const scrollRatio =
+            mdPreview.scrollHeight > mdPreview.clientHeight
+              ? mdPreview.scrollTop /
+                (mdPreview.scrollHeight - mdPreview.clientHeight)
+              : 0;
 
           // Show editor elements, hide preview
           gutter.style.display = "";
@@ -3486,7 +3609,8 @@
             lines.length - 1,
           );
           let charOffset = 0;
-          for (let i = 0; i < targetLine; i++) charOffset += lines[i].length + 1;
+          for (let i = 0; i < targetLine; i++)
+            charOffset += lines[i].length + 1;
           editor.selectionStart = editor.selectionEnd = charOffset;
 
           if (vimState.enabled) {
@@ -3560,11 +3684,17 @@
         const href = a.getAttribute("href");
         if (!href) return;
         // Decode escaped HTML entities back to plain text
-        const clean = href.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+        const clean = href
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .trim();
         // Skip external links
         if (/^https?:\/\//i.test(clean) || /^mailto:/i.test(clean)) return;
         // Try to find a note matching the link
-        const target = state.notes.find((n) => n.name === clean) ||
+        const target =
+          state.notes.find((n) => n.name === clean) ||
           state.notes.find((n) => n.name.toLowerCase() === clean.toLowerCase());
         if (target) {
           e.preventDefault();
@@ -3590,7 +3720,11 @@
         if (e.state && e.state.noteId) {
           const note = state.notes.find((n) => n.id === e.state.noteId);
           if (note) {
-            navigateToNote(note.id, e.state.view && isMarkdownFile(note.name), true);
+            navigateToNote(
+              note.id,
+              e.state.view && isMarkdownFile(note.name),
+              true,
+            );
           }
         } else {
           // Fallback: try to load from URL params
@@ -4271,7 +4405,10 @@
         if (!cur) return;
         cur.classList.add("moving");
         clearTimeout(vimCursorMoveTimer);
-        vimCursorMoveTimer = setTimeout(() => cur.classList.remove("moving"), 150);
+        vimCursorMoveTimer = setTimeout(
+          () => cur.classList.remove("moving"),
+          150,
+        );
       }
 
       function vimUpdateBlockCursor() {
@@ -4332,10 +4469,12 @@
           // Find where the last visual row starts by binary search
           let rowStart = 0;
           if (hBefore > lineHeight) {
-            let lo = 0, hi = col;
+            let lo = 0,
+              hi = col;
             while (lo < hi) {
               const mid = (lo + hi) >>> 1;
-              _wrapMeasure.textContent = textBefore.substring(0, mid + 1) || " ";
+              _wrapMeasure.textContent =
+                textBefore.substring(0, mid + 1) || " ";
               if (_wrapMeasure.offsetHeight >= hBefore) {
                 hi = mid;
               } else {
@@ -4400,11 +4539,28 @@
           vimPushUndoOnce();
         }
         // When leaving insert mode, capture typed text for dot repeat
-        if (vimState.mode === "insert" && mode !== "insert" && vimState.insertEntry) {
+        if (
+          vimState.mode === "insert" &&
+          mode !== "insert" &&
+          vimState.insertEntry
+        ) {
           const ie = vimState.insertEntry;
-          const insertedText = editor.value.substring(ie.pos, editor.selectionStart);
-          if (insertedText || ie.key === "s" || ie.key === "S" || ie.key === "C") {
-            vimState.lastAction = { type: "insert", key: ie.key, text: insertedText, cnt: ie.cnt || 1 };
+          const insertedText = editor.value.substring(
+            ie.pos,
+            editor.selectionStart,
+          );
+          if (
+            insertedText ||
+            ie.key === "s" ||
+            ie.key === "S" ||
+            ie.key === "C"
+          ) {
+            vimState.lastAction = {
+              type: "insert",
+              key: ie.key,
+              text: insertedText,
+              cnt: ie.cnt || 1,
+            };
           }
           vimState.insertEntry = null;
         }
@@ -4734,13 +4890,19 @@
             const col = pos - vimLineStart(lineIdx);
             if (vimState.desiredCol === null) vimState.desiredCol = col;
             const target = Math.min(lineIdx + c, lines.length - 1);
-            return Math.min(vimLineStart(target) + vimState.desiredCol, vimLineEnd(target));
+            return Math.min(
+              vimLineStart(target) + vimState.desiredCol,
+              vimLineEnd(target),
+            );
           }
           case "k": {
             const col = pos - vimLineStart(lineIdx);
             if (vimState.desiredCol === null) vimState.desiredCol = col;
             const target = Math.max(lineIdx - c, 0);
-            return Math.min(vimLineStart(target) + vimState.desiredCol, vimLineEnd(target));
+            return Math.min(
+              vimLineStart(target) + vimState.desiredCol,
+              vimLineEnd(target),
+            );
           }
           case "w": {
             let p = pos;
@@ -5724,7 +5886,8 @@
 
       function vimOpenCommandBar(prefix) {
         vimCommandBar.classList.add("visible");
-        document.querySelector(".vim-command-prefix").textContent = prefix || ":";
+        document.querySelector(".vim-command-prefix").textContent =
+          prefix || ":";
         vimCommandInput.value = "";
         vimCommandInput.focus();
       }
@@ -5914,7 +6077,9 @@
       vimCommandInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          const prefix = document.querySelector(".vim-command-prefix").textContent;
+          const prefix = document.querySelector(
+            ".vim-command-prefix",
+          ).textContent;
           const cmd = vimCommandInput.value;
           vimCloseCommandBar();
           if (prefix === "/" || prefix === "?") {
@@ -6452,26 +6617,33 @@
       });
 
       // Track cursor position for line/col and current line highlight
-      editor.addEventListener("click", () => { vimState.desiredCol = null; updateCursorPos(); });
+      editor.addEventListener("click", () => {
+        vimState.desiredCol = null;
+        updateCursorPos();
+      });
       editor.addEventListener("keyup", updateCursorPos);
       editor.addEventListener("select", updateCursorPos);
 
       editor.addEventListener("keydown", vimHandleKeydown);
 
       // Vim: scroll wheel moves cursor instead of scrolling
-      editor.addEventListener("wheel", (e) => {
-        if (!vimState.enabled || vimState.mode === "insert") return;
-        e.preventDefault();
-        const lines = Math.round(Math.abs(e.deltaY) / 20) || 1;
-        const motion = e.deltaY > 0 ? "j" : "k";
-        for (let i = 0; i < lines; i++) {
-          if (vimState.mode === "visual" || vimState.mode === "visual-line") {
-            vimExecVisual(motion);
-          } else {
-            vimExecNormal(motion, null);
+      editor.addEventListener(
+        "wheel",
+        (e) => {
+          if (!vimState.enabled || vimState.mode === "insert") return;
+          e.preventDefault();
+          const lines = Math.round(Math.abs(e.deltaY) / 20) || 1;
+          const motion = e.deltaY > 0 ? "j" : "k";
+          for (let i = 0; i < lines; i++) {
+            if (vimState.mode === "visual" || vimState.mode === "visual-line") {
+              vimExecVisual(motion);
+            } else {
+              vimExecNormal(motion, null);
+            }
           }
-        }
-      }, { passive: false });
+        },
+        { passive: false },
+      );
 
       editor.addEventListener("keydown", (e) => {
         // Skip in vim normal/visual mode
@@ -6491,18 +6663,30 @@
           if (e.key === "ArrowUp" && lineStart > 0) {
             const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
             const prevLine = val.substring(prevLineStart, lineStart - 1);
-            const newVal = val.substring(0, prevLineStart) + currentLine + "\n" + prevLine + val.substring(actualLineEnd);
+            const newVal =
+              val.substring(0, prevLineStart) +
+              currentLine +
+              "\n" +
+              prevLine +
+              val.substring(actualLineEnd);
             editor.value = newVal;
             const offset = cursor - lineStart;
-            editor.selectionStart = editor.selectionEnd = prevLineStart + offset;
+            editor.selectionStart = editor.selectionEnd =
+              prevLineStart + offset;
           } else if (e.key === "ArrowDown" && lineEnd !== -1) {
             const nextLineEnd = val.indexOf("\n", actualLineEnd + 1);
             const actualNextEnd = nextLineEnd === -1 ? val.length : nextLineEnd;
             const nextLine = val.substring(actualLineEnd + 1, actualNextEnd);
-            const newVal = val.substring(0, lineStart) + nextLine + "\n" + currentLine + val.substring(actualNextEnd);
+            const newVal =
+              val.substring(0, lineStart) +
+              nextLine +
+              "\n" +
+              currentLine +
+              val.substring(actualNextEnd);
             editor.value = newVal;
             const offset = cursor - lineStart;
-            editor.selectionStart = editor.selectionEnd = lineStart + nextLine.length + 1 + offset;
+            editor.selectionStart = editor.selectionEnd =
+              lineStart + nextLine.length + 1 + offset;
           }
           editor.dispatchEvent(new Event("input"));
           return;
@@ -6552,7 +6736,14 @@
             document.activeElement.tagName === "TEXTAREA");
 
         // Switch from view to edit tab with "e"
-        if (!inInput && mdViewActive && e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (
+          !inInput &&
+          mdViewActive &&
+          e.key === "e" &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.altKey
+        ) {
           e.preventDefault();
           switchMdTab("edit");
           return;
@@ -6678,7 +6869,8 @@
           }
         } catch {}
         // No token — check if user was previously connected
-        if (localStorage.getItem(GDRIVE_CONNECTED_KEY) === "true") return "expired";
+        if (localStorage.getItem(GDRIVE_CONNECTED_KEY) === "true")
+          return "expired";
         return "none";
       }
 
@@ -6811,8 +7003,7 @@
               ...opts.headers,
             },
           });
-          if (!retry.ok)
-            throw new Error("Drive error: " + retry.status);
+          if (!retry.ok) throw new Error("Drive error: " + retry.status);
           return retry;
         }
         if (!res.ok) throw new Error("Drive error: " + res.status);
@@ -6914,7 +7105,6 @@
           );
         }
       }
-
 
       let syncDotCount = 0;
       let syncDotTimer = null;
@@ -7318,12 +7508,14 @@
           gdriveConnected = true;
           showSyncFailed();
           // Attempt silent refresh in background (don't block init)
-          silentTokenRefresh().then(() => {
-            showSyncConnected();
-            driveSyncQuiet();
-          }).catch(() => {
-            clearToken();
-          });
+          silentTokenRefresh()
+            .then(() => {
+              showSyncConnected();
+              driveSyncQuiet();
+            })
+            .catch(() => {
+              clearToken();
+            });
         }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
