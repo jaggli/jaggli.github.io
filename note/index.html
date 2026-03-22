@@ -1892,7 +1892,7 @@
                     closeFileMenu();
                   "
                 >
-                  download all
+                  export all
                 </button>
                 <hr class="file-menu-separator" />
                 <button
@@ -2027,7 +2027,7 @@
       }
 
       // ═══════════════════════════════════════════════════
-      //  ZIP builder (no compression, STORE method)
+      //  ZIP builder (DEFLATE compression)
       // ═══════════════════════════════════════════════════
 
       function crc32(data) {
@@ -2041,31 +2041,49 @@
         return (crc ^ 0xffffffff) >>> 0;
       }
 
-      function buildZip(files) {
+      async function deflateBytes(data) {
+        const stream = new Blob([data])
+          .stream()
+          .pipeThrough(new CompressionStream("deflate-raw"));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+      }
+
+      async function buildZip(files) {
         const enc = new TextEncoder();
-        const entries = files.map((f) => ({
+        const raw = files.map((f) => ({
           name: enc.encode(f.name),
           data: enc.encode(f.content),
         }));
+        const entries = await Promise.all(
+          raw.map(async (entry) => {
+            const crc = crc32(entry.data);
+            const compressed = await deflateBytes(entry.data);
+            return {
+              name: entry.name,
+              data: entry.data,
+              compressed,
+              crc,
+            };
+          }),
+        );
         const localParts = [];
         const centralParts = [];
         let offset = 0;
 
         for (const entry of entries) {
-          const crc = crc32(entry.data);
           const local = new Uint8Array(
-            30 + entry.name.length + entry.data.length,
+            30 + entry.name.length + entry.compressed.length,
           );
           const lv = new DataView(local.buffer);
           lv.setUint32(0, 0x04034b50, true);
           lv.setUint16(4, 20, true);
-          lv.setUint16(8, 0, true);
-          lv.setUint32(14, crc, true);
-          lv.setUint32(18, entry.data.length, true);
+          lv.setUint16(8, 8, true);
+          lv.setUint32(14, entry.crc, true);
+          lv.setUint32(18, entry.compressed.length, true);
           lv.setUint32(22, entry.data.length, true);
           lv.setUint16(26, entry.name.length, true);
           local.set(entry.name, 30);
-          local.set(entry.data, 30 + entry.name.length);
+          local.set(entry.compressed, 30 + entry.name.length);
           localParts.push(local);
 
           const central = new Uint8Array(46 + entry.name.length);
@@ -2073,8 +2091,9 @@
           cv.setUint32(0, 0x02014b50, true);
           cv.setUint16(4, 20, true);
           cv.setUint16(6, 20, true);
-          cv.setUint32(16, crc, true);
-          cv.setUint32(20, entry.data.length, true);
+          cv.setUint16(10, 8, true);
+          cv.setUint32(16, entry.crc, true);
+          cv.setUint32(20, entry.compressed.length, true);
           cv.setUint32(24, entry.data.length, true);
           cv.setUint16(28, entry.name.length, true);
           cv.setUint32(42, offset, true);
@@ -2108,6 +2127,124 @@
         }
         result.set(eocd, pos);
         return result;
+      }
+
+      // ═══════════════════════════════════════════════════
+      //  ZIP reader
+      // ═══════════════════════════════════════════════════
+
+      const ZIP_MAX_ENTRIES = 500;
+      const ZIP_MAX_ENTRY_SIZE = 10 * 1024 * 1024;
+      const ZIP_MAX_TOTAL_SIZE = 50 * 1024 * 1024;
+
+      async function readZip(buf) {
+        const bytes = new Uint8Array(buf);
+        const view = new DataView(buf);
+        const len = bytes.length;
+
+        // Find EOCD (scan backwards, max 22 + 65535 comment)
+        let eocdPos = -1;
+        const scanLimit = Math.max(0, len - 22 - 65535);
+        for (let i = len - 22; i >= scanLimit; i--) {
+          if (view.getUint32(i, true) === 0x06054b50) {
+            eocdPos = i;
+            break;
+          }
+        }
+        if (eocdPos < 0) throw new Error("Invalid zip: no EOCD");
+
+        const entryCount = view.getUint16(eocdPos + 8, true);
+        const cdOffset = view.getUint32(eocdPos + 16, true);
+
+        if (entryCount > ZIP_MAX_ENTRIES)
+          throw new Error("Zip has too many files");
+        if (cdOffset >= len) throw new Error("Invalid zip: bad CD offset");
+
+        // Parse central directory
+        const entries = [];
+        let pos = cdOffset;
+        let totalUncompressed = 0;
+
+        for (let i = 0; i < entryCount; i++) {
+          if (pos + 46 > len) throw new Error("Invalid zip: truncated CD");
+          if (view.getUint32(pos, true) !== 0x02014b50)
+            throw new Error("Invalid zip: bad CD signature");
+
+          const method = view.getUint16(pos + 10, true);
+          const compSize = view.getUint32(pos + 20, true);
+          const uncompSize = view.getUint32(pos + 24, true);
+          const nameLen = view.getUint16(pos + 28, true);
+          const extraLen = view.getUint16(pos + 30, true);
+          const commentLen = view.getUint16(pos + 32, true);
+          const localOffset = view.getUint32(pos + 42, true);
+
+          if (pos + 46 + nameLen > len)
+            throw new Error("Invalid zip: truncated name");
+          const rawName = new TextDecoder().decode(
+            bytes.subarray(pos + 46, pos + 46 + nameLen),
+          );
+
+          if (uncompSize > ZIP_MAX_ENTRY_SIZE)
+            throw new Error("Zip entry too large: " + rawName);
+          totalUncompressed += uncompSize;
+          if (totalUncompressed > ZIP_MAX_TOTAL_SIZE)
+            throw new Error("Zip total size too large");
+
+          if (method === 0 || method === 8) {
+            entries.push({
+              rawName,
+              method,
+              compSize,
+              uncompSize,
+              localOffset,
+            });
+          }
+          // Skip unsupported compression methods silently
+
+          pos += 46 + nameLen + extraLen + commentLen;
+        }
+
+        // Extract data from local file headers
+        const results = await Promise.all(
+          entries.map(async (entry) => {
+            const lh = entry.localOffset;
+            if (lh + 30 > len) throw new Error("Invalid zip: bad local header");
+            if (view.getUint32(lh, true) !== 0x04034b50)
+              throw new Error("Invalid zip: bad local signature");
+            const lhNameLen = view.getUint16(lh + 26, true);
+            const lhExtraLen = view.getUint16(lh + 28, true);
+            const dataStart = lh + 30 + lhNameLen + lhExtraLen;
+            if (dataStart + entry.compSize > len)
+              throw new Error("Invalid zip: truncated data");
+            const compData = bytes.subarray(
+              dataStart,
+              dataStart + entry.compSize,
+            );
+
+            let data;
+            if (entry.method === 0) {
+              data = compData;
+            } else {
+              const stream = new Blob([compData])
+                .stream()
+                .pipeThrough(new DecompressionStream("deflate-raw"));
+              data = new Uint8Array(
+                await new Response(stream).arrayBuffer(),
+              );
+            }
+
+            // Sanitize filename: strip directories, reject traversal
+            let name = entry.rawName;
+            if (name.includes("..")) return null;
+            const slash = name.lastIndexOf("/");
+            if (slash >= 0) name = name.slice(slash + 1);
+            if (!name) return null;
+
+            return { name, data };
+          }),
+        );
+
+        return results.filter(Boolean);
       }
 
       // ═══════════════════════════════════════════════════
@@ -2433,6 +2570,61 @@
 
           modalConfirm.addEventListener("click", onConfirm);
           modalCancel.addEventListener("click", onCancel);
+          modalOverlay.addEventListener("click", onOverlay);
+          document.addEventListener("keydown", onKey);
+        });
+      }
+
+      function showImportModal(filename) {
+        return new Promise((resolve) => {
+          modalText.textContent = '"' + filename + '" already exists.';
+          modalInput.style.display = "none";
+          const actionsDiv = modalOverlay.querySelector(".modal-actions");
+          const saved = actionsDiv.innerHTML;
+          actionsDiv.innerHTML = "";
+          const btnSkip = document.createElement("button");
+          btnSkip.className = "modal-btn";
+          btnSkip.textContent = "skip";
+          const btnKeep = document.createElement("button");
+          btnKeep.className = "modal-btn";
+          btnKeep.textContent = "keep both";
+          const btnOver = document.createElement("button");
+          btnOver.className = "modal-btn";
+          btnOver.textContent = "override";
+          actionsDiv.append(btnSkip, btnKeep, btnOver);
+          modalOverlay.classList.add("visible");
+
+          function cleanup() {
+            modalOverlay.classList.remove("visible");
+            actionsDiv.innerHTML = saved;
+            modalOverlay.removeEventListener("click", onOverlay);
+            document.removeEventListener("keydown", onKey);
+          }
+          function onOverlay(e) {
+            if (e.target === modalOverlay) {
+              cleanup();
+              resolve("skip");
+            }
+          }
+          function onKey(e) {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              cleanup();
+              resolve("skip");
+            }
+          }
+          btnSkip.addEventListener("click", () => {
+            cleanup();
+            resolve("skip");
+          });
+          btnKeep.addEventListener("click", () => {
+            cleanup();
+            resolve("keep-both");
+          });
+          btnOver.addEventListener("click", () => {
+            cleanup();
+            resolve("override");
+          });
           modalOverlay.addEventListener("click", onOverlay);
           document.addEventListener("keydown", onKey);
         });
@@ -6491,13 +6683,24 @@
         );
       }
 
-      function downloadAll() {
+      async function downloadAll() {
         if (!state.notes.length) return;
         const files = state.notes.map((n) => ({
           name: n.name,
           content: n.content,
         }));
-        const zip = buildZip(files);
+        const directory = {
+          notes: state.notes.map((n) => ({
+            id: n.id,
+            name: n.name,
+            updatedAt: n.updatedAt,
+          })),
+        };
+        files.push({
+          name: ".note.directory",
+          content: JSON.stringify(directory, null, 2),
+        });
+        const zip = await buildZip(files);
         triggerDownload(
           new Blob([zip], { type: "application/zip" }),
           "notes.zip",
@@ -6620,7 +6823,153 @@
         }
       });
 
-      document.addEventListener("drop", (e) => {
+      async function importZip(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const header = new Uint8Array(arrayBuffer, 0, 4);
+        if (
+          header[0] !== 0x50 ||
+          header[1] !== 0x4b ||
+          header[2] !== 0x03 ||
+          header[3] !== 0x04
+        ) {
+          showModal("Invalid zip file.", "ok", null);
+          return;
+        }
+        let entries;
+        try {
+          entries = await readZip(arrayBuffer);
+        } catch (e) {
+          showModal("Could not read zip file: " + e.message, "ok", null);
+          return;
+        }
+
+        // Parse .note.directory metadata
+        const dirEntry = entries.find((e) => e.name === ".note.directory");
+        let metadata = null;
+        if (dirEntry) {
+          try {
+            const parsed = JSON.parse(
+              new TextDecoder().decode(dirEntry.data),
+            );
+            if (
+              parsed &&
+              Array.isArray(parsed.notes) &&
+              parsed.notes.every(
+                (n) =>
+                  typeof n.id === "string" &&
+                  typeof n.name === "string" &&
+                  typeof n.updatedAt === "number",
+              )
+            ) {
+              metadata = parsed;
+            }
+          } catch (e) {
+            // Invalid metadata — treat as plain zip
+          }
+        }
+
+        const importable = entries.filter(
+          (e) => e.name !== ".note.directory",
+        );
+        const skipped = [];
+
+        for (const entry of importable) {
+          let name = entry.name;
+          // Strip control characters, limit length
+          name = name.replace(/[\x00-\x1f\x7f]/g, "");
+          if (name.length > 255) name = name.slice(0, 255);
+          // Strip leading dots (except .note.directory already filtered)
+          if (name.startsWith(".")) name = name.slice(1);
+          if (!name) continue;
+
+          const content = new TextDecoder().decode(entry.data);
+
+          // Binary file detection: check for null bytes in first 8KB
+          const check = content.slice(0, 8192);
+          if (check.includes("\x00")) {
+            skipped.push(entry.name);
+            continue;
+          }
+
+          if (wouldExceedStorage(content.length * 2 + name.length * 2 + 200)) {
+            await showModal(
+              '"' +
+                name +
+                '" is too large. Delete some notes to free up space.',
+              "ok",
+              null,
+            );
+            continue;
+          }
+
+          const meta = metadata
+            ? metadata.notes.find((n) => n.name === name)
+            : null;
+          const existing = state.notes.find((n) => n.name === name);
+
+          if (meta && existing && meta.id === existing.id) {
+            // Same ID: auto-merge by updatedAt
+            if (meta.updatedAt > existing.updatedAt) {
+              existing.content = content;
+              existing.updatedAt = meta.updatedAt;
+              state.activeId = existing.id;
+              saveState();
+              render();
+            }
+          } else if (existing) {
+            // Same filename, different ID or no metadata
+            const action = await showImportModal(name);
+            if (action === "override") {
+              existing.content = content;
+              existing.updatedAt = meta ? meta.updatedAt : Date.now();
+              state.activeId = existing.id;
+              saveState();
+              render();
+            } else if (action === "keep-both") {
+              const dot = name.lastIndexOf(".");
+              let base = dot > 0 ? name.slice(0, dot) : name;
+              let ext = dot > 0 ? name.slice(dot) : "";
+              let num = 1;
+              while (
+                state.notes.some((n) => n.name === `${base}${num}${ext}`)
+              )
+                num++;
+              createNote(`${base}${num}${ext}`, content);
+            }
+            // "skip": do nothing
+          } else {
+            // No conflict
+            if (meta) {
+              const note = {
+                id: meta.id,
+                name: name,
+                content: content,
+                updatedAt: meta.updatedAt,
+              };
+              state.notes.unshift(note);
+              state.activeId = note.id;
+              saveState();
+              scheduleDriveUpload(true);
+              render();
+            } else {
+              createNote(name, content);
+            }
+          }
+        }
+
+        if (skipped.length) {
+          showModal(
+            "Skipped binary file" +
+              (skipped.length > 1 ? "s" : "") +
+              ": " +
+              skipped.join(", "),
+            "ok",
+            null,
+          );
+        }
+      }
+
+      document.addEventListener("drop", async (e) => {
         e.preventDefault();
         dragCounter = 0;
         dropOverlay.classList.remove("visible");
@@ -6629,20 +6978,35 @@
         // Save vim buffer before switching
         if (vimState.enabled && vimState.bufferDirty) vimWriteBuffer();
         const wasInView = mdViewActive;
+
+        // Separate zip files from text files
+        const zipFiles = [];
+        const textFiles = [];
         const unsupported = [];
-        let remaining = 0;
         for (const file of files) {
-          if (!file.type.startsWith("text/") && !isTextFilename(file.name)) {
+          if (
+            file.name.toLowerCase().endsWith(".zip") ||
+            file.type === "application/zip"
+          ) {
+            zipFiles.push(file);
+          } else if (
+            file.type.startsWith("text/") ||
+            isTextFilename(file.name)
+          ) {
+            textFiles.push(file);
+          } else {
             unsupported.push(file.name);
-            continue;
           }
-          remaining++;
         }
-        const totalValid = remaining;
-        for (const file of files) {
-          if (!file.type.startsWith("text/") && !isTextFilename(file.name)) {
-            continue;
-          }
+
+        // Handle zip files
+        for (const zip of zipFiles) {
+          await importZip(zip);
+        }
+
+        // Handle text files (existing logic)
+        let remaining = textFiles.length;
+        for (const file of textFiles) {
           const reader = new FileReader();
           reader.onload = async () => {
             if (wouldExceedStorage(reader.result.length * 2)) {
