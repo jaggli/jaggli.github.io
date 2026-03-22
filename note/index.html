@@ -7151,7 +7151,14 @@
           scheduleTokenRefresh();
         } else if (tokenState === "expired") {
           gdriveConnected = true;
-          showSyncFailed();
+          // Try silent refresh before showing failed
+          try {
+            await silentTokenRefresh();
+            showSyncConnected();
+          } catch {
+            clearToken();
+            showSyncFailed();
+          }
         }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
@@ -7176,8 +7183,14 @@
       init();
 
       // Re-sync when tab becomes visible again (handles backgrounded timers)
-      document.addEventListener("visibilitychange", async () => {
-        if (document.hidden || !gdriveConnected) return;
+      let lastSyncCheck = 0;
+      async function onTabResume() {
+        if (!gdriveConnected) return;
+        // Debounce — visibilitychange and focus can fire together
+        const now = Date.now();
+        if (now - lastSyncCheck < 5000) return;
+        lastSyncCheck = now;
+
         // Reset stuck blinking state
         syncDotCount = 0;
         clearTimeout(syncDotTimer);
@@ -7197,7 +7210,11 @@
           // Token still valid — catch up
           driveSyncQuiet();
         }
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) onTabResume();
       });
+      window.addEventListener("focus", onTabResume);
 
       // Safari ignores interactive-widget=resizes-content, so use visualViewport API.
       // Only apply on browsers that lack native support (i.e., not Chromium).
