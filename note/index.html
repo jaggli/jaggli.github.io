@@ -753,8 +753,66 @@
         margin-bottom: 8px;
       }
 
-      .md-preview li > input[type="checkbox"] {
-        margin-right: 6px;
+      .md-preview li.task-item {
+        list-style: none;
+        margin-left: -29px;
+        padding: 0 6px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .md-preview li.task-item ol,
+      .md-preview li.task-item ul {
+        padding-left: 46px;
+        margin-top: 0;
+      }
+
+      .md-preview li.task-item:hover:not(:has(li.task-item:hover)) {
+        background: var(--overlay);
+      }
+
+      .md-preview li.task-item input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--gutter);
+        border-radius: 3px;
+        margin-right: 8px;
+        vertical-align: middle;
+        position: relative;
+        cursor: pointer;
+      }
+
+      .md-preview li.task-item > span {
+        vertical-align: middle;
+      }
+
+      .md-preview li.task-item input[type="checkbox"]:checked {
+        background: var(--green);
+        border-color: var(--green);
+      }
+
+      .md-preview li.task-item input[type="checkbox"]:checked::after {
+        content: "";
+        position: absolute;
+        left: 3px;
+        top: 0px;
+        width: 4px;
+        height: 8px;
+        border: solid var(--bg);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+
+      .md-preview li.task-item.checked > span {
+        text-decoration: line-through;
+        opacity: 0.5;
+      }
+
+      .md-preview li.task-item.checked > span {
+        text-decoration: line-through;
+        opacity: 0.5;
       }
 
       /* Syntax highlighting tokens */
@@ -3116,6 +3174,7 @@
       // then parse markdown syntax on the escaped text,
       // then selectively re-enable <details> and <summary> only.
       function renderMarkdown(src) {
+        let taskIdx = 0;
         // Step 1: escape everything to prevent XSS
         let text = src.replace(/&/g, "&amp;")
                       .replace(/</g, "&lt;")
@@ -3156,44 +3215,79 @@
         // Merge adjacent blockquotes
         text = text.replace(/<\/blockquote>\n<blockquote>/g, "\n");
 
-        // Fold continuation lines (indented 2+ spaces after a list item) with <br>
+        // Lists (unordered, ordered, nested, with continuation lines)
         {
-          const srcLines = text.split("\n");
-          const out = [];
-          let inListItem = false;
-          for (let i = 0; i < srcLines.length; i++) {
-            const isListStart = /^\s*[-*+]\s|^\s*\d+\.\s/.test(srcLines[i]);
-            if (isListStart) {
-              inListItem = true;
-              out.push(srcLines[i]);
-            } else if (inListItem && /^ {2,}\S/.test(srcLines[i])) {
-              out[out.length - 1] += "<br>" + srcLines[i].trim();
+          const listRe = /^(\s*)([-*+]|\d+\.)\s/;
+          const lines = text.split("\n");
+          let i = 0;
+
+          function parseList(baseIndent) {
+            let html = "";
+            let listTag = "";
+            while (i < lines.length) {
+              const m = lines[i].match(listRe);
+              if (!m) break;
+              const indent = m[1].length;
+              if (indent < baseIndent) break;
+              if (indent > baseIndent) {
+                // Nested list — append to previous <li>
+                const nested = parseList(indent);
+                html = html.replace(/<\/li>$/, nested + "</li>");
+                continue;
+              }
+              // Determine list type from first item
+              const isOrdered = /^\d+\./.test(m[2]);
+              if (!listTag) listTag = isOrdered ? "ol" : "ul";
+
+              // Extract item content
+              const content = lines[i].replace(listRe, "");
+              let itemHtml = "";
+              let isTask = false;
+              let isChecked = false;
+              // Check for task list
+              const taskChecked = content.match(/^\[x\]\s+(.*)/);
+              const taskUnchecked = content.match(/^\[\s\]\s+(.*)/);
+              if (taskChecked) {
+                isTask = true;
+                isChecked = true;
+                itemHtml = '<input type="checkbox" checked data-task="' + taskIdx + '"><span>' + taskChecked[1];
+                taskIdx++;
+              } else if (taskUnchecked) {
+                isTask = true;
+                itemHtml = '<input type="checkbox" data-task="' + taskIdx + '"><span>' + taskUnchecked[1];
+                taskIdx++;
+              } else {
+                itemHtml = content;
+              }
+              i++;
+              // Fold continuation lines (indented text that isn't a new list item)
+              while (i < lines.length && !listRe.test(lines[i]) && lines[i].match(/^\s+\S/)) {
+                itemHtml += "<br>" + lines[i].trim();
+                i++;
+              }
+              if (isTask) {
+                itemHtml += "</span>";
+                const cls = "task-item" + (isChecked ? " checked" : "");
+                html += '<li class="' + cls + '" data-task="' + (taskIdx - 1) + '">' + itemHtml + "</li>";
+              } else {
+                html += "<li>" + itemHtml + "</li>";
+              }
+            }
+            return "<" + listTag + ">" + html + "</" + listTag + ">";
+          }
+
+          const outLines = [];
+          i = 0;
+          while (i < lines.length) {
+            if (listRe.test(lines[i])) {
+              outLines.push(parseList(lines[i].match(listRe)[1].length));
             } else {
-              inListItem = false;
-              out.push(srcLines[i]);
+              outLines.push(lines[i]);
+              i++;
             }
           }
-          text = out.join("\n");
+          text = outLines.join("\n");
         }
-
-        // Task list items (before regular lists)
-        text = text.replace(/^(\s*)[-*+]\s+\[x\]\s+(.+)$/gm,
-          '$1<li><input type="checkbox" checked disabled> $2</li>');
-        text = text.replace(/^(\s*)[-*+]\s+\[\s\]\s+(.+)$/gm,
-          '$1<li><input type="checkbox" disabled> $2</li>');
-
-        // Unordered lists
-        text = text.replace(/^[-*+]\s+(.+)$/gm, "<li>$1</li>");
-        // Wrap adjacent <li> in <ul>
-        text = text.replace(/((?:<li>[\s\S]*?<\/li>\n?)+)/g, (m) => {
-          return "<ul>" + m.trim() + "</ul>";
-        });
-
-        // Ordered lists
-        text = text.replace(/^\d+\.\s+(.+)$/gm, "<oli>$1</oli>");
-        text = text.replace(/((?:<oli>[\s\S]*?<\/oli>\n?)+)/g, (m) => {
-          return "<ol>" + m.replace(/<\/?oli>/g, (t) => t.replace("oli", "li")) + "</ol>";
-        });
 
         // Tables
         text = text.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
@@ -3289,6 +3383,78 @@
           if (note) {
             mdPreview.innerHTML = renderMarkdown(note.content);
           }
+          // Task checkbox toggle handler
+          mdPreview.onclick = (e) => {
+            const li = e.target.closest("li.task-item");
+            const input = e.target.tagName === "INPUT" && e.target.dataset.task !== undefined ? e.target : null;
+            if (!li && !input) return;
+            e.preventDefault();
+            const note = getActiveNote();
+            if (!note) return;
+            const clickedIdx = parseInt((li || input).dataset.task);
+
+            function parseTasks(content) {
+              const re = /^(\s*)([-*+])\s+\[([ x])\]/gm;
+              const items = [];
+              let m;
+              while ((m = re.exec(content)) !== null)
+                items.push({ idx: items.length, indent: m[1].length, checked: m[3] === "x" });
+              return items;
+            }
+
+            function setTasks(content, indices, checked) {
+              let count = 0;
+              return content.replace(/^(\s*[-*+]\s+)\[([ x])\]/gm, (match, prefix) => {
+                if (indices.has(count++)) return prefix + (checked ? "[x]" : "[ ]");
+                return match;
+              });
+            }
+
+            const tasks = parseTasks(note.content);
+            const clicked = tasks[clickedIdx];
+            if (!clicked) return;
+            const newState = !clicked.checked;
+
+            // Collect clicked + all descendant tasks
+            const toSet = new Set([clickedIdx]);
+            for (let i = clickedIdx + 1; i < tasks.length; i++) {
+              if (tasks[i].indent <= clicked.indent) break;
+              toSet.add(tasks[i].idx);
+            }
+            note.content = setTasks(note.content, toSet, newState);
+
+            // Cascade up: auto-check/uncheck parents based on sibling state
+            function cascadeUp(content, fromIdx) {
+              const items = parseTasks(content);
+              const child = items[fromIdx];
+              let parentIdx = -1;
+              for (let i = fromIdx - 1; i >= 0; i--) {
+                if (items[i].indent < child.indent) { parentIdx = i; break; }
+              }
+              if (parentIdx === -1) return content;
+              const parent = items[parentIdx];
+              // All direct task children at child's indent level
+              const siblings = [];
+              for (let i = parentIdx + 1; i < items.length; i++) {
+                if (items[i].indent <= parent.indent) break;
+                if (items[i].indent === child.indent) siblings.push(items[i]);
+              }
+              const allChecked = siblings.every(s => s.checked);
+              if (parent.checked !== allChecked) {
+                content = setTasks(content, new Set([parentIdx]), allChecked);
+                content = cascadeUp(content, parentIdx);
+              }
+              return content;
+            }
+            note.content = cascadeUp(note.content, clickedIdx);
+
+            note.updatedAt = Date.now();
+            editor.value = note.content;
+            saveState();
+            updateUrl();
+            scheduleDriveUpload(false);
+            mdPreview.innerHTML = renderMarkdown(note.content);
+          };
           // Hide editor elements, show preview
           gutter.style.display = "none";
           editorArea.style.display = "none";
