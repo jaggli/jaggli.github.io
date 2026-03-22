@@ -6486,6 +6486,7 @@
       const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive.appdata";
       const GDRIVE_FILE_NAME = "note-app-data.json";
       const GDRIVE_TOKEN_KEY = "notepad_gdrive_token";
+      const GDRIVE_CONNECTED_KEY = "notepad_gdrive_connected";
       let gdriveToken = null;
       let gdriveTokenExpiry = 0;
       let gisLoaded = false;
@@ -6502,16 +6503,19 @@
       function restoreToken() {
         try {
           const raw = localStorage.getItem(GDRIVE_TOKEN_KEY);
-          if (!raw) return "none";
-          const { token, expiry } = JSON.parse(raw);
-          if (Date.now() < expiry) {
-            gdriveToken = token;
-            gdriveTokenExpiry = expiry;
-            return "ok";
+          if (raw) {
+            const { token, expiry } = JSON.parse(raw);
+            if (Date.now() < expiry) {
+              gdriveToken = token;
+              gdriveTokenExpiry = expiry;
+              return "ok";
+            }
+            localStorage.removeItem(GDRIVE_TOKEN_KEY);
+            return "expired";
           }
-          localStorage.removeItem(GDRIVE_TOKEN_KEY);
-          return "expired";
         } catch {}
+        // No token — check if user was previously connected
+        if (localStorage.getItem(GDRIVE_CONNECTED_KEY) === "true") return "expired";
         return "none";
       }
 
@@ -6860,6 +6864,7 @@
 
           gdriveConnected = true;
           gdriveDirty = false;
+          localStorage.setItem(GDRIVE_CONNECTED_KEY, "true");
           showSyncConnected();
 
           setSyncDotSyncing(false);
@@ -6982,6 +6987,7 @@
         clearToken();
         gdriveConnected = false;
         gdriveDirty = false;
+        localStorage.removeItem(GDRIVE_CONNECTED_KEY);
         clearTimeout(gdriveSyncTimeout);
         clearTimeout(gdriveRefreshTimer);
         hideSyncConnected();
