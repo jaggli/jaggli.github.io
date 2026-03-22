@@ -7345,11 +7345,11 @@
         clearTimeout(syncOkTimer);
         if (success) {
           showSyncConnected();
-          const label = document.getElementById("syncLabel");
-          if (label) {
-            label.textContent = "sync ok";
+          const dot = document.querySelector(".sync-dot");
+          if (dot) {
+            dot.textContent = "\u2714";
             syncOkTimer = setTimeout(() => {
-              label.textContent = "sync";
+              dot.textContent = "\u25CF";
             }, 2000);
           }
         } else {

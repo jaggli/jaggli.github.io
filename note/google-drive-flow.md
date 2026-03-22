@@ -2,13 +2,13 @@
 
 ## UI States
 
-| State            | Dot   | Animation    | Label                   | Menu                       |
-| ---------------- | ----- | ------------ | ----------------------- | -------------------------- |
-| Disconnected     | —     | —            | _(hidden)_              | "sync google drive" button |
-| Connected (idle) | Green | None         | `sync`                  | sync now · disconnect      |
-| Syncing          | Green | Blinking LED | `syncing`               | —                          |
-| Sync success     | Green | None         | `sync ok` → `sync` (2s) | sync now · disconnect      |
-| Sync failed      | Red   | None         | `sync failed`           | reconnect                  |
+| State            | Dot                    | Animation    | Label         | Menu                       |
+| ---------------- | ---------------------- | ------------ | ------------- | -------------------------- |
+| Disconnected     | —                      | —            | _(hidden)_    | "sync google drive" button |
+| Connected (idle) | Green                  | None         | `sync`        | sync now · disconnect      |
+| Syncing          | Green                  | Blinking LED | `syncing`     | —                          |
+| Sync success     | Green ✔ → Green ● (2s) | None         | `sync`        | sync now · disconnect      |
+| Sync failed      | Red                    | None         | `sync failed` | reconnect                  |
 
 ---
 
@@ -29,7 +29,7 @@ driveSync()
   → gdriveUploadState()              push merged state
   → gdriveConnected = true
   → localStorage("notepad_gdrive_connected", "true")
-  → setSyncResult(true)              label = "sync ok" (4s → "sync")
+  → setSyncResult(true)              dot = ✔ (2s → ●)
 ```
 
 **Merge strategy:** newer `updatedAt` wins. Same content → keep local. Remote-only notes added unless their ID is in `deletedIds`.
@@ -47,7 +47,7 @@ scheduleSave()                       300ms debounce
     → drivePushQuiet()               upload to Drive
       → setSyncDotSyncing(true)      dot blinks
       → gdriveUploadState()
-      → setSyncResult(true)          "sync ok" (2s)
+      → setSyncResult(true)          dot = ✔ (2s → ●)
 ```
 
 **Note:** 30s defensive wait batches rapid keystrokes into one upload.
@@ -221,16 +221,16 @@ Every Drive API call goes through `gdriveFetch()` which:
 
 ## Timing Constants
 
-| Constant                 | Value               | Purpose                    |
-| ------------------------ | ------------------- | -------------------------- |
-| Token refresh offset     | 5 min before expiry | Pre-emptive silent refresh |
-| Autosave debounce        | 300ms               | Batch rapid keystrokes     |
-| Drive upload debounce    | 30s                 | Batch multiple saves       |
-| Silent refresh timeout   | 10s                 | Prevent hanging promise    |
-| Blink minimum time       | 900ms               | One full animation cycle   |
-| Tab resume debounce      | 5s                  | Prevent double-fire        |
-| "sync ok" label duration | 2s                  | Visual feedback            |
-| Blink animation cycle    | 0.9s                | LED effect                 |
+| Constant               | Value               | Purpose                       |
+| ---------------------- | ------------------- | ----------------------------- |
+| Token refresh offset   | 5 min before expiry | Pre-emptive silent refresh    |
+| Autosave debounce      | 300ms               | Batch rapid keystrokes        |
+| Drive upload debounce  | 30s                 | Batch multiple saves          |
+| Silent refresh timeout | 10s                 | Prevent hanging promise       |
+| Blink minimum time     | 900ms               | One full animation cycle      |
+| Tab resume debounce    | 5s                  | Prevent double-fire           |
+| Checkmark duration     | 2s                  | ✔ shown before reverting to ● |
+| Blink animation cycle  | 0.9s                | LED effect                    |
 
 ---
 
