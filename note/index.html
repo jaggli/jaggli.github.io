@@ -3284,19 +3284,21 @@
         return window.innerWidth <= 900;
       }
 
-      async function startRename(noteId) {
-        const note = state.notes.find((n) => n.id === noteId);
-        if (!note) return;
-        const result = await showPromptModal("Rename:", note.name, "rename");
-        if (!result || result === note.name) return;
-        note.name = result;
-        note.updatedAt = Date.now();
-        saveState();
-        scheduleDriveUpload(true);
-        scheduleUrlUpdate();
-        updateTitle();
-        updateMdTabBar();
-        renderNoteList();
+      function startRename(noteId) {
+        const item = noteList.querySelector(
+          `.note-item[data-id="${noteId}"]`,
+        );
+        if (!item) return;
+        const input = item.querySelector(".note-item-input");
+        if (!input) return;
+        input.classList.add("editing");
+        input.focus();
+        const dot = input.value.lastIndexOf(".");
+        if (dot > 0) {
+          input.setSelectionRange(0, dot);
+        } else {
+          input.select();
+        }
       }
 
       function renderNoteList() {
@@ -3309,6 +3311,7 @@
             "note-item" + (note.id === state.activeId ? " active" : "");
           div.draggable = true;
           div.dataset.idx = ni;
+          div.dataset.id = note.id;
 
           // Drag handlers
           div.addEventListener("dragstart", (e) => {
@@ -3363,16 +3366,9 @@
               sidebar.classList.remove("open");
               document.querySelector(".app").classList.remove("sidebar-open");
               editor.focus();
+            } else {
+              startRename(note.id);
             }
-          });
-          div.addEventListener("dblclick", (e) => {
-            if (
-              e.target.closest(".btn-pin") ||
-              e.target.closest(".btn-delete") ||
-              e.target.closest(".btn-rename")
-            )
-              return;
-            startRename(note.id);
           });
 
           // Meta container (name + timestamp)
@@ -3403,6 +3399,10 @@
           });
           input.addEventListener("blur", () => {
             input.classList.remove("editing");
+            note.name = input.value.trim() || "untitled";
+            note.updatedAt = Date.now();
+            saveState();
+            scheduleDriveUpload(true);
             renderNoteList();
           });
           meta.appendChild(input);
@@ -3410,13 +3410,14 @@
           // Display name with middle-ellipsis
           const nameSpan = document.createElement("span");
           nameSpan.className = "note-item-name";
-          const mid = Math.ceil(note.name.length / 2);
+          const endLen = 8;
+          const split = Math.max(note.name.length - endLen, 1);
           const startSpan = document.createElement("span");
           startSpan.className = "note-item-name-start";
-          startSpan.textContent = note.name.slice(0, mid);
+          startSpan.textContent = note.name.slice(0, split);
           const endSpan = document.createElement("span");
           endSpan.className = "note-item-name-end";
-          endSpan.textContent = note.name.slice(mid);
+          endSpan.textContent = note.name.slice(split);
           nameSpan.append(startSpan, endSpan);
           meta.appendChild(nameSpan);
 
