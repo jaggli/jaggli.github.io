@@ -859,7 +859,7 @@
         -webkit-appearance: none;
         width: 14px;
         height: 14px;
-        border: 2px solid var(--gutter);
+        border: 2px solid var(--green);
         border-radius: 3px;
         margin-right: 8px;
         vertical-align: middle;
@@ -872,20 +872,18 @@
       }
 
       .md-preview li.task-item input[type="checkbox"]:checked {
-        background: var(--green);
-        border-color: var(--green);
+        background: var(--text);
+        border-color: var(--text);
       }
 
       .md-preview li.task-item input[type="checkbox"]:checked::after {
-        content: "";
+        content: "\2714";
         position: absolute;
-        left: 3px;
-        top: 0px;
-        width: 4px;
-        height: 8px;
-        border: solid var(--bg);
-        border-width: 0 2px 2px 0;
-        transform: rotate(45deg);
+        left: 1px;
+        top: -1px;
+        font-size: 11px;
+        color: var(--bg);
+        font-weight: bold;
       }
 
       .md-preview li.task-item.checked > span {
@@ -1514,6 +1512,14 @@
       }
 
       @media (max-width: 900px) {
+        .md-preview {
+          padding: 24px 16px;
+        }
+
+        .md-preview .heading-anchor {
+          display: none;
+        }
+
         :root {
           font-size: 16px;
         }
