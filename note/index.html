@@ -7343,10 +7343,12 @@
       }
       function setSyncResult(success) {
         clearTimeout(syncOkTimer);
+        clearTimeout(syncDotTimer);
         if (success) {
           showSyncConnected();
           const dot = document.querySelector(".sync-dot");
           if (dot) {
+            dot.classList.remove("syncing");
             dot.textContent = "\u2714";
             syncOkTimer = setTimeout(() => {
               dot.textContent = "\u25CF";
