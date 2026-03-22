@@ -3702,6 +3702,10 @@
             scheduleDriveUpload(false);
             mdPreview.innerHTML = renderMarkdown(note.content);
           };
+          // Remember cursor line ratio before hiding editor
+          const cursorLine = editor.value.substring(0, editor.selectionStart).split("\n").length;
+          const totalLines = editor.value.split("\n").length;
+          const cursorRatio = totalLines > 1 ? (cursorLine - 1) / (totalLines - 1) : 0;
           // Hide editor elements, show preview
           gutter.style.display = "none";
           editorArea.style.display = "none";
@@ -3710,6 +3714,14 @@
           btnReplace.style.display = "none";
           btnWrap.style.display = "none";
           cursorPos.style.display = "none";
+          // Scroll preview so cursor area is centered
+          requestAnimationFrame(() => {
+            const scrollMax = mdPreview.scrollHeight - mdPreview.clientHeight;
+            if (scrollMax > 0) {
+              const target = cursorRatio * mdPreview.scrollHeight - mdPreview.clientHeight / 2;
+              mdPreview.scrollTop = Math.max(0, Math.min(target, scrollMax));
+            }
+          });
         } else {
           // Estimate source line from preview scroll position
           const scrollRatio =
