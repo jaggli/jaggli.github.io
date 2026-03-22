@@ -2150,7 +2150,7 @@
       const WRAP_KEY = "notepad_wrap";
       const VIM_KEY = "notepad_vim";
       const SWAP_PREFIX = "notepad_swap_";
-      let state = { notes: [], activeId: null };
+      let state = { notes: [], activeId: null, deletedIds: [] };
       let saveTimeout = null;
       let vimState = {
         enabled: false,
@@ -2174,6 +2174,7 @@
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) state = JSON.parse(raw);
+          if (!state.deletedIds) state.deletedIds = [];
         } catch {}
       }
 
@@ -4001,6 +4002,8 @@
         const idx = state.notes.findIndex((n) => n.id === id);
         if (idx === -1) return;
         deleteSwap(id);
+        if (!state.deletedIds) state.deletedIds = [];
+        state.deletedIds.push(id);
         state.notes.splice(idx, 1);
         if (state.activeId === id) {
           state.activeId = state.notes.length ? state.notes[0].id : null;
@@ -7365,6 +7368,7 @@
           const file = await gdriveFindFile();
           let remoteNotes = [];
           let remoteSettings = null;
+          let remoteDeletedIds = [];
           if (file) {
             const res = await gdriveFetch(
               "https://www.googleapis.com/drive/v3/files/" +
@@ -7374,7 +7378,14 @@
             const data = await res.json();
             if (data.notes) remoteNotes = data.notes;
             if (data.settings) remoteSettings = data.settings;
+            if (data.deletedIds) remoteDeletedIds = data.deletedIds;
           }
+
+          // Merge deleted IDs from both sides
+          const remoteDeleted = new Set(remoteDeletedIds);
+          const localDeleted = new Set(state.deletedIds || []);
+          const allDeleted = new Set([...localDeleted, ...remoteDeleted]);
+          state.deletedIds = [...allDeleted];
 
           const localById = new Map(state.notes.map((n) => [n.id, n]));
           const remoteById = new Map(remoteNotes.map((n) => [n.id, n]));
@@ -7382,6 +7393,8 @@
 
           // Process local notes
           for (const local of state.notes) {
+            // Skip notes deleted on remote
+            if (remoteDeleted.has(local.id)) continue;
             const remote = remoteById.get(local.id);
             if (!remote) {
               // Only local — keep it
@@ -7406,9 +7419,10 @@
             }
           }
 
-          // Add remote-only notes
+          // Add remote-only notes (skip locally deleted ones)
+          const deletedSet = new Set(state.deletedIds || []);
           for (const remote of remoteNotes) {
-            if (!localById.has(remote.id)) {
+            if (!localById.has(remote.id) && !deletedSet.has(remote.id)) {
               merged.push(remote);
             }
           }
@@ -7422,7 +7436,7 @@
 
           render();
 
-          // Upload merged state to Drive
+          // Upload merged state to Drive (includes deletedIds)
           await gdriveUploadState();
 
           gdriveConnected = true;
@@ -7470,6 +7484,12 @@
           if (!data.notes) return;
           const remoteNotes = data.notes;
           const remoteSettings = data.settings || null;
+          const remoteDeleted = new Set(data.deletedIds || []);
+
+          // Merge deleted IDs from both sides
+          const localDeleted = new Set(state.deletedIds || []);
+          const allDeleted = new Set([...localDeleted, ...remoteDeleted]);
+          state.deletedIds = [...allDeleted];
 
           const localById = new Map(state.notes.map((n) => [n.id, n]));
           const remoteById = new Map(remoteNotes.map((n) => [n.id, n]));
@@ -7478,6 +7498,8 @@
           let localNewer = false;
 
           for (const local of state.notes) {
+            // Skip notes deleted on remote
+            if (remoteDeleted.has(local.id)) { changed = true; continue; }
             const remote = remoteById.get(local.id);
             if (!remote) {
               merged.push(local);
@@ -7499,8 +7521,10 @@
             }
           }
 
+          // Add remote-only notes (skip locally deleted ones)
+          const deletedSet = new Set(state.deletedIds || []);
           for (const remote of remoteNotes) {
-            if (!localById.has(remote.id)) {
+            if (!localById.has(remote.id) && !deletedSet.has(remote.id)) {
               merged.push(remote);
               changed = true;
             }

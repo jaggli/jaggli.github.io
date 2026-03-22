@@ -32,7 +32,7 @@ driveSync()
   → setSyncResult(true)              label = "sync ok" (4s → "sync")
 ```
 
-**Merge strategy:** newer `updatedAt` wins. Same content → keep local. Remote-only notes added.
+**Merge strategy:** newer `updatedAt` wins. Same content → keep local. Remote-only notes added unless their ID is in `deletedIds`.
 
 ---
 
@@ -252,6 +252,7 @@ Single JSON file (`note-app-data.json`) in `appDataFolder`:
 ```json
 {
   "notes": [...],
+  "deletedIds": ["id1", "id2", ...],
   "settings": {
     "wrap": "true/false",
     "vim": "true/false",
@@ -262,3 +263,26 @@ Single JSON file (`note-app-data.json`) in `appDataFolder`:
 
 Settings: Google Drive is the source of truth (remote overwrites local on pull).
 Notes: timestamp-based merge (newer wins per note).
+Deletions: `deletedIds` is a union of both local and remote deleted IDs. Notes whose ID appears in `deletedIds` are never re-added from the other side.
+
+---
+
+## 11. Note Deletion & Sync
+
+**Trigger:** User deletes a note via sidebar or Ctrl+Shift+D.
+
+```
+confirmDelete(id)
+  → state.deletedIds.push(id)           record deletion
+  → state.notes.splice(idx, 1)          remove from local
+  → saveState()                          persist to localStorage
+  → scheduleDriveUpload(true)            immediate push to Drive
+```
+
+The `deletedIds` array is included in the Drive payload. During merge (both `driveSync` and `driveSyncQuiet`):
+
+1. Remote `deletedIds` and local `deletedIds` are unioned
+2. Local notes whose ID is in remote `deletedIds` are removed
+3. Remote notes whose ID is in local `deletedIds` are skipped
+
+This prevents deleted notes from reappearing when syncing across devices or after a race between deletion and sync.
