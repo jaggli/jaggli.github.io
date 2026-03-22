@@ -6563,6 +6563,23 @@
 
       let gdriveRefreshTimer = null;
 
+      async function silentTokenRefresh() {
+        await loadGIS();
+        await new Promise((resolve, reject) => {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: GDRIVE_CLIENT_ID,
+            scope: GDRIVE_SCOPES,
+            callback: (resp) => {
+              if (resp.error) return reject(new Error(resp.error));
+              persistToken(resp.access_token, resp.expires_in);
+              scheduleTokenRefresh();
+              resolve();
+            },
+          });
+          client.requestAccessToken({ prompt: "" });
+        });
+      }
+
       function scheduleTokenRefresh() {
         clearTimeout(gdriveRefreshTimer);
         const msUntilExpiry = gdriveTokenExpiry - Date.now();
@@ -6571,20 +6588,7 @@
         gdriveRefreshTimer = setTimeout(async () => {
           if (!gdriveConnected) return;
           try {
-            await loadGIS();
-            await new Promise((resolve, reject) => {
-              const client = google.accounts.oauth2.initTokenClient({
-                client_id: GDRIVE_CLIENT_ID,
-                scope: GDRIVE_SCOPES,
-                callback: (resp) => {
-                  if (resp.error) return reject(new Error(resp.error));
-                  persistToken(resp.access_token, resp.expires_in);
-                  scheduleTokenRefresh();
-                  resolve();
-                },
-              });
-              client.requestAccessToken({ prompt: "" });
-            });
+            await silentTokenRefresh();
           } catch {
             clearToken();
             showSyncFailed();
@@ -7164,6 +7168,30 @@
       }
 
       init();
+
+      // Re-sync when tab becomes visible again (handles backgrounded timers)
+      document.addEventListener("visibilitychange", async () => {
+        if (document.hidden || !gdriveConnected) return;
+        // Reset stuck blinking state
+        syncDotCount = 0;
+        clearTimeout(syncDotTimer);
+        document.querySelector(".sync-dot")?.classList.remove("syncing");
+
+        if (!gdriveToken || Date.now() >= gdriveTokenExpiry) {
+          // Token expired — try silent refresh
+          try {
+            await silentTokenRefresh();
+            showSyncConnected();
+            driveSyncQuiet();
+          } catch {
+            clearToken();
+            showSyncFailed();
+          }
+        } else {
+          // Token still valid — catch up
+          driveSyncQuiet();
+        }
+      });
 
       // Safari ignores interactive-widget=resizes-content, so use visualViewport API.
       // Only apply on browsers that lack native support (i.e., not Chromium).
