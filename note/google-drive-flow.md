@@ -7,7 +7,7 @@
 | Disconnected     | —     | —            | _(hidden)_              | "sync google drive" button |
 | Connected (idle) | Green | None         | `sync`                  | sync now · disconnect      |
 | Syncing          | Green | Blinking LED | `syncing`               | —                          |
-| Sync success     | Green | None         | `sync ok` → `sync` (4s) | sync now · disconnect      |
+| Sync success     | Green | None         | `sync ok` → `sync` (2s) | sync now · disconnect      |
 | Sync failed      | Red   | None         | `sync failed`           | reconnect                  |
 
 ---
@@ -47,7 +47,7 @@ scheduleSave()                       300ms debounce
     → drivePushQuiet()               upload to Drive
       → setSyncDotSyncing(true)      dot blinks
       → gdriveUploadState()
-      → setSyncResult(true)          "sync ok" (4s)
+      → setSyncResult(true)          "sync ok" (2s)
 ```
 
 **Note:** 30s defensive wait batches rapid keystrokes into one upload.
@@ -229,7 +229,7 @@ Every Drive API call goes through `gdriveFetch()` which:
 | Silent refresh timeout   | 10s                 | Prevent hanging promise    |
 | Blink minimum time       | 900ms               | One full animation cycle   |
 | Tab resume debounce      | 5s                  | Prevent double-fire        |
-| "sync ok" label duration | 4s                  | Visual feedback            |
+| "sync ok" label duration | 2s                  | Visual feedback            |
 | Blink animation cycle    | 0.9s                | LED effect                 |
 
 ---
