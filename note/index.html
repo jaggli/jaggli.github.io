@@ -6925,12 +6925,18 @@
       async function silentTokenRefresh() {
         await loadGIS();
         await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error("timeout")), 10000);
+          let settled = false;
+          const timeout = setTimeout(() => {
+            settled = true;
+            reject(new Error("timeout"));
+          }, 10000);
           const client = google.accounts.oauth2.initTokenClient({
             client_id: GDRIVE_CLIENT_ID,
             scope: GDRIVE_SCOPES,
             callback: (resp) => {
               clearTimeout(timeout);
+              if (settled) return;
+              settled = true;
               if (resp.error) return reject(new Error(resp.error));
               persistToken(resp.access_token, resp.expires_in);
               scheduleTokenRefresh();
@@ -7515,6 +7521,15 @@
             })
             .catch(() => {
               clearToken();
+              // Fall back to interactive auth
+              gdriveAuth()
+                .then(() => {
+                  showSyncConnected();
+                  driveSyncQuiet();
+                })
+                .catch(() => {
+                  showSyncFailed();
+                });
             });
         }
         const loaded = await loadFromUrl();
@@ -7554,15 +7569,20 @@
         document.querySelector(".sync-dot")?.classList.remove("syncing");
 
         if (!gdriveToken || Date.now() >= gdriveTokenExpiry) {
-          // Token expired — try silent refresh
+          // Token expired — try silent refresh, fall back to interactive auth
           try {
             await silentTokenRefresh();
-            showSyncConnected();
-            driveSyncQuiet();
           } catch {
             clearToken();
-            showSyncFailed();
+            try {
+              await gdriveAuth();
+            } catch {
+              showSyncFailed();
+              return;
+            }
           }
+          showSyncConnected();
+          driveSyncQuiet();
         } else {
           // Token still valid — catch up
           driveSyncQuiet();
