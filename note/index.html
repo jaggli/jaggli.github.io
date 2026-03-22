@@ -7768,22 +7768,16 @@
           gdriveConnected = true;
           showSyncFailed();
           // Attempt silent refresh in background (don't block init)
+          // If silent refresh fails, stay in failed state — user can
+          // re-auth via Ctrl+S or sync menu (no competing popup)
           silentTokenRefresh()
             .then(() => {
               showSyncConnected();
               driveSyncQuiet();
             })
             .catch(() => {
-              clearToken();
-              // Fall back to interactive auth
-              gdriveAuth()
-                .then(() => {
-                  showSyncConnected();
-                  driveSyncQuiet();
-                })
-                .catch(() => {
-                  showSyncFailed();
-                });
+              // Stay in sync failed — don't open interactive popup on init
+              // to avoid competing with user-initiated auth (Ctrl+S, sync menu)
             });
         }
         const loaded = await loadFromUrl();
@@ -7836,7 +7830,6 @@
           try {
             await silentTokenRefresh();
           } catch {
-            clearToken();
             try {
               await gdriveAuth();
             } catch {

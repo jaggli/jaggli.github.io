@@ -169,12 +169,12 @@ showSyncFailed()                     red dot immediately (don't block init)
 
 Background (non-blocking):
   → try silentTokenRefresh()
-  → catch: try gdriveAuth()          interactive popup
-  → catch: showSyncFailed()          stay red
+  → on success: showSyncConnected() + driveSyncQuiet()
+  → on failure: stay in sync failed (no interactive popup)
 
-  on success:
-    → showSyncConnected()            green dot
-    → driveSyncQuiet()               pull remote changes
+User must re-auth manually via Ctrl+S or sync menu.
+This avoids competing auth popups if the user initiates
+sync themselves while a background popup is pending.
 ```
 
 ---
@@ -216,6 +216,12 @@ Every Drive API call goes through `gdriveFetch()` which:
 `syncDotCount` tracks nested sync operations. The dot only stops blinking when all syncs complete, with a 900ms minimum visible time.
 
 `gdriveUploading` flag prevents concurrent uploads — calls to `drivePushQuiet()` while an upload is in flight are silently dropped.
+
+### No competing auth popups
+
+Init and tab resume only attempt `silentTokenRefresh()` (no popup). If silent refresh fails, the app stays in "sync failed" — it does **not** open an interactive auth popup in the background. This prevents a race where a background popup's `clearToken()` wipes a token that the user just obtained via Ctrl+S or the sync menu.
+
+Recovery from "sync failed" is always user-initiated: Ctrl+S (non-vim), sync menu → "reconnect", or `:w` (vim mode).
 
 ---
 
