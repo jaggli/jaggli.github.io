@@ -43,7 +43,8 @@ across devices via Google Drive.
 - Drag-and-drop file import
 - Drag to reorder notes in sidebar
 - Pin notes to keep them at the top
-- Zip export (download all notes at once)
+- Export all notes as a ZIP (includes metadata for re-import)
+- Import notes by dropping ZIP or text files onto the editor
 - Google Drive sync with per-file conflict resolution
 - Vim mode (toggle in toolbar, desktop only)
 - Word wrap toggle with wrap-aware line numbers

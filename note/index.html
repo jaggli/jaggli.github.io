@@ -356,24 +356,49 @@
         color: var(--text);
       }
 
+      .note-item-name {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        font-family: var(--font);
+        font-size: 14px;
+        cursor: pointer;
+        overflow: hidden;
+      }
+
+      .note-item-name-start {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex-shrink: 1;
+      }
+
+      .note-item-name-end {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
       .note-item-input {
+        display: none;
         flex: 1;
         background: none;
         border: none;
         color: inherit;
         font-family: var(--font);
         font-size: 14px;
-        padding: 0;
+        padding: 0 4px;
+        margin: 0 -4px;
         outline: none;
         min-width: 0;
-        cursor: pointer;
+        cursor: text;
       }
 
       .note-item-input.editing {
-        cursor: text;
-        background: none;
-        padding: 0 4px;
-        margin: 0 -4px;
+        display: block;
+      }
+
+      .note-item-input.editing + .note-item-name {
+        display: none;
       }
 
       .note-item .btn-delete {
@@ -433,21 +458,17 @@
       /* Pointer: fine (mouse) — hide icons, reveal on hover */
       @media (pointer: fine) {
         .note-item .btn-delete,
-        .note-item .btn-rename,
         .note-item .btn-pin:not(.pinned) {
           color: transparent;
+        }
+        .note-item .btn-rename {
+          display: none;
         }
         .note-item:hover .btn-delete {
           color: var(--gutter);
         }
         .note-item .btn-delete:hover {
           color: var(--red);
-        }
-        .note-item:hover .btn-rename {
-          color: var(--gutter);
-        }
-        .note-item .btn-rename:hover {
-          color: var(--text);
         }
         .note-item:hover .btn-pin:not(.pinned) {
           color: var(--gutter);
@@ -1574,6 +1595,7 @@
           font-size: 16px;
         }
 
+        .note-item-name,
         .note-item-input {
           font-size: 16px;
         }
@@ -2516,12 +2538,12 @@
         });
       }
 
-      function showPromptModal(text, defaultValue) {
+      function showPromptModal(text, defaultValue, confirmLabel) {
         return new Promise((resolve) => {
           modalText.textContent = text;
           modalInput.style.display = "block";
           modalInput.value = defaultValue || "";
-          modalConfirm.textContent = "create";
+          modalConfirm.textContent = confirmLabel || "create";
           modalConfirm.className = "modal-btn";
           modalCancel.textContent = "cancel";
           modalCancel.style.display = "";
@@ -3262,18 +3284,19 @@
         return window.innerWidth <= 900;
       }
 
-      function startRename(input) {
-        input.readOnly = false;
-        input.classList.add("editing");
-        input.focus();
-        setTimeout(() => {
-          const dot = input.value.lastIndexOf(".");
-          if (dot > 0) {
-            input.setSelectionRange(0, dot);
-          } else {
-            input.select();
-          }
-        }, 0);
+      async function startRename(noteId) {
+        const note = state.notes.find((n) => n.id === noteId);
+        if (!note) return;
+        const result = await showPromptModal("Rename:", note.name, "rename");
+        if (!result || result === note.name) return;
+        note.name = result;
+        note.updatedAt = Date.now();
+        saveState();
+        scheduleDriveUpload(true);
+        scheduleUrlUpdate();
+        updateTitle();
+        updateMdTabBar();
+        renderNoteList();
       }
 
       function renderNoteList() {
@@ -3330,12 +3353,8 @@
             if (
               e.target.closest(".btn-pin") ||
               e.target.closest(".btn-delete") ||
-              e.target.closest(".btn-rename")
-            )
-              return;
-            if (
-              e.target.classList.contains("note-item-input") &&
-              !e.target.readOnly
+              e.target.closest(".btn-rename") ||
+              e.target.classList.contains("note-item-input")
             )
               return;
             if (state.activeId !== note.id) {
@@ -3346,26 +3365,26 @@
               editor.focus();
             }
           });
+          div.addEventListener("dblclick", (e) => {
+            if (
+              e.target.closest(".btn-pin") ||
+              e.target.closest(".btn-delete") ||
+              e.target.closest(".btn-rename")
+            )
+              return;
+            startRename(note.id);
+          });
 
           // Meta container (name + timestamp)
           const meta = document.createElement("div");
           meta.className = "note-item-meta";
 
+          // Hidden input for new-file inline naming
           const input = document.createElement("input");
           input.className = "note-item-input";
           input.name = "filename";
           input.value = note.name;
           input.spellcheck = false;
-          input.readOnly = true;
-          input.addEventListener("click", (e) => {
-            if (state.activeId !== note.id) {
-              e.preventDefault();
-              switchNote(note.id);
-            } else if (input.readOnly && !isMobile()) {
-              e.preventDefault();
-              startRename(input);
-            }
-          });
           input.addEventListener("input", () => {
             note.name = input.value.trim() || "untitled";
             note.updatedAt = Date.now();
@@ -3383,11 +3402,23 @@
             }
           });
           input.addEventListener("blur", () => {
-            input.readOnly = true;
             input.classList.remove("editing");
+            renderNoteList();
           });
-
           meta.appendChild(input);
+
+          // Display name with middle-ellipsis
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "note-item-name";
+          const mid = Math.ceil(note.name.length / 2);
+          const startSpan = document.createElement("span");
+          startSpan.className = "note-item-name-start";
+          startSpan.textContent = note.name.slice(0, mid);
+          const endSpan = document.createElement("span");
+          endSpan.className = "note-item-name-end";
+          endSpan.textContent = note.name.slice(mid);
+          nameSpan.append(startSpan, endSpan);
+          meta.appendChild(nameSpan);
 
           // Timestamp
           const timeEl = document.createElement("div");
@@ -3411,14 +3442,14 @@
             renderNoteList();
           });
 
-          // Rename button (mobile only)
+          // Rename button (touch devices only via CSS)
           const renameBtn = document.createElement("button");
           renameBtn.className = "btn-rename";
           renameBtn.title = "Rename";
           renameBtn.innerHTML = "&#9998;";
           renameBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            startRename(input);
+            startRename(note.id);
           });
 
           // Delete button
@@ -4170,7 +4201,7 @@
             ".note-item.active .note-item-input",
           );
           if (input) {
-            input.readOnly = false;
+            input.classList.add("editing");
             input.focus();
             const dot = input.value.lastIndexOf(".");
             if (dot > 0) {
@@ -7077,7 +7108,7 @@
         if (saved) {
           sidebar.style.setProperty("--sidebar-width", saved + "px");
         } else if (window.innerWidth >= 1000) {
-          sidebar.style.setProperty("--sidebar-width", "260px");
+          sidebar.style.setProperty("--sidebar-width", "350px");
         }
       })();
 
