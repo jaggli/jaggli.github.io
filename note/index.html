@@ -585,7 +585,7 @@
         display: none;
         border-bottom: 1px solid var(--border);
         background: var(--sidebar);
-        padding: 0 8px;
+        padding: 0;
         gap: 0;
       }
 
@@ -1180,18 +1180,15 @@
         margin-left: 6px;
       }
 
-      .vim-mode-normal {
-        color: var(--blue);
-        font-weight: bold;
-      }
-      .vim-mode-insert {
-        color: var(--green);
-        font-weight: bold;
-      }
+      .vim-mode-normal,
+      .vim-mode-insert,
       .vim-mode-visual {
-        color: var(--green);
         font-weight: bold;
+        margin-right: 16px;
       }
+      .vim-mode-normal { color: var(--blue); }
+      .vim-mode-insert { color: var(--green); }
+      .vim-mode-visual { color: var(--green); }
 
       /* Modal */
       .modal-overlay {
@@ -2829,7 +2826,7 @@
             m +
             "</span>" +
             dirty +
-            "  Ln " +
+            "Ln " +
             line +
             ", Col " +
             col;
