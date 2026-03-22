@@ -6570,10 +6570,12 @@
       async function silentTokenRefresh() {
         await loadGIS();
         await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("timeout")), 10000);
           const client = google.accounts.oauth2.initTokenClient({
             client_id: GDRIVE_CLIENT_ID,
             scope: GDRIVE_SCOPES,
             callback: (resp) => {
+              clearTimeout(timeout);
               if (resp.error) return reject(new Error(resp.error));
               persistToken(resp.access_token, resp.expires_in);
               scheduleTokenRefresh();
@@ -7151,14 +7153,14 @@
           scheduleTokenRefresh();
         } else if (tokenState === "expired") {
           gdriveConnected = true;
-          // Try silent refresh before showing failed
-          try {
-            await silentTokenRefresh();
+          showSyncFailed();
+          // Attempt silent refresh in background (don't block init)
+          silentTokenRefresh().then(() => {
             showSyncConnected();
-          } catch {
+            driveSyncQuiet();
+          }).catch(() => {
             clearToken();
-            showSyncFailed();
-          }
+          });
         }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
