@@ -618,7 +618,7 @@
         display: none;
         flex: 1;
         overflow: auto;
-        padding: 32px 24px;
+        padding: 32px 24px 32px 48px;
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
           Arial, sans-serif;
@@ -649,6 +649,30 @@
         margin: 1.4em 0 0.5em;
         line-height: 1.3;
         max-width: 68ch;
+        position: relative;
+      }
+
+      .md-preview .heading-anchor {
+        position: absolute;
+        left: -24px;
+        opacity: 0;
+        text-decoration: none;
+        color: var(--overlay2);
+        font-weight: normal;
+        transition: opacity 0.15s;
+      }
+
+      .md-preview h1:hover .heading-anchor,
+      .md-preview h2:hover .heading-anchor,
+      .md-preview h3:hover .heading-anchor,
+      .md-preview h4:hover .heading-anchor,
+      .md-preview h5:hover .heading-anchor,
+      .md-preview h6:hover .heading-anchor {
+        opacity: 1;
+      }
+
+      .md-preview .heading-anchor:hover {
+        color: var(--blue);
       }
 
       .md-preview h1 {
@@ -689,14 +713,60 @@
         border-radius: 4px;
         overflow-x: auto;
         margin: 0.8em 0;
-        font-size: 13px;
+        font-size: 0.85em;
         line-height: 1.5;
+        position: relative;
       }
 
       .md-preview pre code {
         background: none;
         padding: 0;
         border-radius: 0;
+        font-size: inherit;
+      }
+
+      .md-preview pre .code-copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        opacity: 0;
+        background: var(--surface1);
+        color: var(--subtext0);
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        padding: 3px 8px;
+        border-radius: 3px;
+        transition: opacity 0.15s, color 0.15s;
+      }
+
+      .md-preview pre:hover .code-copy-btn {
+        opacity: 1;
+      }
+
+      .md-preview pre .code-copy-btn:hover {
+        color: var(--text);
+      }
+
+      .md-toast {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        background: var(--surface0);
+        color: var(--subtext);
+        font-size: 13px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        padding: 6px 12px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        z-index: 999;
+      }
+
+      .md-toast.visible {
+        opacity: 1;
       }
 
       .md-preview blockquote {
@@ -1695,6 +1765,7 @@
             <div class="vim-cursor" id="vimCursor"></div>
           </div>
           <div class="md-preview" id="mdPreview"></div>
+          <div class="md-toast" id="mdToast"></div>
           <div class="empty-state" id="emptyState">
             <div class="empty-state-desktop">
               ctrl+n or drop a file to start
@@ -2231,11 +2302,11 @@
             history.replaceState(
               null,
               "",
-              location.pathname + "?" + shortParams.toString(),
+              location.pathname + "?" + shortParams.toString() + location.hash,
             );
             btnShare.style.display = "none";
           } else {
-            history.replaceState(null, "", full);
+            history.replaceState(null, "", full + location.hash);
             btnShare.style.display = "";
           }
         } catch {}
@@ -2901,9 +2972,16 @@
         storageUsage.title = `localStorage: ${label} / 5MB`;
       }
 
+      let cursorSaveTimeout = null;
       function updateCursorPos() {
         const val = editor.value || "";
         const pos = editor.selectionStart;
+        const note = getActiveNote();
+        if (note) {
+          note.cursorPos = pos;
+          clearTimeout(cursorSaveTimeout);
+          cursorSaveTimeout = setTimeout(saveState, 1000);
+        }
         const before = val.substring(0, pos);
         const line = before.split("\n").length;
         const col = pos - before.lastIndexOf("\n");
@@ -2945,6 +3023,9 @@
           editor.value = note.content;
           editor.disabled = false;
           btnShare.disabled = false;
+          if (note.cursorPos !== undefined) {
+            editor.selectionStart = editor.selectionEnd = Math.min(note.cursorPos, note.content.length);
+          }
           // Recover from swap file
           const swap = loadSwap(note.id);
           if (swap && swap.content !== note.content) {
@@ -3221,13 +3302,37 @@
 
         // Step 2: parse markdown on the escaped text
 
+        // Language alias map for code blocks
+        const langAliases = {
+          javascript: "js", typescript: "ts", python: "py",
+          rust: "rs", bash: "sh", shell: "sh", zsh: "sh",
+          yml: "yaml",
+        };
+
         // Fenced code blocks (``` ... ```)
         const codeBlocks = [];
         text = text.replace(
           /^(`{3,})(\S*)\n([\s\S]*?)^\1/gm,
           (_, fence, lang, code) => {
             const idx = codeBlocks.length;
-            codeBlocks.push("<pre><code>" + code + "</code></pre>");
+            // Unescape HTML entities to get raw code for highlighting
+            const raw = code
+              .replace(/&quot;/g, '"')
+              .replace(/&gt;/g, ">")
+              .replace(/&lt;/g, "<")
+              .replace(/&amp;/g, "&");
+            const ext = langAliases[lang] || lang;
+            let highlighted;
+            if (ext && (langRules[ext] || htmlExts.has(ext))) {
+              highlighted = highlightCode(raw, "file." + ext);
+            } else {
+              highlighted = escapeHtml(raw);
+            }
+            codeBlocks.push(
+              '<pre><button class="code-copy-btn">copy</button><code>' +
+                highlighted +
+                "</code></pre>",
+            );
             return "\x00CB" + idx + "\x00";
           },
         );
@@ -3240,13 +3345,35 @@
           return "\x00IC" + idx + "\x00";
         });
 
-        // Headings
-        text = text.replace(/^######\s+(.+)$/gm, "<h6>$1</h6>");
-        text = text.replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>");
-        text = text.replace(/^####\s+(.+)$/gm, "<h4>$1</h4>");
-        text = text.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>");
-        text = text.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
-        text = text.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
+        // Headings with anchor links
+        const slugCounts = {};
+        function makeHeading(level, title) {
+          // Strip HTML tags for slug generation
+          const plain = title.replace(/<[^>]+>/g, "").replace(/&\w+;/g, "");
+          let slug = plain
+            .toLowerCase()
+            .trim()
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-");
+          if (slugCounts[slug] !== undefined) {
+            slugCounts[slug]++;
+            slug += "-" + slugCounts[slug];
+          } else {
+            slugCounts[slug] = 0;
+          }
+          return (
+            "<h" + level + ' id="' + slug + '">' +
+            '<a class="heading-anchor" href="#' + slug + '">#</a>' +
+            title +
+            "</h" + level + ">"
+          );
+        }
+        text = text.replace(/^######[ \t]+(.+)$/gm, (_, t) => makeHeading(6, t));
+        text = text.replace(/^#####[ \t]+(.+)$/gm, (_, t) => makeHeading(5, t));
+        text = text.replace(/^####[ \t]+(.+)$/gm, (_, t) => makeHeading(4, t));
+        text = text.replace(/^###[ \t]+(.+)$/gm, (_, t) => makeHeading(3, t));
+        text = text.replace(/^##[ \t]+(.+)$/gm, (_, t) => makeHeading(2, t));
+        text = text.replace(/^#[ \t]+(.+)$/gm, (_, t) => makeHeading(1, t));
 
         // Horizontal rules
         text = text.replace(/^([-*_]){3,}\s*$/gm, "<hr>");
@@ -3643,7 +3770,7 @@
         history.replaceState(
           { noteId: note ? note.id : null, view: mdViewActive },
           "",
-          location.pathname + "?" + params.toString(),
+          location.pathname + "?" + params.toString() + location.hash,
         );
       }
 
@@ -3653,6 +3780,13 @@
           const note = getActiveNote();
           if (note && isMarkdownFile(note.name)) {
             switchMdTab("view");
+            // Scroll to anchor if present
+            if (location.hash) {
+              requestAnimationFrame(() => {
+                const el = mdPreview.querySelector(location.hash);
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              });
+            }
           }
         }
       }
@@ -3676,10 +3810,48 @@
         highlightLayer.scrollLeft = 0;
       }
 
+      // Toast helper for markdown preview
+      const mdToast = document.getElementById("mdToast");
+      let mdToastTimer = null;
+      function showMdToast(msg) {
+        mdToast.textContent = msg;
+        mdToast.classList.add("visible");
+        clearTimeout(mdToastTimer);
+        mdToastTimer = setTimeout(() => mdToast.classList.remove("visible"), 2000);
+      }
+
+      // Heading anchor click handler
+      mdPreview.addEventListener("click", (e) => {
+        const anchor = e.target.closest(".heading-anchor");
+        if (!anchor) return;
+        e.preventDefault();
+        const slug = anchor.getAttribute("href").slice(1);
+        const url = location.href.split("#")[0] + "#" + slug;
+        history.replaceState(null, "", "#" + slug);
+        const heading = anchor.closest("h1,h2,h3,h4,h5,h6");
+        if (heading) heading.scrollIntoView({ behavior: "smooth" });
+        navigator.clipboard.writeText(url).then(() => {
+          showMdToast("copied to clipboard");
+        });
+      });
+
+      // Code block copy button handler
+      mdPreview.addEventListener("click", (e) => {
+        const btn = e.target.closest(".code-copy-btn");
+        if (!btn) return;
+        e.preventDefault();
+        const code = btn.closest("pre").querySelector("code");
+        navigator.clipboard.writeText(code.textContent).then(() => {
+          showMdToast("copied to clipboard");
+          btn.textContent = "copied";
+          setTimeout(() => { btn.textContent = "copy"; }, 2000);
+        });
+      });
+
       // Intercept clicks on local note links in preview
       mdPreview.addEventListener("click", (e) => {
         const a = e.target.closest("a");
-        if (!a) return;
+        if (!a || a.classList.contains("heading-anchor")) return;
         const href = a.getAttribute("href");
         if (!href) return;
         // Decode escaped HTML entities back to plain text
@@ -3691,6 +3863,14 @@
           .trim();
         // Skip external links
         if (/^https?:\/\//i.test(clean) || /^mailto:/i.test(clean)) return;
+        // Handle in-page anchor links
+        if (/^#/.test(clean)) {
+          e.preventDefault();
+          const el = mdPreview.querySelector(clean);
+          if (el) el.scrollIntoView({ behavior: "smooth" });
+          history.replaceState(null, "", clean);
+          return;
+        }
         // Try to find a note matching the link
         const target =
           state.notes.find((n) => n.name === clean) ||
@@ -3834,22 +4014,26 @@
             switchMdTab("edit");
           }
         }
+        // Save cursor position of current note before switching
+        const prevNote = getActiveNote();
+        if (prevNote) prevNote.cursorPos = editor.selectionStart;
         state.activeId = id;
         saveState();
         render();
         updateUrl();
         sidebar.classList.remove("open");
         document.querySelector(".app").classList.remove("sidebar-open");
-        // Scroll to top
-        editor.scrollTop = 0;
-        gutter.scrollTop = 0;
-        highlightLayer.scrollTop = 0;
-        highlightLayer.scrollLeft = 0;
+        // Scroll cursor into view (renderEditor restored cursorPos)
+        editor.focus();
+        requestAnimationFrame(() => {
+          gutter.scrollTop = editor.scrollTop;
+          highlightLayer.scrollTop = editor.scrollTop;
+          highlightLayer.scrollLeft = editor.scrollLeft;
+        });
         // Reset vim state
         if (vimState.enabled) {
           if (vimCommandBar.classList.contains("visible")) vimCloseCommandBar();
           if (vimState.mode !== "normal") vimSetMode("normal");
-          editor.selectionStart = editor.selectionEnd = 0;
           editor.readOnly = false;
           editor.focus();
           editor.readOnly = true;
@@ -7396,6 +7580,26 @@
         "- Alt+↑ / Alt+↓ — move line up / down",
         "- e — switch from view to edit (in markdown preview)",
         "",
+        "## Markdown preview",
+        "",
+        ".md files have edit/view tabs. The view tab renders",
+        "your markdown with these interactive features:",
+        "",
+        "- **Heading anchors** — hover a heading to reveal a #",
+        "  link. Click it to copy a shareable URL with the",
+        "  anchor to your clipboard.",
+        "- **Clickable anchor links** — [link](#heading) scrolls",
+        "  to the matching heading in the preview.",
+        "- **Code block copy** — hover a fenced code block to",
+        "  reveal a copy button in the top-right corner.",
+        "- **Syntax highlighting** — fenced code blocks with a",
+        "  language tag (e.g. \\`\\`\\`js) are syntax-highlighted.",
+        "- **Task checkboxes** — click a checkbox to toggle it.",
+        "  Checking/unchecking a parent toggles all children.",
+        "  All children checked auto-checks the parent.",
+        "- **Inter-note links** — [label](other.md) navigates",
+        "  to that note. Browser back button works.",
+        "",
         "## Vim",
         "",
         "Toggle from the status bar.",
@@ -7547,11 +7751,20 @@
         updateUrl();
         startTimestampRefresh();
         if (getActiveNote()) {
+          const note = getActiveNote();
           editor.focus();
-          if (vimState.enabled) {
-            editor.selectionStart = editor.selectionEnd = 0;
+          // Restore cursor position after focus (focus can move cursor to end)
+          if (note.cursorPos !== undefined) {
+            const pos = Math.min(note.cursorPos, editor.value.length);
+            editor.selectionStart = editor.selectionEnd = pos;
           }
           updateCursorPos();
+          // Sync highlight layer and gutter after browser layout
+          requestAnimationFrame(() => {
+            gutter.scrollTop = editor.scrollTop;
+            highlightLayer.scrollTop = editor.scrollTop;
+            highlightLayer.scrollLeft = editor.scrollLeft;
+          });
         }
 
         // Auto-sync from Google Drive on load (only if token is valid)

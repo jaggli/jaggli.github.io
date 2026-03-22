@@ -50,6 +50,17 @@ across devices via Google Drive.
 - Current line highlighting
 - Markdown preview (edit/view tabs for `.md` files)
   with inter-note linking (`[label](other.md)`)
+- Heading anchors in preview (hover to reveal `#` link,
+  click to copy shareable URL with anchor)
+- Clickable anchor links (`[link](#heading)`) scroll
+  to the target heading in preview
+- Code block copy button (hover to reveal, click to copy)
+- Syntax-highlighted fenced code blocks in preview
+  (when a language tag is specified)
+- Interactive task checkboxes with cascading
+  parent/child toggling
+- Cursor position memory (persisted per note across
+  sessions and mode switches)
 - Cursor position (line/column) and vim mode indicator in status bar
 - Indent/dedent selection with Tab/Shift+Tab
 - Move lines up/down with Alt+Arrow keys
