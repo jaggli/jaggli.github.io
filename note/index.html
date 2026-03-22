@@ -732,10 +732,6 @@
         max-width: 68ch;
       }
 
-      .md-preview details {
-        max-width: 68ch;
-      }
-
       .md-preview table {
         border-collapse: collapse;
         margin: 0.8em 0;
@@ -753,6 +749,7 @@
       }
 
       .md-preview details {
+        max-width: 68ch;
         margin: 0.6em 0;
         border: 1px solid var(--border);
         border-radius: 4px;
@@ -819,11 +816,6 @@
         border: solid var(--bg);
         border-width: 0 2px 2px 0;
         transform: rotate(45deg);
-      }
-
-      .md-preview li.task-item.checked > span {
-        text-decoration: line-through;
-        opacity: 0.5;
       }
 
       .md-preview li.task-item.checked > span {
@@ -3833,8 +3825,15 @@
           vimShowError("No write since last change (add ! to override)");
           return;
         }
-        // Close markdown preview when switching notes
-        if (mdViewActive) switchMdTab("edit");
+        // Stay in view tab if switching to another markdown file
+        const targetNote = state.notes.find(n => n.id === id);
+        if (mdViewActive) {
+          if (targetNote && isMarkdownFile(targetNote.name)) {
+            mdPreview.innerHTML = renderMarkdown(targetNote.content);
+          } else {
+            switchMdTab("edit");
+          }
+        }
         state.activeId = id;
         saveState();
         render();
