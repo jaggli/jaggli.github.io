@@ -660,6 +660,55 @@
         display: block;
       }
 
+      /* Zen mode */
+      .zen-mode .sidebar,
+      .zen-mode .sidebar-resize,
+      .zen-mode .statusbar,
+      .zen-mode .md-tab-bar,
+      .zen-mode .find-replace-bar {
+        display: none !important;
+      }
+
+      .zen-mode .md-preview.visible {
+        display: flex;
+        justify-content: center;
+        padding: 0;
+        width: 100%;
+      }
+
+      .zen-mode .md-preview .zen-wrap {
+        max-width: 800px;
+        width: 100%;
+        padding: 32px 24px;
+      }
+
+      .zen-mode .md-preview .zen-wrap::after {
+        content: "";
+        display: block;
+        height: 40vh;
+      }
+
+      .zen-edit-btn {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 1000;
+        padding: 6px 16px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+        font-family: var(--font);
+        font-size: 13px;
+        opacity: 0.4;
+        transition: opacity 0.2s;
+      }
+
+      .zen-edit-btn:hover {
+        opacity: 1;
+      }
+
       .md-preview h1,
       .md-preview h2,
       .md-preview h3,
@@ -1780,6 +1829,9 @@
           <button class="md-tab" id="mdTabView" onclick="switchMdTab('view')">
             view
           </button>
+          <button class="md-tab" id="mdTabZen" onclick="switchMdTab('zen')">
+            zen
+          </button>
         </div>
         <div class="editor-wrap">
           <div class="gutter" id="gutter"></div>
@@ -1799,6 +1851,14 @@
             <div class="vim-cursor" id="vimCursor"></div>
           </div>
           <div class="md-preview" id="mdPreview"></div>
+          <button
+            class="zen-edit-btn"
+            id="zenEditBtn"
+            style="display: none"
+            onclick="exitZenMode()"
+          >
+            edit
+          </button>
           <div class="md-toast" id="mdToast"></div>
           <div class="empty-state" id="emptyState">
             <div class="empty-state-desktop">
@@ -2461,7 +2521,8 @@
           const compressed = await compress(note.content);
           const params = new URLSearchParams();
           params.set("name", note.name);
-          if (mdViewActive) params.set("view", "md");
+          if (zenModeActive) params.set("view", "zen");
+          else if (mdViewActive) params.set("view", "md");
           params.set("note", compressed);
           const full = location.pathname + "?" + params.toString();
           if (full.length > URL_MAX_LENGTH) {
@@ -3518,6 +3579,9 @@
       // ═══════════════════════════════════════════════════
 
       let mdViewActive = false;
+      let zenModeActive = false;
+      let zenFromUrl = false;
+      let zenEphemeralNote = null;
 
       function isMarkdownFile(name) {
         if (!name) return false;
@@ -3850,25 +3914,28 @@
       function updateMdTabBar() {
         const note = getActiveNote();
         const isMd = note && isMarkdownFile(note.name);
-        mdTabBar.classList.toggle("visible", isMd);
-        if (!isMd && mdViewActive) {
+        const zenEphemeral = zenModeActive && zenFromUrl && zenEphemeralNote;
+        mdTabBar.classList.toggle("visible", isMd || zenEphemeral);
+        if (!isMd && !zenEphemeral && mdViewActive) {
           switchMdTab("edit");
         }
       }
 
       function switchMdTab(tab) {
-        mdViewActive = tab === "view";
-        mdTabEdit.classList.toggle("active", !mdViewActive);
-        mdTabView.classList.toggle("active", mdViewActive);
+        zenModeActive = tab === "zen";
+        mdViewActive = tab === "view" || tab === "zen";
+        mdTabEdit.classList.toggle("active", tab === "edit");
+        mdTabView.classList.toggle("active", tab === "view");
+        document
+          .getElementById("mdTabZen")
+          .classList.toggle("active", tab === "zen");
 
-        const editorWrap = document.querySelector(".editor-wrap");
+        const appEl = document.querySelector(".app");
+        const zenEditBtn = document.getElementById("zenEditBtn");
         const btnReplace = document.getElementById("btnReplace");
-        if (mdViewActive) {
-          const note = getActiveNote();
-          if (note) {
-            mdPreview.innerHTML = renderMarkdown(note.content);
-          }
-          // Task checkbox toggle handler
+
+        // Task checkbox handler shared by view and zen
+        function attachCheckboxHandler() {
           mdPreview.onclick = (e) => {
             const li = e.target.closest("li.task-item");
             const input =
@@ -3878,6 +3945,12 @@
                 : null;
             if (!li && !input) return;
             e.preventDefault();
+
+            // In zen mode, persist the note first if ephemeral
+            if (zenModeActive && zenFromUrl && zenEphemeralNote) {
+              persistZenNote();
+            }
+
             const note = getActiveNote();
             if (!note) return;
             const clickedIdx = parseInt((li || input).dataset.task);
@@ -3933,7 +4006,6 @@
               }
               if (parentIdx === -1) return content;
               const parent = items[parentIdx];
-              // All direct task children at child's indent level
               const siblings = [];
               for (let i = parentIdx + 1; i < items.length; i++) {
                 if (items[i].indent <= parent.indent) break;
@@ -3953,8 +4025,35 @@
             saveState();
             updateUrl();
             scheduleDriveUpload(false);
-            mdPreview.innerHTML = renderMarkdown(note.content);
+            const rendered = renderMarkdown(note.content);
+            mdPreview.innerHTML = zenModeActive
+              ? `<div class="zen-wrap">${rendered}</div>`
+              : rendered;
           };
+        }
+
+        if (zenModeActive) {
+          // Render preview from ephemeral note or active note
+          const content =
+            zenFromUrl && zenEphemeralNote
+              ? zenEphemeralNote.content
+              : getActiveNote()?.content || "";
+          mdPreview.innerHTML = `<div class="zen-wrap">${renderMarkdown(content)}</div>`;
+          attachCheckboxHandler();
+          // Hide editor elements, show preview
+          gutter.style.display = "none";
+          editorArea.style.display = "none";
+          emptyState.style.display = "none";
+          mdPreview.classList.add("visible");
+          // Hide all chrome
+          appEl.classList.add("zen-mode");
+          zenEditBtn.style.display = "";
+        } else if (tab === "view") {
+          const note = getActiveNote();
+          if (note) {
+            mdPreview.innerHTML = renderMarkdown(note.content);
+          }
+          attachCheckboxHandler();
           // Remember cursor line ratio before hiding editor
           const cursorLine = editor.value
             .substring(0, editor.selectionStart)
@@ -3970,6 +4069,9 @@
           btnReplace.style.display = "none";
           btnWrap.style.display = "none";
           cursorPos.style.display = "none";
+          btnVim.style.display = "none";
+          appEl.classList.remove("zen-mode");
+          zenEditBtn.style.display = "none";
           // Scroll preview so cursor area is centered
           requestAnimationFrame(() => {
             const scrollMax = mdPreview.scrollHeight - mdPreview.clientHeight;
@@ -3996,7 +4098,14 @@
           btnReplace.style.display = "";
           btnWrap.style.display = "";
           cursorPos.style.display = "";
+          btnVim.style.display = "";
+          appEl.classList.remove("zen-mode");
+          zenEditBtn.style.display = "none";
           updateEmptyState();
+
+          // Clear zen state
+          zenFromUrl = false;
+          zenEphemeralNote = null;
 
           // Jump editor to corresponding position
           const lines = editor.value.split("\n");
@@ -4029,16 +4138,73 @@
         updateMdViewUrl();
       }
 
+      function persistZenNote() {
+        if (!(zenFromUrl && zenEphemeralNote)) return getActiveNote();
+        const name = zenEphemeralNote.name;
+        const content = zenEphemeralNote.content;
+        const existing = state.notes.find((n) => n.name === name);
+        if (existing) {
+          if (existing.content === content) {
+            state.activeId = existing.id;
+          } else {
+            const dot = name.lastIndexOf(".");
+            const base = dot > 0 ? name.slice(0, dot) : name;
+            const ext = dot > 0 ? name.slice(dot) : "";
+            let num = 1;
+            while (state.notes.some((n) => n.name === `${base}${num}${ext}`))
+              num++;
+            const id = crypto.randomUUID();
+            const now = Date.now();
+            state.notes.unshift({
+              id,
+              name: `${base}${num}${ext}`,
+              content,
+              createdAt: now,
+              updatedAt: now,
+            });
+            state.activeId = id;
+          }
+        } else {
+          const id = crypto.randomUUID();
+          const now = Date.now();
+          state.notes.unshift({
+            id,
+            name,
+            content,
+            createdAt: now,
+            updatedAt: now,
+          });
+          state.activeId = id;
+        }
+        zenFromUrl = false;
+        zenEphemeralNote = null;
+        saveState();
+        scheduleDriveUpload(false);
+        return getActiveNote();
+      }
+
+      function exitZenMode() {
+        persistZenNote();
+        switchMdTab("edit");
+        render();
+        updateUrl();
+      }
+
       function updateMdViewUrl() {
         const params = new URLSearchParams(location.search);
-        if (mdViewActive) {
+        if (zenModeActive) {
+          params.set("view", "zen");
+        } else if (mdViewActive) {
           params.set("view", "md");
         } else {
           params.delete("view");
         }
         const note = getActiveNote();
         history.replaceState(
-          { noteId: note ? note.id : null, view: mdViewActive },
+          {
+            noteId: note ? note.id : null,
+            view: zenModeActive ? "zen" : mdViewActive,
+          },
           "",
           location.pathname + "?" + params.toString() + location.hash,
         );
@@ -4046,7 +4212,15 @@
 
       function checkMdViewParam() {
         const params = new URLSearchParams(location.search);
-        if (params.get("view") === "md") {
+        const viewParam = params.get("view");
+        if (viewParam === "zen") {
+          if (
+            zenEphemeralNote ||
+            (getActiveNote() && isMarkdownFile(getActiveNote().name))
+          ) {
+            switchMdTab("zen");
+          }
+        } else if (viewParam === "md") {
           const note = getActiveNote();
           if (note && isMarkdownFile(note.name)) {
             switchMdTab("view");
@@ -6778,7 +6952,8 @@
           const compressed = await compress(note.content);
           const params = new URLSearchParams();
           params.set("name", note.name);
-          if (mdViewActive) params.set("view", "md");
+          if (zenModeActive) params.set("view", "zen");
+          else if (mdViewActive) params.set("view", "md");
           params.set("note", compressed);
           const url =
             location.origin + location.pathname + "?" + params.toString();
@@ -6804,9 +6979,18 @@
         const params = new URLSearchParams(location.search);
         const noteData = params.get("note");
         const name = params.get("name") || "shared note";
+        const viewParam = params.get("view");
         if (!noteData) return false;
         try {
           const content = await decompress(noteData);
+
+          // Zen mode from URL: don't persist, store ephemerally
+          if (viewParam === "zen") {
+            zenFromUrl = true;
+            zenEphemeralNote = { name, content };
+            return true;
+          }
+
           const existing = state.notes.find((n) => n.name === name);
           if (existing) {
             if (existing.content === content) {
@@ -6870,6 +7054,7 @@
       let dragCounter = 0;
 
       document.addEventListener("dragenter", (e) => {
+        if (zenModeActive) return;
         if (e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
           dragCounter++;
@@ -7031,6 +7216,7 @@
         e.preventDefault();
         dragCounter = 0;
         dropOverlay.classList.remove("visible");
+        if (zenModeActive) return;
         const files = e.dataTransfer.files;
         if (!files.length) return;
         // Save vim buffer before switching
@@ -7368,6 +7554,23 @@
           (document.activeElement.tagName === "INPUT" ||
             document.activeElement.tagName === "TEXTAREA");
 
+        // In zen mode, block all shortcuts except "e" and Escape
+        if (zenModeActive) {
+          if (
+            !inInput &&
+            e.key === "e" &&
+            !e.metaKey &&
+            !e.ctrlKey &&
+            !e.altKey
+          ) {
+            e.preventDefault();
+            exitZenMode();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            exitZenMode();
+          }
+          return;
+        }
         // Switch from view to edit tab with "e"
         if (
           !inInput &&
@@ -7382,7 +7585,12 @@
           return;
         }
         // Find & Replace (skip if typing in an input)
-        if (!inInput && (e.metaKey || e.ctrlKey) && e.key === "h") {
+        if (
+          !inInput &&
+          !mdViewActive &&
+          (e.metaKey || e.ctrlKey) &&
+          e.key === "h"
+        ) {
           e.preventDefault();
           openFindReplace();
           return;
@@ -8213,7 +8421,7 @@
         checkMdViewParam();
         updateUrl();
         startTimestampRefresh();
-        if (getActiveNote()) {
+        if (getActiveNote() && !zenModeActive) {
           const note = getActiveNote();
           editor.focus();
           // Restore cursor position after focus (focus can move cursor to end)
