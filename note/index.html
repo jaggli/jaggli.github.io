@@ -986,12 +986,13 @@
       .md-preview li.task-item input[type="checkbox"] {
         appearance: none;
         -webkit-appearance: none;
-        width: 14px;
-        height: 14px;
+        width: 16px;
+        height: 16px;
         border: 2px solid var(--blue);
         border-radius: 3px;
         margin-right: 8px;
         position: relative;
+        top: 2px;
         cursor: pointer;
         flex-shrink: 0;
       }
@@ -1009,9 +1010,9 @@
       .md-preview li.task-item input[type="checkbox"]:checked::after {
         content: "\2714";
         position: absolute;
-        left: 1px;
-        top: -1px;
-        font-size: 11px;
+        left: 0;
+        top: -2px;
+        font-size: 14px;
         color: var(--bg);
         font-weight: bold;
       }
@@ -1905,7 +1906,11 @@
             <div class="vim-cursor" id="vimCursor"></div>
           </div>
           <div class="md-preview" id="mdPreview"></div>
-          <div class="zen-menu-container" id="zenMenuContainer" style="display:none">
+          <div
+            class="zen-menu-container"
+            id="zenMenuContainer"
+            style="display: none"
+          >
             <button class="zen-menu-btn" onclick="toggleZenMenu()">===</button>
             <span class="zen-copied" id="zenCopied">copied to clipboard</span>
             <div class="zen-menu" id="zenMenu">
@@ -2474,10 +2479,7 @@
           // Merge: prefer the version with the latest updatedAt
           state.notes = newState.notes.map((remote) => {
             const local = localById.get(remote.id);
-            if (
-              local &&
-              local.updatedAt > remote.updatedAt
-            ) {
+            if (local && local.updatedAt > remote.updatedAt) {
               return local; // keep unsaved in-memory edits
             }
             return remote;
@@ -3973,11 +3975,26 @@
           /(?<![a-zA-Z0-9])\*\*\*(.+?)\*\*\*(?![a-zA-Z0-9])/g,
           "<strong><em>$1</em></strong>",
         );
-        text = text.replace(/(?<![a-zA-Z0-9])\*\*(.+?)\*\*(?![a-zA-Z0-9])/g, "<strong>$1</strong>");
-        text = text.replace(/(?<![a-zA-Z0-9])\*(.+?)\*(?![a-zA-Z0-9])/g, "<em>$1</em>");
-        text = text.replace(/(?<![a-zA-Z0-9])___(.+?)___(?![a-zA-Z0-9])/g, "<strong><em>$1</em></strong>");
-        text = text.replace(/(?<![a-zA-Z0-9])__(.+?)__(?![a-zA-Z0-9])/g, "<strong>$1</strong>");
-        text = text.replace(/(?<![a-zA-Z0-9])_(.+?)_(?![a-zA-Z0-9])/g, "<em>$1</em>");
+        text = text.replace(
+          /(?<![a-zA-Z0-9])\*\*(.+?)\*\*(?![a-zA-Z0-9])/g,
+          "<strong>$1</strong>",
+        );
+        text = text.replace(
+          /(?<![a-zA-Z0-9])\*(.+?)\*(?![a-zA-Z0-9])/g,
+          "<em>$1</em>",
+        );
+        text = text.replace(
+          /(?<![a-zA-Z0-9])___(.+?)___(?![a-zA-Z0-9])/g,
+          "<strong><em>$1</em></strong>",
+        );
+        text = text.replace(
+          /(?<![a-zA-Z0-9])__(.+?)__(?![a-zA-Z0-9])/g,
+          "<strong>$1</strong>",
+        );
+        text = text.replace(
+          /(?<![a-zA-Z0-9])_(.+?)_(?![a-zA-Z0-9])/g,
+          "<em>$1</em>",
+        );
 
         // Strikethrough
         text = text.replace(/~~(.+?)~~/g, "<del>$1</del>");
@@ -4431,7 +4448,11 @@
         e.preventDefault();
         const slug = anchor.getAttribute("href").slice(1);
         const url = location.href.split("#")[0] + "#" + slug;
-        history.replaceState(null, "", location.pathname + location.search + "#" + slug);
+        history.replaceState(
+          null,
+          "",
+          location.pathname + location.search + "#" + slug,
+        );
         const heading = anchor.closest("h1,h2,h3,h4,h5,h6");
         if (heading) heading.scrollIntoView({ behavior: "smooth" });
         navigator.clipboard.writeText(url).then(() => {
@@ -5027,7 +5048,8 @@
         // Compute the line of the match and scroll to it
         const textBefore = editor.value.substring(0, m.start);
         const line = textBefore.split("\n").length - 1;
-        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
+        const lineHeight =
+          parseFloat(getComputedStyle(editor).lineHeight) || 20;
         const targetScroll = line * lineHeight - editor.clientHeight / 2;
         editor.scrollTop = Math.max(0, targetScroll);
         gutter.scrollTop = editor.scrollTop;
