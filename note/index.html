@@ -4220,6 +4220,10 @@
           btnVim.style.display = "";
           appEl.classList.remove("zen-mode");
           zenMenuContainer.style.display = "none";
+          // Sync editor with in-memory content (e.g. after checkbox toggle)
+          const activeNote = getActiveNote();
+          if (activeNote) editor.value = activeNote.content;
+          updateHighlight();
           updateEmptyState();
 
           // Clear zen state
