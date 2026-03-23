@@ -688,24 +688,73 @@
         height: 40vh;
       }
 
-      .zen-edit-btn {
+      .zen-menu-container {
         position: fixed;
         top: 12px;
         left: 12px;
         z-index: 1000;
-        padding: 6px 16px;
+      }
+
+      .zen-menu-btn {
+        padding: 4px 10px;
         border: 1px solid var(--border);
         border-radius: 4px;
         background: var(--bg);
         color: var(--text);
         cursor: pointer;
         font-family: var(--font);
-        font-size: 13px;
+        font-size: 15px;
         opacity: 0.4;
         transition: opacity 0.2s;
       }
 
-      .zen-edit-btn:hover {
+      .zen-menu-btn:hover {
+        opacity: 1;
+      }
+
+      .zen-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 4px;
+        background: var(--sidebar);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        overflow: hidden;
+        min-width: 100px;
+      }
+
+      .zen-menu.visible {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .zen-menu button {
+        background: none;
+        border: none;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 13px;
+        padding: 8px 16px;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .zen-menu button:hover {
+        background: var(--active);
+      }
+
+      .zen-copied {
+        font-family: var(--font);
+        font-size: 13px;
+        color: var(--subtext);
+        margin-left: 8px;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .zen-copied.visible {
         opacity: 1;
       }
 
@@ -1851,14 +1900,14 @@
             <div class="vim-cursor" id="vimCursor"></div>
           </div>
           <div class="md-preview" id="mdPreview"></div>
-          <button
-            class="zen-edit-btn"
-            id="zenEditBtn"
-            style="display: none"
-            onclick="exitZenMode()"
-          >
-            edit
-          </button>
+          <div class="zen-menu-container" id="zenMenuContainer" style="display:none">
+            <button class="zen-menu-btn" onclick="toggleZenMenu()">===</button>
+            <span class="zen-copied" id="zenCopied">copied to clipboard</span>
+            <div class="zen-menu" id="zenMenu">
+              <button onclick="zenShare()">share</button>
+              <button onclick="exitZenMode()">edit</button>
+            </div>
+          </div>
           <div class="md-toast" id="mdToast"></div>
           <div class="empty-state" id="emptyState">
             <div class="empty-state-desktop">
@@ -3931,7 +3980,7 @@
           .classList.toggle("active", tab === "zen");
 
         const appEl = document.querySelector(".app");
-        const zenEditBtn = document.getElementById("zenEditBtn");
+        const zenMenuContainer = document.getElementById("zenMenuContainer");
         const btnReplace = document.getElementById("btnReplace");
 
         // Task checkbox handler shared by view and zen
@@ -4047,7 +4096,7 @@
           mdPreview.classList.add("visible");
           // Hide all chrome
           appEl.classList.add("zen-mode");
-          zenEditBtn.style.display = "";
+          zenMenuContainer.style.display = "";
         } else if (tab === "view") {
           const note = getActiveNote();
           if (note) {
@@ -4071,7 +4120,7 @@
           cursorPos.style.display = "none";
           btnVim.style.display = "none";
           appEl.classList.remove("zen-mode");
-          zenEditBtn.style.display = "none";
+          zenMenuContainer.style.display = "none";
           // Scroll preview so cursor area is centered
           requestAnimationFrame(() => {
             const scrollMax = mdPreview.scrollHeight - mdPreview.clientHeight;
@@ -4100,7 +4149,7 @@
           cursorPos.style.display = "";
           btnVim.style.display = "";
           appEl.classList.remove("zen-mode");
-          zenEditBtn.style.display = "none";
+          zenMenuContainer.style.display = "none";
           updateEmptyState();
 
           // Clear zen state
@@ -4184,10 +4233,37 @@
       }
 
       function exitZenMode() {
+        closeZenMenu();
         persistZenNote();
         switchMdTab("edit");
         render();
         updateUrl();
+      }
+
+      function toggleZenMenu() {
+        document.getElementById("zenMenu").classList.toggle("visible");
+      }
+
+      function closeZenMenu() {
+        document.getElementById("zenMenu").classList.remove("visible");
+      }
+
+      document.addEventListener("click", (e) => {
+        if (zenModeActive && !e.target.closest(".zen-menu-container")) {
+          closeZenMenu();
+        }
+      });
+
+      async function zenShare() {
+        closeZenMenu();
+        try {
+          await navigator.clipboard.writeText(location.href);
+          const label = document.getElementById("zenCopied");
+          label.classList.add("visible");
+          setTimeout(() => label.classList.remove("visible"), 2000);
+        } catch (err) {
+          console.error("Share failed:", err);
+        }
       }
 
       function updateMdViewUrl() {
