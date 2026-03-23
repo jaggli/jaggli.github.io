@@ -2560,6 +2560,7 @@
       const URL_MAX_LENGTH = 8000;
 
       async function updateUrl() {
+        if (zenModeActive && zenFromUrl && zenEphemeralNote) return;
         const note = getActiveNote();
         if (!note) {
           history.replaceState(null, "", location.pathname);
@@ -4295,6 +4296,12 @@
             (getActiveNote() && isMarkdownFile(getActiveNote().name))
           ) {
             switchMdTab("zen");
+            if (location.hash) {
+              requestAnimationFrame(() => {
+                const el = mdPreview.querySelector(location.hash);
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              });
+            }
           }
         } else if (viewParam === "md") {
           const note = getActiveNote();
