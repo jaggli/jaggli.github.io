@@ -7689,44 +7689,46 @@
         // Skip in vim normal/visual mode
         if (vimState.enabled && vimState.mode !== "insert") return;
 
-        // Alt+Arrow Up/Down — move line up/down
+        // Alt+Arrow Up/Down — move line(s) up/down
         if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
           e.preventDefault();
           const val = editor.value;
-          const cursor = editor.selectionStart;
+          const selStart = editor.selectionStart;
           const selEnd = editor.selectionEnd;
-          const lineStart = val.lastIndexOf("\n", cursor - 1) + 1;
-          const lineEnd = val.indexOf("\n", selEnd);
-          const actualLineEnd = lineEnd === -1 ? val.length : lineEnd;
-          const currentLine = val.substring(lineStart, actualLineEnd);
+          // Expand selection to cover full lines
+          const blockStart = val.lastIndexOf("\n", selStart - 1) + 1;
+          const blockEndNl = val.indexOf("\n", selEnd);
+          const blockEnd = blockEndNl === -1 ? val.length : blockEndNl;
+          const block = val.substring(blockStart, blockEnd);
+          // Offsets of selection within the block
+          const offStart = selStart - blockStart;
+          const offEnd = selEnd - blockStart;
 
-          if (e.key === "ArrowUp" && lineStart > 0) {
-            const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
-            const prevLine = val.substring(prevLineStart, lineStart - 1);
-            const newVal =
+          if (e.key === "ArrowUp" && blockStart > 0) {
+            const prevLineStart = val.lastIndexOf("\n", blockStart - 2) + 1;
+            const prevLine = val.substring(prevLineStart, blockStart - 1);
+            editor.value =
               val.substring(0, prevLineStart) +
-              currentLine +
+              block +
               "\n" +
               prevLine +
-              val.substring(actualLineEnd);
-            editor.value = newVal;
-            const offset = cursor - lineStart;
-            editor.selectionStart = editor.selectionEnd =
-              prevLineStart + offset;
-          } else if (e.key === "ArrowDown" && lineEnd !== -1) {
-            const nextLineEnd = val.indexOf("\n", actualLineEnd + 1);
-            const actualNextEnd = nextLineEnd === -1 ? val.length : nextLineEnd;
-            const nextLine = val.substring(actualLineEnd + 1, actualNextEnd);
-            const newVal =
-              val.substring(0, lineStart) +
+              val.substring(blockEnd);
+            editor.selectionStart = prevLineStart + offStart;
+            editor.selectionEnd = prevLineStart + offEnd;
+          } else if (e.key === "ArrowDown" && blockEndNl !== -1) {
+            const nextLineEndNl = val.indexOf("\n", blockEnd + 1);
+            const nextLineEnd =
+              nextLineEndNl === -1 ? val.length : nextLineEndNl;
+            const nextLine = val.substring(blockEnd + 1, nextLineEnd);
+            editor.value =
+              val.substring(0, blockStart) +
               nextLine +
               "\n" +
-              currentLine +
-              val.substring(actualNextEnd);
-            editor.value = newVal;
-            const offset = cursor - lineStart;
-            editor.selectionStart = editor.selectionEnd =
-              lineStart + nextLine.length + 1 + offset;
+              block +
+              val.substring(nextLineEnd);
+            const newBlockStart = blockStart + nextLine.length + 1;
+            editor.selectionStart = newBlockStart + offStart;
+            editor.selectionEnd = newBlockStart + offEnd;
           }
           editor.dispatchEvent(new Event("input"));
           return;
