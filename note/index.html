@@ -756,10 +756,14 @@
         border: none;
         cursor: pointer;
         font-size: 12px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
         padding: 3px 8px;
         border-radius: 3px;
-        transition: opacity 0.15s, color 0.15s;
+        transition:
+          opacity 0.15s,
+          color 0.15s;
       }
 
       .md-preview pre:hover .code-copy-btn {
@@ -777,7 +781,9 @@
         background: var(--surface0);
         color: var(--subtext);
         font-size: 13px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
         padding: 6px 12px;
         border-radius: 4px;
         opacity: 0;
@@ -2250,9 +2256,7 @@
               const stream = new Blob([compData])
                 .stream()
                 .pipeThrough(new DecompressionStream("deflate-raw"));
-              data = new Uint8Array(
-                await new Response(stream).arrayBuffer(),
-              );
+              data = new Uint8Array(await new Response(stream).arrayBuffer());
             }
 
             // Sanitize filename: strip directories, reject traversal
@@ -2858,13 +2862,15 @@
         [/[{}();:,]/g, "hl-punc"],
       ];
 
+      // RegExp constructors used below to prevent VSCode HTML parser
+      // from seeing </, <!, <!-- sequences inside this <script> block
       const htmlBaseRules = [
-        [/<!DOCTYPE\b[^>]*/gi, "hl-tag"],
-        [/<!--[\s\S]*?-->/g, "hl-cmt"],
+        [new RegExp("<" + "!DOCTYPE\\b[^>]*", "gi"), "hl-tag"],
+        [new RegExp("<" + "!--[\\s\\S]*?-->", "g"), "hl-cmt"],
         [/"(?:[^"\\]|\\.)*"/g, "hl-str"],
         [/'(?:[^'\\]|\\.)*'/g, "hl-str"],
-        [new RegExp("<\\/?[a-zA-Z][a-zA-Z0-9\\-]*", "g"), "hl-tag"],
-        [/\/?>/g, "hl-tag"],
+        [new RegExp("<" + "\\/?[a-zA-Z][a-zA-Z0-9\\-]*", "g"), "hl-tag"],
+        [new RegExp("\\/" + "?>", "g"), "hl-tag"],
         [/\b[a-zA-Z\-:]+(?==)/g, "hl-attr"],
         [/&[a-zA-Z]+;|&#\d+;/g, "hl-bi"],
       ];
@@ -3245,7 +3251,10 @@
           editor.disabled = false;
           btnShare.disabled = false;
           if (note.cursorPos !== undefined) {
-            editor.selectionStart = editor.selectionEnd = Math.min(note.cursorPos, note.content.length);
+            editor.selectionStart = editor.selectionEnd = Math.min(
+              note.cursorPos,
+              note.content.length,
+            );
           }
           // Recover from swap file
           const swap = loadSwap(note.id);
@@ -3285,9 +3294,7 @@
       }
 
       function startRename(noteId) {
-        const item = noteList.querySelector(
-          `.note-item[data-id="${noteId}"]`,
-        );
+        const item = noteList.querySelector(`.note-item[data-id="${noteId}"]`);
         if (!item) return;
         const input = item.querySelector(".note-item-input");
         if (!input) return;
@@ -3535,8 +3542,13 @@
 
         // Language alias map for code blocks
         const langAliases = {
-          javascript: "js", typescript: "ts", python: "py",
-          rust: "rs", bash: "sh", shell: "sh", zsh: "sh",
+          javascript: "js",
+          typescript: "ts",
+          python: "py",
+          rust: "rs",
+          bash: "sh",
+          shell: "sh",
+          zsh: "sh",
           yml: "yaml",
         };
 
@@ -3593,13 +3605,23 @@
             slugCounts[slug] = 0;
           }
           return (
-            "<h" + level + ' id="' + slug + '">' +
-            '<a class="heading-anchor" href="#' + slug + '">#</a>' +
+            "<h" +
+            level +
+            ' id="' +
+            slug +
+            '">' +
+            '<a class="heading-anchor" href="#' +
+            slug +
+            '">#</a>' +
             title +
-            "</h" + level + ">"
+            "</h" +
+            level +
+            ">"
           );
         }
-        text = text.replace(/^######[ \t]+(.+)$/gm, (_, t) => makeHeading(6, t));
+        text = text.replace(/^######[ \t]+(.+)$/gm, (_, t) =>
+          makeHeading(6, t),
+        );
         text = text.replace(/^#####[ \t]+(.+)$/gm, (_, t) => makeHeading(5, t));
         text = text.replace(/^####[ \t]+(.+)$/gm, (_, t) => makeHeading(4, t));
         text = text.replace(/^###[ \t]+(.+)$/gm, (_, t) => makeHeading(3, t));
@@ -3934,9 +3956,12 @@
             mdPreview.innerHTML = renderMarkdown(note.content);
           };
           // Remember cursor line ratio before hiding editor
-          const cursorLine = editor.value.substring(0, editor.selectionStart).split("\n").length;
+          const cursorLine = editor.value
+            .substring(0, editor.selectionStart)
+            .split("\n").length;
           const totalLines = editor.value.split("\n").length;
-          const cursorRatio = totalLines > 1 ? (cursorLine - 1) / (totalLines - 1) : 0;
+          const cursorRatio =
+            totalLines > 1 ? (cursorLine - 1) / (totalLines - 1) : 0;
           // Hide editor elements, show preview
           gutter.style.display = "none";
           editorArea.style.display = "none";
@@ -3949,7 +3974,9 @@
           requestAnimationFrame(() => {
             const scrollMax = mdPreview.scrollHeight - mdPreview.clientHeight;
             if (scrollMax > 0) {
-              const target = cursorRatio * mdPreview.scrollHeight - mdPreview.clientHeight / 2;
+              const target =
+                cursorRatio * mdPreview.scrollHeight -
+                mdPreview.clientHeight / 2;
               mdPreview.scrollTop = Math.max(0, Math.min(target, scrollMax));
             }
           });
@@ -4060,7 +4087,10 @@
         mdToast.textContent = msg;
         mdToast.classList.add("visible");
         clearTimeout(mdToastTimer);
-        mdToastTimer = setTimeout(() => mdToast.classList.remove("visible"), 2000);
+        mdToastTimer = setTimeout(
+          () => mdToast.classList.remove("visible"),
+          2000,
+        );
       }
 
       // Heading anchor click handler
@@ -4087,7 +4117,9 @@
         navigator.clipboard.writeText(code.textContent).then(() => {
           showMdToast("copied to clipboard");
           btn.textContent = "copied";
-          setTimeout(() => { btn.textContent = "copy"; }, 2000);
+          setTimeout(() => {
+            btn.textContent = "copy";
+          }, 2000);
         });
       });
 
@@ -4251,7 +4283,7 @@
           return;
         }
         // Stay in view tab if switching to another markdown file
-        const targetNote = state.notes.find(n => n.id === id);
+        const targetNote = state.notes.find((n) => n.id === id);
         if (mdViewActive) {
           if (targetNote && isMarkdownFile(targetNote.name)) {
             mdPreview.innerHTML = renderMarkdown(targetNote.content);
@@ -6880,9 +6912,7 @@
         let metadata = null;
         if (dirEntry) {
           try {
-            const parsed = JSON.parse(
-              new TextDecoder().decode(dirEntry.data),
-            );
+            const parsed = JSON.parse(new TextDecoder().decode(dirEntry.data));
             if (
               parsed &&
               Array.isArray(parsed.notes) &&
@@ -6900,9 +6930,7 @@
           }
         }
 
-        const importable = entries.filter(
-          (e) => e.name !== ".note.directory",
-        );
+        const importable = entries.filter((e) => e.name !== ".note.directory");
         const skipped = [];
 
         for (const entry of importable) {
@@ -6962,9 +6990,7 @@
               let base = dot > 0 ? name.slice(0, dot) : name;
               let ext = dot > 0 ? name.slice(dot) : "";
               let num = 1;
-              while (
-                state.notes.some((n) => n.name === `${base}${num}${ext}`)
-              )
+              while (state.notes.some((n) => n.name === `${base}${num}${ext}`))
                 num++;
               createNote(`${base}${num}${ext}`, content);
             }
@@ -7903,7 +7929,10 @@
 
           for (const local of state.notes) {
             // Skip notes deleted on remote
-            if (remoteDeleted.has(local.id)) { changed = true; continue; }
+            if (remoteDeleted.has(local.id)) {
+              changed = true;
+              continue;
+            }
             const remote = remoteById.get(local.id);
             if (!remote) {
               merged.push(local);
