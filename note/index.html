@@ -5020,12 +5020,18 @@
       function selectFindMatch(focusEditor) {
         if (findMatchIdx < 0 || findMatchIdx >= findMatches.length) return;
         const m = findMatches[findMatchIdx];
-        // Set selection, then scroll match into view.
-        // blur+focus after setSelectionRange makes the browser
-        // natively scroll the caret into the viewport (works with wrap).
         editor.setSelectionRange(m.start, m.end);
-        editor.blur();
+        // Scroll the match into view by temporarily focusing the editor
+        // (focus triggers native caret-scroll), then return focus to find input.
         editor.focus();
+        // Compute the line of the match and scroll to it
+        const textBefore = editor.value.substring(0, m.start);
+        const line = textBefore.split("\n").length - 1;
+        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
+        const targetScroll = line * lineHeight - editor.clientHeight / 2;
+        editor.scrollTop = Math.max(0, targetScroll);
+        gutter.scrollTop = editor.scrollTop;
+        highlightLayer.scrollTop = editor.scrollTop;
         if (!focusEditor) findInput.focus();
         findReplaceCount.textContent =
           findMatchIdx + 1 + " of " + findMatches.length;
