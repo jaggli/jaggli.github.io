@@ -967,12 +967,16 @@
         padding: 0 6px;
         border-radius: 4px;
         cursor: pointer;
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
       }
 
       .md-preview li.task-item ol,
       .md-preview li.task-item ul {
         padding-left: 46px;
         margin-top: 0;
+        width: 100%;
       }
 
       .md-preview li.task-item:hover:not(:has(li.task-item:hover)) {
@@ -987,13 +991,13 @@
         border: 2px solid var(--green);
         border-radius: 3px;
         margin-right: 8px;
-        vertical-align: middle;
         position: relative;
         cursor: pointer;
+        flex-shrink: 0;
       }
 
       .md-preview li.task-item > span {
-        vertical-align: middle;
+        flex: 1;
       }
 
       .md-preview li.task-item input[type="checkbox"]:checked {
@@ -2428,8 +2432,71 @@
       const WRAP_KEY = "notepad_wrap";
       const VIM_KEY = "notepad_vim";
       const SWAP_PREFIX = "notepad_swap_";
+      const TAB_LEADER_KEY = "notepad_tab_leader";
       let state = { notes: [], activeId: null, deletedIds: [] };
       let saveTimeout = null;
+      const tabId =
+        Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      let isTabLeader = false;
+
+      function claimLeadership() {
+        isTabLeader = true;
+        localStorage.setItem(TAB_LEADER_KEY, tabId);
+      }
+
+      function revokeLeadership() {
+        if (!isTabLeader) return;
+        isTabLeader = false;
+        // Stop all pending syncs & Drive timers
+        clearTimeout(saveTimeout);
+        try {
+          clearTimeout(gdriveSyncTimeout);
+          clearTimeout(gdriveRefreshTimer);
+        } catch {}
+      }
+
+      /**
+       * Pull latest state from localStorage (written by the leader tab).
+       * If the user edited a note in this (non-leader) tab, preserve those
+       * edits by keeping the in-memory version when it's newer.
+       */
+      function pullStateFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const newState = JSON.parse(raw);
+          const activeNote = getActiveNote();
+
+          // Build a map of local in-memory notes that may have unsaved edits
+          const localById = new Map(state.notes.map((n) => [n.id, n]));
+
+          // Merge: prefer the version with the latest updatedAt
+          state.notes = newState.notes.map((remote) => {
+            const local = localById.get(remote.id);
+            if (
+              local &&
+              local.updatedAt > remote.updatedAt
+            ) {
+              return local; // keep unsaved in-memory edits
+            }
+            return remote;
+          });
+          // Also keep any notes that exist locally but not in storage
+          for (const local of localById.values()) {
+            if (!newState.notes.some((n) => n.id === local.id)) {
+              state.notes.push(local);
+            }
+          }
+
+          if (activeNote && state.notes.find((n) => n.id === activeNote.id)) {
+            state.activeId = activeNote.id;
+          } else {
+            state.activeId = newState.activeId;
+          }
+          render();
+        } catch {}
+      }
+
       let vimState = {
         enabled: false,
         mode: "normal",
@@ -2470,6 +2537,7 @@
       }
 
       function saveState() {
+        if (!isTabLeader) return;
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (e) {
@@ -2483,6 +2551,7 @@
       }
 
       function scheduleSave() {
+        if (!isTabLeader) return;
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
           saveState();
@@ -7433,7 +7502,14 @@
       // ═══════════════════════════════════════════════════
 
       window.addEventListener("storage", (e) => {
+        // Another tab claimed leadership — this tab must stop syncing
+        if (e.key === TAB_LEADER_KEY && e.newValue !== tabId) {
+          revokeLeadership();
+        }
         if (e.key === STORAGE_KEY && e.newValue) {
+          // Only non-leader tabs should react to storage changes
+          // (the leader wrote them, so it already has the data)
+          if (isTabLeader) return;
           try {
             const newState = JSON.parse(e.newValue);
             const currentContent = editor.value;
@@ -7473,6 +7549,35 @@
             vimState.mode = "normal";
           }
           updateCursorPos();
+        }
+      });
+
+      // ═══════════════════════════════════════════════════
+      //  Tab Leadership (only the active tab syncs)
+      // ═══════════════════════════════════════════════════
+
+      function reclaimLeadership() {
+        if (isTabLeader) return;
+        // Pull latest state written by the previous leader, then take over
+        pullStateFromStorage();
+        claimLeadership();
+        // Persist merged state now that we're leader
+        saveState();
+        // Resume Drive sync if connected
+        if (gdriveConnected) driveSyncQuiet();
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reclaimLeadership();
+      });
+
+      window.addEventListener("focus", reclaimLeadership);
+
+      // Flush pending saves when the leader tab is closed
+      window.addEventListener("beforeunload", () => {
+        if (isTabLeader && saveTimeout) {
+          clearTimeout(saveTimeout);
+          saveState();
         }
       });
 
@@ -7877,7 +7982,7 @@
         // Refresh 5 minutes before expiry
         const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 0);
         gdriveRefreshTimer = setTimeout(async () => {
-          if (!gdriveConnected) return;
+          if (!gdriveConnected || !isTabLeader) return;
           try {
             await silentTokenRefresh();
           } catch {
@@ -8179,7 +8284,7 @@
       let gdriveUploading = false;
 
       function scheduleDriveUpload(immediate) {
-        if (!gdriveConnected) return;
+        if (!gdriveConnected || !isTabLeader) return;
         gdriveDirty = true;
         clearTimeout(gdriveSyncTimeout);
         if (immediate) {
@@ -8191,7 +8296,7 @@
       }
 
       async function driveSyncQuiet() {
-        if (!gdriveConnected) return;
+        if (!gdriveConnected || !isTabLeader) return;
         setSyncDotSyncing(true);
         try {
           const file = await gdriveFindFile();
@@ -8275,7 +8380,7 @@
       }
 
       async function drivePushQuiet() {
-        if (!gdriveDirty || gdriveUploading) return;
+        if (!gdriveDirty || gdriveUploading || !isTabLeader) return;
         gdriveUploading = true;
         setSyncDotSyncing(true);
         try {
@@ -8473,6 +8578,9 @@
         loadState();
         loadWrap();
         loadVim();
+
+        // This tab is the newest — claim leadership so it can sync
+        claimLeadership();
 
         // Restore Google Drive session
         const tokenState = restoreToken();
