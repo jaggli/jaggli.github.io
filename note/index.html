@@ -4257,7 +4257,7 @@
       async function zenShare() {
         closeZenMenu();
         try {
-          await navigator.clipboard.writeText(location.href);
+          await navigator.clipboard.writeText(location.href.split("#")[0]);
           const label = document.getElementById("zenCopied");
           label.classList.add("visible");
           setTimeout(() => label.classList.remove("visible"), 2000);
@@ -4350,7 +4350,7 @@
         e.preventDefault();
         const slug = anchor.getAttribute("href").slice(1);
         const url = location.href.split("#")[0] + "#" + slug;
-        history.replaceState(null, "", "#" + slug);
+        history.replaceState(null, "", location.pathname + location.search + "#" + slug);
         const heading = anchor.closest("h1,h2,h3,h4,h5,h6");
         if (heading) heading.scrollIntoView({ behavior: "smooth" });
         navigator.clipboard.writeText(url).then(() => {
