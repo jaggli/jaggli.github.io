@@ -417,7 +417,7 @@ selectFindMatch(focusEditor)
 | Lists (ul) | Normalize marker to `-`, 2-space indent multiples |
 | Lists (ol) | Preserve numbering, normalize indent |
 | Task lists | Normalize `- [ ]` / `- [x]` spacing |
-| Tables | Align columns to equal width, pad cells |
+| Tables | Align columns to equal width, pad cells respecting `:---` / `---:` / `:---:` alignment |
 | Blockquotes | Normalize to `> ` (single space) |
 | Horizontal rules | Normalize to `---` |
 | Blank lines | Collapse consecutive blanks to 1 |

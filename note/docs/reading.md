@@ -347,6 +347,25 @@ Pipe-delimited tables are rendered with standard HTML table markup:
 
 The separator row (`| --- | --- |`) determines column count. Header cells use `<th>`, body cells use `<td>`.
 
+### Column Alignment
+
+The separator row supports alignment markers using colons:
+
+```markdown
+| Left   |  Right | Center |
+| :----- | -----: | :----: |
+| text   |   text |  text  |
+```
+
+| Separator | Alignment | CSS class |
+| --------- | --------- | --------- |
+| `:---`    | Left      | (default) |
+| `---:`    | Right     | `.align-right` |
+| `:---:`   | Center    | `.align-center` |
+| `---`     | Left      | (default) |
+
+Alignment is applied as CSS classes on both `<th>` and `<td>` elements. The formatter (`formatMarkdown`) also respects alignment — right-aligned cells are right-padded, centered cells are center-padded in the source.
+
 ---
 
 ## Keyboard Shortcuts

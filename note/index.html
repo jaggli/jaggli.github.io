@@ -943,6 +943,14 @@
         background: var(--overlay);
       }
 
+      .md-preview .align-right {
+        text-align: right;
+      }
+
+      .md-preview .align-center {
+        text-align: center;
+      }
+
       .md-preview details {
         max-width: 68ch;
         margin: 0.6em 0;
@@ -3955,9 +3963,23 @@
 
           if (rows.length === 0) continue;
 
-          // Compute column widths
+          // Parse alignment from separator row
           const colCount = Math.max(...rows.map((r) => r.length));
-          const widths = new Array(colCount).fill(3); // minimum 3 for ---
+          const aligns = new Array(colCount).fill("left");
+          if (sepIdx >= 0) {
+            const sepCells = rows[sepIdx];
+            for (let c = 0; c < sepCells.length; c++) {
+              const s = sepCells[c];
+              const left = s.startsWith(":");
+              const right = s.endsWith(":");
+              if (left && right) aligns[c] = "center";
+              else if (right) aligns[c] = "right";
+              else aligns[c] = "left";
+            }
+          }
+
+          // Compute column widths
+          const widths = new Array(colCount).fill(3);
           for (const row of rows) {
             for (let c = 0; c < row.length; c++) {
               if (row[c] !== undefined) widths[c] = Math.max(widths[c], row[c].length);
@@ -3970,10 +3992,18 @@
             let line = "|";
             for (let c = 0; c < colCount; c++) {
               if (isSep) {
-                line += " " + "-".repeat(widths[c]) + " |";
+                const dashes = "-".repeat(widths[c]);
+                if (aligns[c] === "center") line += " :" + dashes.slice(2) + ": |";
+                else if (aligns[c] === "right") line += " " + dashes.slice(1) + ": |";
+                else line += " " + dashes + " |";
               } else {
-                const cell = (rows[r][c] || "").padEnd(widths[c]);
-                line += " " + cell + " |";
+                const cell = rows[r][c] || "";
+                if (aligns[c] === "right") line += " " + cell.padStart(widths[c]) + " |";
+                else if (aligns[c] === "center") {
+                  const pad = widths[c] - cell.length;
+                  const left = Math.floor(pad / 2);
+                  line += " " + " ".repeat(left) + cell + " ".repeat(pad - left) + " |";
+                } else line += " " + cell.padEnd(widths[c]) + " |";
               }
             }
             out[start + r].text = line;
@@ -4241,15 +4271,30 @@
           /^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm,
           (_, header, sep, body) => {
             const splitRow = (r) => r.split("|").slice(1, -1);
+            // Parse alignment from separator row
+            const aligns = splitRow(sep).map((c) => {
+              const s = c.trim();
+              const left = s.startsWith(":");
+              const right = s.endsWith(":");
+              if (left && right) return "center";
+              if (right) return "right";
+              return "left";
+            });
+            const alignAttr = (i) => {
+              const a = aligns[i];
+              if (a === "right") return ' class="align-right"';
+              if (a === "center") return ' class="align-center"';
+              return "";
+            };
             const ths = splitRow(header)
-              .map((c) => "<th>" + c.trim() + "</th>")
+              .map((c, i) => "<th" + alignAttr(i) + ">" + c.trim() + "</th>")
               .join("");
             const rows = body
               .trim()
               .split("\n")
               .map((row) => {
                 const tds = splitRow(row)
-                  .map((c) => "<td>" + c.trim() + "</td>")
+                  .map((c, i) => "<td" + alignAttr(i) + ">" + c.trim() + "</td>")
                   .join("");
                 return "<tr>" + tds + "</tr>";
               })
