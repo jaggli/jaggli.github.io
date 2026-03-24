@@ -8277,10 +8277,15 @@
           redo();
           return;
         }
-        // Ctrl+S: suppress browser save, autoformat markdown, force sync (not in vim — use :w)
+        // Ctrl+S: suppress browser save
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
-          if (!vimState.enabled) {
+          // Vim mode: do nothing (use :w)
+          if (vimState.enabled) return;
+          // Zen mode: do nothing
+          if (zenModeActive) return;
+          // Edit mode (non-vim): autoformat markdown, then save + sync
+          if (!mdViewActive) {
             const note = getActiveNote();
             if (note && isMarkdownFile(note.name)) {
               const pos = editor.selectionStart;
@@ -8293,10 +8298,11 @@
               updateHighlight();
               updateCursorPos();
             }
-            saveState();
-            scheduleUrlUpdate();
-            if (gdriveConnected) driveSync();
           }
+          // Save + sync (edit mode and view mode, not zen)
+          saveState();
+          scheduleUrlUpdate();
+          if (gdriveConnected) driveSync();
           return;
         }
         // New note
