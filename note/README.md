@@ -5,14 +5,14 @@ in your browser. No signup, no backend, no dependencies.
 Just open the page and start typing.
 
 Built as a single `index.html` file with vanilla JS and
-CSS (~7000 lines). Your notes are stored in `localStorage`
+CSS (~9400 lines). Your notes are stored in `localStorage`
 by default. Optionally, sign in with Google to sync notes
 across devices via Google Drive.
 
 ## How it works
 
 - **Single file**: The entire app is one self-contained
-  HTML file (~7000 lines). No build step, no bundler,
+  HTML file (~9400 lines). No build step, no bundler,
   no framework.
 - **Local storage**: Notes are persisted in your
   browser's `localStorage` (5MB limit). A storage meter
@@ -20,10 +20,12 @@ across devices via Google Drive.
 - **Cross-tab sync**: Open the editor in multiple tabs —
   changes to notes, sidebar width, word wrap, vim mode,
   and pin state sync instantly via `storage` events.
-- **URL sharing**: Notes can be shared via URL using zlib
-  compression encoded in query parameters. The shared
-  note is embedded in the link itself — no server
-  involved (~8kB size limit).
+- **URL sharing**: Notes can be shared via URL using
+  deflate-raw compression encoded in hash parameters.
+  The shared note is embedded in the link itself — no
+  server involved (~60kB URL limit). Sensitive data
+  (name, content) stays in the hash fragment, never
+  sent to servers.
 - **Google Drive sync**: Optionally sign in with Google
   to sync notes across devices. Files are stored in your
   Google Drive's hidden app folder — no storage cost to
@@ -35,9 +37,9 @@ across devices via Google Drive.
 
 ## Features
 
-- Syntax highlighting for 11+ languages
-  (JS, TS, Python, Rust, Go, CSS, HTML, JSON,
-  YAML, TOML, Markdown, and more)
+- Syntax highlighting for 12 languages
+  (JS, TS, Python, Rust, Go, CSS/SCSS, HTML/XML,
+  JSON, YAML, TOML, Markdown, Shell/Bash)
 - Fuzzy search across all notes
 - Find & replace within a note
 - Drag-and-drop file import
@@ -49,8 +51,9 @@ across devices via Google Drive.
 - Vim mode (toggle in toolbar, desktop only)
 - Word wrap toggle with wrap-aware line numbers
 - Current line highlighting
-- Markdown preview (edit/view tabs for `.md` files)
-  with inter-note linking (`[label](other.md)`)
+- Markdown preview with edit/view/zen tabs for `.md` files
+- Inter-note linking (`[label](other.md)`) with browser
+  back/forward navigation between notes
 - Heading anchors in preview (hover to reveal `#` link,
   click to copy shareable URL with anchor)
 - Clickable anchor links (`[link](#heading)`) scroll
@@ -58,14 +61,21 @@ across devices via Google Drive.
 - Code block copy button (hover to reveal, click to copy)
 - Syntax-highlighted fenced code blocks in preview
   (when a language tag is specified)
+- Tables with column alignment (left, center, right)
+- Horizontal rules
+- `<details>`/`<summary>` collapsible sections
 - Interactive task checkboxes with cascading
   parent/child toggling
+- Markdown formatter (`:fmt` or Ctrl+Shift+F) for
+  consistent heading, list, table, and whitespace style
+- Zen mode for distraction-free reading/writing
 - Cursor position memory (persisted per note across
   sessions and mode switches)
 - Cursor position (line/column) and vim mode indicator in status bar
 - Indent/dedent selection with Tab/Shift+Tab
 - Move lines up/down with Alt+Arrow keys
 - Undo/redo with per-note history
+- Browser back/forward for note and tab switches
 - Delete confirmation dialog
 - Built-in help page (accessible from file menu)
 - Mobile-optimized UI with touch-friendly controls
@@ -92,25 +102,29 @@ Features include:
   to navigate matches, `*`/`#` to search word under cursor
 - Command mode (`:`) with `:set wrap`, `:set nowrap`,
   `:new`, `:e <name>`, `:view` (markdown preview),
+  `:fmt` (format markdown), `:mddemo` (demo file),
   `:help`, `:<number>` (jump to line),
   `:%s/find/replace/g` (opens find & replace)
 - Count prefixes (e.g. `3dw`, `5j`, `2>>`)
 
 ## Keyboard shortcuts
 
-| Shortcut        | Action                             |
-| --------------- | ---------------------------------- |
-| Ctrl+N          | New note                           |
-| Ctrl+P / Ctrl+F | Search all notes                   |
-| Ctrl+H          | Find & replace                     |
-| Ctrl+Shift+D    | Delete note                        |
-| Ctrl+Z          | Undo                               |
-| Ctrl+Shift+Z    | Redo                               |
-| Tab             | Insert 2 spaces / indent selection |
-| Shift+Tab       | Dedent selection                   |
-| Alt+↑ / Alt+↓   | Move line up / down                |
-| e               | Switch from view to edit (in markdown preview) |
-| Escape          | Close search / sidebar / find bar  |
+| Shortcut        | Action                                         |
+| --------------- | ---------------------------------------------- |
+| Ctrl+N          | New note                                       |
+| Ctrl+P / Ctrl+F | Search all notes                               |
+| Ctrl+H          | Find & replace                                 |
+| Ctrl+S          | Format (`.md` only) + save + sync              |
+| Ctrl+Shift+D    | Delete note                                    |
+| Ctrl+Shift+F    | Format markdown                                |
+| Ctrl+Shift+M    | Toggle vim mode                                |
+| Ctrl+Z          | Undo                                           |
+| Ctrl+Shift+Z    | Redo                                           |
+| Tab             | Insert 2 spaces / indent selection             |
+| Shift+Tab       | Dedent selection                               |
+| Alt+↑ / Alt+↓   | Move line up / down                            |
+| e               | Switch from view/zen to edit tab               |
+| Escape          | Close search / sidebar / find bar / exit zen   |
 
 When vim mode is active, standard vim keybindings take
 precedence in the editor. The shortcuts above still work
@@ -128,7 +142,7 @@ prompt for a filename via a styled dialog.
 - **Theme**: [Catppuccin Mocha](https://catppuccin.com)
 - **Font**: [Victor Mono](https://rubjo.github.io/victor-mono/)
   (served locally)
-- **Compression**: zlib via `CompressionStream` /
+- **Compression**: deflate-raw via `CompressionStream` /
   `DecompressionStream` APIs for URL sharing
 - **Zip**: Custom minimal zip builder (no library)
   for multi-note download
