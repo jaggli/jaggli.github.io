@@ -1606,6 +1606,27 @@
         background: transparent;
       }
 
+      /* Selection occurrence indicators (scrollbar track) */
+      .occurrence-track {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 8px;
+        height: 100%;
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      .occurrence-marker {
+        position: absolute;
+        right: 1px;
+        width: 6px;
+        height: 3px;
+        background: var(--blue);
+        opacity: 0.6;
+        border-radius: 1px;
+      }
+
       /* Mobile files button (hidden on desktop) */
       .btn-files {
         display: none;
@@ -1905,6 +1926,7 @@
             ></textarea>
             <div class="vim-cursor" id="vimCursor"></div>
           </div>
+          <div class="occurrence-track" id="occurrenceTrack"></div>
           <div class="md-preview" id="mdPreview"></div>
           <div
             class="zen-menu-container"
@@ -3411,6 +3433,69 @@
         storageUsage.title = `localStorage: ${label} / 5MB`;
       }
 
+      /* Selection occurrence markers */
+      const occurrenceTrack = document.getElementById("occurrenceTrack");
+      let occurrenceTimeout = null;
+      let lastOccurrenceQuery = "";
+
+      function updateOccurrenceMarkers() {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const text = editor.value || "";
+        const selected = text.substring(start, end);
+
+        // Clear if selection is empty, whitespace-only, or too short
+        if (!selected || selected.length < 2 || /^\s+$/.test(selected)) {
+          if (lastOccurrenceQuery !== "") {
+            occurrenceTrack.innerHTML = "";
+            lastOccurrenceQuery = "";
+          }
+          return;
+        }
+
+        // Skip if same query
+        if (selected === lastOccurrenceQuery) return;
+        lastOccurrenceQuery = selected;
+
+        // Find all occurrences (case-insensitive)
+        const lower = text.toLowerCase();
+        const qLower = selected.toLowerCase();
+        const positions = [];
+        let idx = 0;
+        while ((idx = lower.indexOf(qLower, idx)) !== -1) {
+          positions.push(idx);
+          idx += 1;
+        }
+
+        if (positions.length < 2) {
+          occurrenceTrack.innerHTML = "";
+          return;
+        }
+
+        // Count total lines
+        const totalLines = text.split("\n").length;
+        const trackHeight = occurrenceTrack.clientHeight;
+        if (totalLines === 0 || trackHeight === 0) {
+          occurrenceTrack.innerHTML = "";
+          return;
+        }
+
+        // Build markers
+        let html = "";
+        for (let i = 0; i < positions.length; i++) {
+          const before = text.substring(0, positions[i]);
+          const line = before.split("\n").length - 1;
+          const top = Math.round((line / totalLines) * trackHeight);
+          html += '<div class="occurrence-marker" style="top:' + top + 'px"></div>';
+        }
+        occurrenceTrack.innerHTML = html;
+      }
+
+      function scheduleOccurrenceUpdate() {
+        clearTimeout(occurrenceTimeout);
+        occurrenceTimeout = setTimeout(updateOccurrenceMarkers, 150);
+      }
+
       let cursorSaveTimeout = null;
       function updateCursorPos() {
         const val = editor.value || "";
@@ -3447,6 +3532,7 @@
         }
         updateGutterActive();
         if (typeof vimUpdateBlockCursor === "function") vimUpdateBlockCursor();
+        scheduleOccurrenceUpdate();
       }
 
       function updateEmptyState() {
@@ -3457,6 +3543,8 @@
       }
 
       function renderEditor() {
+        occurrenceTrack.innerHTML = "";
+        lastOccurrenceQuery = "";
         const note = getActiveNote();
         if (note) {
           editor.value = note.content;
@@ -7698,6 +7786,7 @@
       // ═══════════════════════════════════════════════════
 
       editor.addEventListener("input", () => {
+        lastOccurrenceQuery = "";
         const note = getActiveNote();
         if (!note) return;
         // In vim mode, skip automatic history — vim commands handle their own undo
@@ -7742,6 +7831,7 @@
       });
       editor.addEventListener("keyup", updateCursorPos);
       editor.addEventListener("select", updateCursorPos);
+      editor.addEventListener("mouseup", scheduleOccurrenceUpdate);
 
       editor.addEventListener("keydown", vimHandleKeydown);
 

@@ -5,17 +5,17 @@
 The editor uses a **grid-based overlay** system. Three elements are stacked in the same CSS grid cell (`grid-area: 1 / 1 / 2 / 2`):
 
 ```
-┌──────────┬─────────────────────────────────────┐
-│          │  highlight-layer  (z-index: 0)      │
-│  gutter  │  ─ opaque background, colored spans │
-│          │  ─ pointer-events: none             │
-│  (line   │                                     │
-│  numbers)│  textarea  (z-index: 1)             │
-│          │  ─ transparent text & background    │
-│          │  ─ receives all input               │
-│          │  ─ caret-color: visible             │
-│          │  ─ ::selection visible (rgba blue)  │
-└──────────┴─────────────────────────────────────┘
+┌──────────┬─────────────────────────────────────┬────────┐
+│          │  highlight-layer  (z-index: 0)      │        │
+│  gutter  │  ─ opaque background, colored spans │ occur- │
+│          │  ─ pointer-events: none             │ rence  │
+│  (line   │                                     │ track  │
+│  numbers)│  textarea  (z-index: 1)             │ (z: 4) │
+│          │  ─ transparent text & background    │        │
+│          │  ─ receives all input               │ 8px    │
+│          │  ─ caret-color: visible             │ wide   │
+│          │  ─ ::selection visible (rgba blue)  │        │
+└──────────┴─────────────────────────────────────┴────────┘
 ```
 
 The user types in the textarea (transparent text), but sees syntax-highlighted text rendered in the `<pre>` layer behind it. The textarea's `::selection` pseudo-element shows through because the textarea is on top.
@@ -375,3 +375,47 @@ selectFindMatch(focusEditor)
 - **Replace current:** uses `document.execCommand("insertText")` to preserve undo history
 - **Replace all:** direct string replacement via `editor.value = result`
 - After replace: `updateFindMatches()` re-scans to update match list
+
+---
+
+## Selection Occurrence Indicators
+
+When the user selects text (2+ characters, non-whitespace) in either normal or vim visual mode, small markers appear on the right edge of the editor — aligned with the scrollbar — showing where all other occurrences of that text exist in the document.
+
+### How It Works
+
+```
+updateOccurrenceMarkers()
+  → read editor.selectionStart / selectionEnd
+  → if selection < 2 chars or whitespace-only → clear markers
+  → case-insensitive indexOf scan (same pattern as updateFindMatches)
+  → if < 2 occurrences → clear markers (no point highlighting just the selection)
+  → for each occurrence: compute line number, map to vertical position in track
+  → render markers as absolutely-positioned divs in occurrence-track
+```
+
+### DOM Structure
+
+The occurrence track is a sibling of `.editor-area` inside `.editor-wrap`, positioned absolutely on the right edge:
+
+```html
+<div class="editor-wrap">
+  <div class="gutter">...</div>
+  <div class="editor-area">...</div>
+  <div class="occurrence-track" id="occurrenceTrack">
+    <div class="occurrence-marker" style="top:42px"></div>
+    <div class="occurrence-marker" style="top:185px"></div>
+  </div>
+</div>
+```
+
+### Event Triggers
+
+- **`updateCursorPos()`** → `scheduleOccurrenceUpdate()` (debounced 150ms) — fires on `keyup`, `select`, `click`
+- **`mouseup`** → `scheduleOccurrenceUpdate()` — catches drag selections
+- **`input`** → resets `lastOccurrenceQuery` cache so markers recalculate after content changes
+- **`renderEditor()`** → clears markers on note switch
+
+### Caching
+
+`lastOccurrenceQuery` stores the last selected text. If the selection hasn't changed, the scan is skipped. Reset on content changes (`input` event) and note switches (`renderEditor`).
