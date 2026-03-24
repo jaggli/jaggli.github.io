@@ -1906,14 +1906,14 @@
           <button
             class="md-tab active"
             id="mdTabEdit"
-            onclick="switchMdTab('edit')"
+            onclick="switchMdTab('edit', true)"
           >
             edit
           </button>
-          <button class="md-tab" id="mdTabView" onclick="switchMdTab('view')">
+          <button class="md-tab" id="mdTabView" onclick="switchMdTab('view', true)">
             view
           </button>
-          <button class="md-tab" id="mdTabZen" onclick="switchMdTab('zen')">
+          <button class="md-tab" id="mdTabZen" onclick="switchMdTab('zen', true)">
             zen
           </button>
         </div>
@@ -2712,13 +2712,17 @@
             // Too long — drop note content from URL, hide share
             hashMap.delete("note");
             history.replaceState(
-              null,
+              { noteId: note.id, tab: currentTab() },
               "",
               location.pathname + query + buildHash(hashMap),
             );
             btnShare.style.display = "none";
           } else {
-            history.replaceState(null, "", full);
+            history.replaceState(
+              { noteId: note.id, tab: currentTab() },
+              "",
+              full,
+            );
             btnShare.style.display = "";
           }
         } catch {}
@@ -4424,7 +4428,20 @@
         }
       }
 
-      function switchMdTab(tab) {
+      function currentTab() {
+        return zenModeActive ? "zen" : mdViewActive ? "view" : "edit";
+      }
+
+      function switchMdTab(tab, pushHistory) {
+        // Push current state for browser back/forward when user switches tabs
+        if (pushHistory && tab !== currentTab()) {
+          const note = getActiveNote();
+          history.pushState(
+            { noteId: note ? note.id : null, tab: currentTab() },
+            "",
+            location.href,
+          );
+        }
         zenModeActive = tab === "zen";
         mdViewActive = tab === "view" || tab === "zen";
         mdTabEdit.classList.toggle("active", tab === "edit");
@@ -4693,7 +4710,7 @@
       function exitZenMode() {
         closeZenMenu();
         persistZenNote();
-        switchMdTab("edit");
+        switchMdTab("edit", true);
         render();
         updateUrl();
       }
@@ -4739,10 +4756,7 @@
         const query = queryStr ? "?" + queryStr : "";
         const note = getActiveNote();
         history.replaceState(
-          {
-            noteId: note ? note.id : null,
-            view: zenModeActive ? "zen" : mdViewActive,
-          },
+          { noteId: note ? note.id : null, tab: currentTab() },
           "",
           location.pathname + query + location.hash,
         );
@@ -4892,7 +4906,7 @@
           e.preventDefault();
           // Push current state before navigating
           history.pushState(
-            { noteId: state.activeId, view: mdViewActive },
+            { noteId: state.activeId, tab: currentTab() },
             "",
             location.href,
           );
@@ -4900,7 +4914,7 @@
           navigateToNote(target.id, wantView);
           // Replace the new entry's URL with the target note's URL
           history.replaceState(
-            { noteId: target.id, view: wantView },
+            { noteId: target.id, tab: wantView ? "view" : "edit" },
             "",
             location.href,
           );
@@ -4908,15 +4922,22 @@
       });
 
       // Handle browser back/forward
+      function restoreTab(tab, note) {
+        if (!note || !isMarkdownFile(note.name)) {
+          if (mdViewActive || zenModeActive) switchMdTab("edit");
+          return;
+        }
+        const target = tab || "edit";
+        if (target !== currentTab()) switchMdTab(target);
+      }
+
       window.addEventListener("popstate", async (e) => {
         if (e.state && e.state.noteId) {
           const note = state.notes.find((n) => n.id === e.state.noteId);
           if (note) {
-            navigateToNote(
-              note.id,
-              e.state.view && isMarkdownFile(note.name),
-              true,
-            );
+            // Navigate without creating history or triggering tab logic
+            navigateToNote(note.id, false, true);
+            restoreTab(e.state.tab, note);
             const hashMap = parseHashParams(location.hash);
             const anchor = hashMap.get("anchor");
             if (anchor) {
@@ -4929,7 +4950,35 @@
             }
           }
         } else {
-          // Fallback: try to load from URL params
+          // Fallback: try to find note by name in hash
+          const hashMap = parseHashParams(location.hash);
+          const name = hashMap.get("name");
+          if (name) {
+            const note = state.notes.find((n) => n.name === name);
+            if (note) {
+              const viewParam =
+                new URLSearchParams(location.search).get("view");
+              const tab =
+                viewParam === "zen"
+                  ? "zen"
+                  : viewParam === "md"
+                    ? "view"
+                    : "edit";
+              navigateToNote(note.id, false, true);
+              restoreTab(tab, note);
+              const anchor = hashMap.get("anchor");
+              if (anchor) {
+                requestAnimationFrame(() => {
+                  const el = mdPreview.querySelector(
+                    "#" + CSS.escape(anchor),
+                  );
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                });
+              }
+              return;
+            }
+          }
+          // Last resort: decompress from URL params
           const loaded = await loadFromUrl();
           if (loaded) {
             render();
@@ -5029,6 +5078,14 @@
         if (vimState.enabled && vimState.bufferDirty) {
           vimShowError("No write since last change (add ! to override)");
           return;
+        }
+        // Push current state for browser back/forward navigation
+        if (state.activeId && state.activeId !== id) {
+          history.pushState(
+            { noteId: state.activeId, tab: currentTab() },
+            "",
+            location.href,
+          );
         }
         // Stay in view tab if switching to another markdown file
         const targetNote = state.notes.find((n) => n.id === id);
@@ -5814,7 +5871,7 @@
       function toggleVim() {
         // In view mode, switch to edit tab first
         if (mdViewActive) {
-          switchMdTab("edit");
+          switchMdTab("edit", true);
           if (vimState.enabled) return; // already in vim, just switch to edit
         }
         // If disabling vim, save buffer first (like :wq)
@@ -7245,7 +7302,7 @@
           const note = getActiveNote();
           if (note && isMarkdownFile(note.name)) {
             if (vimState.bufferDirty) vimWriteBuffer();
-            switchMdTab("view");
+            switchMdTab("view", true);
           } else {
             vimShowError("Not a markdown file");
           }
@@ -8249,7 +8306,7 @@
           !e.altKey
         ) {
           e.preventDefault();
-          switchMdTab("edit");
+          switchMdTab("edit", true);
           return;
         }
         // Find & Replace (skip if typing in an input)

@@ -58,13 +58,13 @@ scheduleSave()                       300ms debounce
 
 **Trigger:** Ctrl/Cmd+S keydown.
 
-| Context                        | Action                                             |
-| ------------------------------ | -------------------------------------------------- |
-| Edit mode, non-vim, `.md` file | Format markdown → save → update URL → `driveSync()`|
-| Edit mode, non-vim, other file | Save → update URL → `driveSync()`                  |
-| View tab (markdown preview)    | Save → update URL → `driveSync()` (no formatting)  |
-| Vim mode (any file)            | Nothing — suppresses browser save only. Use `:w`   |
-| Zen mode                       | Nothing — suppresses browser save only             |
+| Context                        | Action                                              |
+| ------------------------------ | --------------------------------------------------- |
+| Edit mode, non-vim, `.md` file | Format markdown → save → update URL → `driveSync()` |
+| Edit mode, non-vim, other file | Save → update URL → `driveSync()`                   |
+| View tab (markdown preview)    | Save → update URL → `driveSync()` (no formatting)   |
+| Vim mode (any file)            | Nothing — suppresses browser save only. Use `:w`    |
+| Zen mode                       | Nothing — suppresses browser save only              |
 
 `driveSync()` performs a full sync (same as first-time connection, minus auth if token is valid).
 

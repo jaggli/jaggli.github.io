@@ -333,6 +333,14 @@ All links get `rel="noopener noreferrer"` and a `title` attribute with the URL.
 
 Links in view/zen mode open normally (no special interception). Fragment links (`#anchor`) are intercepted for smooth in-page scrolling.
 
+### Inter-Note Link Navigation
+
+Relative links (e.g., `[see todo](todo.md)`) are matched against existing notes by name. Clicking one:
+
+1. Pushes the current note onto browser history (`pushState`)
+2. Switches to the target note
+3. Browser back/forward buttons navigate between notes visited this way
+
 ---
 
 ## Tables

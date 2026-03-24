@@ -151,8 +151,29 @@ scheduleUrlUpdate()                      500ms debounce
     → compress(note.content)             async
     → if URL > URL_MAX_LENGTH (60000):
         drop "note" param, hide share button
-    → history.replaceState(...)          no page reload
+    → history.replaceState(...)          no page reload, preserves noteId in state
 ```
+
+### Browser History (Back/Forward)
+
+Note switching and tab switching create history entries. Content (`note=`) and anchor (`anchor=`) changes use `replaceState` and do not affect browser history.
+
+| Action                      | History API    | Creates history entry? |
+| --------------------------- | -------------- | ---------------------- |
+| Switch note (sidebar/`:e`)  | `pushState`    | Yes                    |
+| Inter-note link click       | `pushState`    | Yes                    |
+| Tab switch (edit/view/zen)  | `pushState`    | Yes                    |
+| Exit zen (menu/Esc/`e` key) | `pushState`    | Yes                    |
+| Content edit (typing)       | `replaceState` | No                     |
+| Anchor click / in-page `#`  | `replaceState` | No                     |
+
+History state stores `{ noteId, tab }` where `tab` is `"edit"`, `"view"`, or `"zen"`.
+
+On `popstate` (back/forward), the handler:
+
+1. Reads `noteId` and `tab` from `history.state` if available
+2. Falls back to looking up the note by `name=` in the hash (derives tab from `?view=` param)
+3. Last resort: decompresses from URL via `loadFromUrl()`
 
 ### Load Flow (page load)
 
@@ -223,7 +244,7 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 | Ctrl+N          | New note (Ctrl only, not Cmd — avoids new window) |
 | Ctrl+P / Ctrl+F | Open note search                                  |
 | Ctrl+H          | Open find & replace                               |
-| Ctrl+S          | See [Ctrl+S behavior](#ctrls-behavior) below       |
+| Ctrl+S          | See [Ctrl+S behavior](#ctrls-behavior) below      |
 | Ctrl+Shift+D    | Delete current note                               |
 | Ctrl+Shift+F    | Format markdown (`.md` files only)                |
 | Ctrl+Shift+M    | Toggle vim mode                                   |
@@ -239,13 +260,13 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 
 Ctrl/Cmd+S always suppresses the browser save dialog. Beyond that, behavior depends on context:
 
-| Context                        | Action                                        |
-| ------------------------------ | --------------------------------------------- |
-| Edit mode, non-vim, `.md` file | Format markdown → save → update URL → sync    |
-| Edit mode, non-vim, other file | Save → update URL → sync                      |
-| View tab (markdown preview)    | Save → update URL → sync (no formatting)      |
-| Vim mode (any file)            | Nothing (use `:w` to save)                    |
-| Zen mode                       | Nothing                                       |
+| Context                        | Action                                     |
+| ------------------------------ | ------------------------------------------ |
+| Edit mode, non-vim, `.md` file | Format markdown → save → update URL → sync |
+| Edit mode, non-vim, other file | Save → update URL → sync                   |
+| View tab (markdown preview)    | Save → update URL → sync (no formatting)   |
+| Vim mode (any file)            | Nothing (use `:w` to save)                 |
+| Zen mode                       | Nothing                                    |
 
 "Save" = `saveState()` (localStorage). "Sync" = `driveSync()` (only if connected to Google Drive). "Update URL" = `scheduleUrlUpdate()` (compress content into URL hash).
 
@@ -401,31 +422,31 @@ selectFindMatch(focusEditor)
 
 ### Trigger
 
-| Method | Context |
-|---|---|
-| `:fmt` | Vim command bar |
-| `Ctrl+Shift+F` | Any mode (vim or normal) |
-| `Ctrl+S` | Edit mode, non-vim, `.md` files only (see [Ctrl+S behavior](#ctrls-behavior)) |
+| Method         | Context                                                                       |
+| -------------- | ----------------------------------------------------------------------------- |
+| `:fmt`         | Vim command bar                                                               |
+| `Ctrl+Shift+F` | Any mode (vim or normal)                                                      |
+| `Ctrl+S`       | Edit mode, non-vim, `.md` files only (see [Ctrl+S behavior](#ctrls-behavior)) |
 
 `:fmt` and `Ctrl+Shift+F` only run on `.md` files (toast shown otherwise). `Ctrl+S` silently skips formatting for non-markdown files and proceeds with save/sync. `Ctrl+S` does nothing in vim mode or zen mode.
 
 ### What Gets Formatted
 
-| Construct | Rule |
-|---|---|
-| Headings | Single space after `#`, blank line before/after |
-| Lists (ul) | Normalize marker to `-`, 2-space indent multiples |
-| Lists (ol) | Preserve numbering, normalize indent |
-| Task lists | Normalize `- [ ]` / `- [x]` spacing |
-| Tables | Align columns to equal width, pad cells respecting `:---` / `---:` / `:---:` alignment |
-| Blockquotes | Normalize to `> ` (single space) |
-| Horizontal rules | Normalize to `---` |
-| Blank lines | Collapse consecutive blanks to 1 |
-| Trailing whitespace | Stripped from all non-code lines |
+| Construct           | Rule                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| Headings            | Single space after `#`, blank line before/after                                        |
+| Lists (ul)          | Normalize marker to `-`, 2-space indent multiples                                      |
+| Lists (ol)          | Preserve numbering, normalize indent                                                   |
+| Task lists          | Normalize `- [ ]` / `- [x]` spacing                                                    |
+| Tables              | Align columns to equal width, pad cells respecting `:---` / `---:` / `:---:` alignment |
+| Blockquotes         | Normalize to `> ` (single space)                                                       |
+| Horizontal rules    | Normalize to `---`                                                                     |
+| Blank lines         | Collapse consecutive blanks to 1                                                       |
+| Trailing whitespace | Stripped from all non-code lines                                                       |
 
 ### What's NOT Touched
 
-- **Code blocks** — everything between `` ``` `` fences passes through unchanged (content and fences)
+- **Code blocks** — everything between ` ``` ` fences passes through unchanged (content and fences)
 - **`<details>`/`<summary>` tags** — each tag is placed on its own line; markdown content between them is formatted normally
 - **Inline formatting** — bold, italic, links, inline code left as-is
 
