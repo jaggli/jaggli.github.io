@@ -34,23 +34,30 @@ editor.scroll → gutter.scrollTop = editor.scrollTop
 
 ### Storage Keys
 
-| Key | Content | Purpose |
-| --- | --- | --- |
-| `notepad_data` | Full state JSON | Notes, activeId, deletedIds |
-| `notepad_wrap` | `"true"` / `"false"` | Word wrap toggle |
-| `notepad_vim` | `"true"` / `"false"` | Vim mode toggle |
-| `notepad_sidebar_width` | Pixel value | Sidebar width |
-| `notepad_swap_<noteId>` | `{content, timestamp}` | Vim unsaved buffer |
-| `notepad_tab_leader` | Tab ID string | Current leader tab |
-| `notepad_gdrive_token` | `{token, expiry}` | OAuth token (see google-drive-flow.md) |
-| `notepad_gdrive_connected` | `"true"` | Drive sync opted in |
+| Key                        | Content                | Purpose                                |
+| -------------------------- | ---------------------- | -------------------------------------- |
+| `notepad_data`             | Full state JSON        | Notes, activeId, deletedIds            |
+| `notepad_wrap`             | `"true"` / `"false"`   | Word wrap toggle                       |
+| `notepad_vim`              | `"true"` / `"false"`   | Vim mode toggle                        |
+| `notepad_sidebar_width`    | Pixel value            | Sidebar width                          |
+| `notepad_swap_<noteId>`    | `{content, timestamp}` | Vim unsaved buffer                     |
+| `notepad_tab_leader`       | Tab ID string          | Current leader tab                     |
+| `notepad_gdrive_token`     | `{token, expiry}`      | OAuth token (see google-drive-flow.md) |
+| `notepad_gdrive_connected` | `"true"`               | Drive sync opted in                    |
 
 ### State Structure
 
 ```json
 {
   "notes": [
-    { "id": "m1abc2def", "name": "todo.md", "content": "...", "updatedAt": 1711234567890, "pinned": true, "cursorPos": 42 }
+    {
+      "id": "m1abc2def",
+      "name": "todo.md",
+      "content": "...",
+      "updatedAt": 1711234567890,
+      "pinned": true,
+      "cursorPos": 42
+    }
   ],
   "activeId": "m1abc2def",
   "deletedIds": ["old-id-1", "old-id-2"]
@@ -88,14 +95,14 @@ editor "input" event
   └─ scheduleUrlUpdate()                  500ms → updateUrl()
 ```
 
-| Operation | Debounce | Function | Purpose |
-| --- | --- | --- | --- |
-| Syntax highlight | 30ms | `scheduleHighlight()` | Re-render highlight layer |
-| Persist to localStorage | 300ms | `scheduleSave()` | Batch rapid keystrokes |
-| Undo history snapshot | 400ms | `scheduleHistorySnapshot()` | Group edits into undo steps |
-| URL update | 500ms | `scheduleUrlUpdate()` | Compress content into URL |
-| Cursor position save | 1000ms | `cursorSaveTimeout` | Persist cursor pos to state |
-| Drive upload | 30s | `scheduleDriveUpload()` | Batch multiple saves |
+| Operation               | Debounce | Function                    | Purpose                     |
+| ----------------------- | -------- | --------------------------- | --------------------------- |
+| Syntax highlight        | 30ms     | `scheduleHighlight()`       | Re-render highlight layer   |
+| Persist to localStorage | 300ms    | `scheduleSave()`            | Batch rapid keystrokes      |
+| Undo history snapshot   | 400ms    | `scheduleHistorySnapshot()` | Group edits into undo steps |
+| URL update              | 500ms    | `scheduleUrlUpdate()`       | Compress content into URL   |
+| Cursor position save    | 1000ms   | `cursorSaveTimeout`         | Persist cursor pos to state |
+| Drive upload            | 30s      | `scheduleDriveUpload()`     | Batch multiple saves        |
 
 ### Flush on Tab Close
 
@@ -127,11 +134,11 @@ decompress(b64)  → base64 → inflate-raw → string
 /note/?name=todo.md&note=<compressed>&view=md
 ```
 
-| Parameter | Required | Values | Purpose |
-| --- | --- | --- | --- |
-| `name` | Yes | Note filename | Identifies the note |
-| `note` | No | Base64 deflate | Compressed content (dropped if URL > 8000 chars) |
-| `view` | No | `md`, `zen` | Markdown preview or zen mode |
+| Parameter | Required | Values         | Purpose                                          |
+| --------- | -------- | -------------- | ------------------------------------------------ |
+| `name`    | Yes      | Note filename  | Identifies the note                              |
+| `note`    | No       | Base64 deflate | Compressed content (dropped if URL > 8000 chars) |
+| `view`    | No       | `md`, `zen`    | Markdown preview or zen mode                     |
 
 ### Update Flow
 
@@ -198,43 +205,43 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 
 ### Editing
 
-| Shortcut | Action |
-| --- | --- |
-| Tab | Insert 2 spaces (no selection) or indent selected lines |
-| Shift+Tab | Dedent selected lines |
-| Alt+↑ / Alt+↓ | Move selected line(s) up/down |
-| Ctrl+Z | Undo |
-| Ctrl+Shift+Z | Redo |
+| Shortcut      | Action                                                  |
+| ------------- | ------------------------------------------------------- |
+| Tab           | Insert 2 spaces (no selection) or indent selected lines |
+| Shift+Tab     | Dedent selected lines                                   |
+| Alt+↑ / Alt+↓ | Move selected line(s) up/down                           |
+| Ctrl+Z        | Undo                                                    |
+| Ctrl+Shift+Z  | Redo                                                    |
 
 ### Navigation & Actions
 
-| Shortcut | Action |
-| --- | --- |
-| Ctrl+N | New note (Ctrl only, not Cmd — avoids new window) |
-| Ctrl+P / Ctrl+F | Open note search |
-| Ctrl+H | Open find & replace |
-| Ctrl+S | Sync to Google Drive (non-vim mode) |
-| Ctrl+Shift+D | Delete current note |
-| Ctrl+Shift+M | Toggle vim mode |
-| Escape | Close search / find-replace / sidebar |
+| Shortcut        | Action                                            |
+| --------------- | ------------------------------------------------- |
+| Ctrl+N          | New note (Ctrl only, not Cmd — avoids new window) |
+| Ctrl+P / Ctrl+F | Open note search                                  |
+| Ctrl+H          | Open find & replace                               |
+| Ctrl+S          | Sync to Google Drive (non-vim mode)               |
+| Ctrl+Shift+D    | Delete current note                               |
+| Ctrl+Shift+M    | Toggle vim mode                                   |
+| Escape          | Close search / find-replace / sidebar             |
 
 ### Markdown View
 
-| Shortcut | Action |
-| --- | --- |
-| e | Switch from view/zen to edit tab |
+| Shortcut | Action                           |
+| -------- | -------------------------------- |
+| e        | Switch from view/zen to edit tab |
 
 ### Vim Mode
 
 When vim is enabled, all keys are intercepted by `vimHandleKeydown()` in normal/visual mode. In insert mode, standard shortcuts (Tab, Ctrl+Z, etc.) work normally. Vim-specific shortcuts:
 
-| Shortcut | Action |
-| --- | --- |
-| Ctrl+D / Ctrl+U | Half-page scroll down/up |
-| Ctrl+R | Redo |
-| `:w` | Write buffer to storage |
-| `:wq` | Write and exit vim |
-| `:q!` | Discard buffer and exit vim |
+| Shortcut        | Action                      |
+| --------------- | --------------------------- |
+| Ctrl+D / Ctrl+U | Half-page scroll down/up    |
+| Ctrl+R          | Redo                        |
+| `:w`            | Write buffer to storage     |
+| `:wq`           | Write and exit vim          |
+| `:q!`           | Discard buffer and exit vim |
 
 ---
 
@@ -257,11 +264,11 @@ toggleVim()
 
 In normal editing, `editor.value` and `note.content` are always in sync. In vim mode, they can diverge:
 
-| | `editor.value` (buffer) | `note.content` (saved) |
-| --- | --- | --- |
-| After typing | Updated by vim handler | Unchanged |
-| After `:w` | Unchanged | `= editor.value` |
-| After `:q!` | `= note.content` | Unchanged |
+|              | `editor.value` (buffer) | `note.content` (saved) |
+| ------------ | ----------------------- | ---------------------- |
+| After typing | Updated by vim handler  | Unchanged              |
+| After `:w`   | Unchanged               | `= editor.value`       |
+| After `:q!`  | `= note.content`        | Unchanged              |
 
 ### Swap Files
 
@@ -274,6 +281,7 @@ deleteSwap(noteId)         → remove swap file
 ```
 
 On page load, if a swap file exists with different content from the saved note:
+
 - **Vim enabled:** load swap into buffer, mark dirty
 - **Vim disabled:** apply swap to note, save, clean up
 
