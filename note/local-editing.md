@@ -1,0 +1,366 @@
+# Local Editing — Architecture & Flows
+
+## Editor Architecture
+
+The editor uses a **grid-based overlay** system. Three elements are stacked in the same CSS grid cell (`grid-area: 1 / 1 / 2 / 2`):
+
+```
+┌──────────┬─────────────────────────────────────┐
+│          │  highlight-layer  (z-index: 0)      │
+│  gutter  │  ─ opaque background, colored spans │
+│          │  ─ pointer-events: none             │
+│  (line   │                                     │
+│  numbers)│  textarea  (z-index: 1)             │
+│          │  ─ transparent text & background    │
+│          │  ─ receives all input               │
+│          │  ─ caret-color: visible             │
+│          │  ─ ::selection visible (rgba blue)  │
+└──────────┴─────────────────────────────────────┘
+```
+
+The user types in the textarea (transparent text), but sees syntax-highlighted text rendered in the `<pre>` layer behind it. The textarea's `::selection` pseudo-element shows through because the textarea is on top.
+
+**Scroll sync:** The textarea's `scroll` event synchronizes all three elements:
+
+```
+editor.scroll → gutter.scrollTop = editor.scrollTop
+              → highlightLayer.scrollTop = editor.scrollTop
+              → highlightLayer.scrollLeft = editor.scrollLeft
+```
+
+---
+
+## localStorage Handling
+
+### Storage Keys
+
+| Key | Content | Purpose |
+| --- | --- | --- |
+| `notepad_data` | Full state JSON | Notes, activeId, deletedIds |
+| `notepad_wrap` | `"true"` / `"false"` | Word wrap toggle |
+| `notepad_vim` | `"true"` / `"false"` | Vim mode toggle |
+| `notepad_sidebar_width` | Pixel value | Sidebar width |
+| `notepad_swap_<noteId>` | `{content, timestamp}` | Vim unsaved buffer |
+| `notepad_tab_leader` | Tab ID string | Current leader tab |
+| `notepad_gdrive_token` | `{token, expiry}` | OAuth token (see google-drive-flow.md) |
+| `notepad_gdrive_connected` | `"true"` | Drive sync opted in |
+
+### State Structure
+
+```json
+{
+  "notes": [
+    { "id": "m1abc2def", "name": "todo.md", "content": "...", "updatedAt": 1711234567890, "pinned": true, "cursorPos": 42 }
+  ],
+  "activeId": "m1abc2def",
+  "deletedIds": ["old-id-1", "old-id-2"]
+}
+```
+
+### Save Flow
+
+```
+saveState()
+  → if (!isTabLeader) return          only the active tab writes
+  → localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  → updateStorageUsage()              refresh the storage meter UI
+```
+
+### Storage Quota
+
+- **Limit:** 5 MB (`STORAGE_LIMIT = 5 * 1024 * 1024`)
+- **Calculation:** iterates all localStorage keys, sums `(key.length + value.length) * 2` (UTF-16)
+- **Checked before:** note creation, file import, drag-and-drop
+- **On overflow:** modal displayed, operation cancelled
+
+---
+
+## Debounced Saves
+
+Editing triggers a chain of debounced operations:
+
+```
+editor "input" event
+  ├─ note.content = editor.value          immediate (in-memory)
+  ├─ scheduleHighlight()                  30ms  → updateHighlight()
+  ├─ scheduleSave()                       300ms → saveState() → scheduleDriveUpload()
+  ├─ scheduleHistorySnapshot()            400ms → pushHistory()
+  └─ scheduleUrlUpdate()                  500ms → updateUrl()
+```
+
+| Operation | Debounce | Function | Purpose |
+| --- | --- | --- | --- |
+| Syntax highlight | 30ms | `scheduleHighlight()` | Re-render highlight layer |
+| Persist to localStorage | 300ms | `scheduleSave()` | Batch rapid keystrokes |
+| Undo history snapshot | 400ms | `scheduleHistorySnapshot()` | Group edits into undo steps |
+| URL update | 500ms | `scheduleUrlUpdate()` | Compress content into URL |
+| Cursor position save | 1000ms | `cursorSaveTimeout` | Persist cursor pos to state |
+| Drive upload | 30s | `scheduleDriveUpload()` | Batch multiple saves |
+
+### Flush on Tab Close
+
+```
+window "beforeunload"
+  → if (isTabLeader && saveTimeout)
+    → clearTimeout(saveTimeout)
+    → saveState()                          force immediate persist
+```
+
+---
+
+## URL Handling
+
+Note content is compressed into the URL so bookmarks and shared links contain the full note.
+
+### Compression
+
+Uses the browser's native `CompressionStream("deflate-raw")`:
+
+```
+compress(text)   → string → deflate-raw → base64
+decompress(b64)  → base64 → inflate-raw → string
+```
+
+### URL Format
+
+```
+/note/?name=todo.md&note=<compressed>&view=md
+```
+
+| Parameter | Required | Values | Purpose |
+| --- | --- | --- | --- |
+| `name` | Yes | Note filename | Identifies the note |
+| `note` | No | Base64 deflate | Compressed content (dropped if URL > 8000 chars) |
+| `view` | No | `md`, `zen` | Markdown preview or zen mode |
+
+### Update Flow
+
+```
+scheduleUrlUpdate()                      500ms debounce
+  → updateUrl()
+    → compress(note.content)             async
+    → if URL > URL_MAX_LENGTH (8000):
+        drop "note" param, hide share button
+    → history.replaceState(...)          no page reload
+```
+
+### Load Flow (page load)
+
+```
+loadFromUrl()
+  → read "note" and "name" from URL params
+  → if no "note" param → return false
+  → decompress(noteData)
+  → if view=zen → store as ephemeral (not persisted)
+  → if note exists with same name:
+      same content → activate it
+      different → modal: "update" or "new file"
+  → otherwise → create new note
+```
+
+---
+
+## Syntax Highlighting
+
+### Language Detection
+
+File extension determines the highlight rules:
+
+```
+getExtension(name)  →  langRules[ext]  →  tokenize(code, rules)  →  buildHTML()
+```
+
+Supported: js/jsx/ts/tsx, py, rb, go, rs, java, c/cpp, css, json, yaml, sql, toml.
+HTML/XML/SVG use a dedicated `highlightHTML()` parser.
+
+### Highlight Pipeline
+
+```
+updateHighlight()
+  → highlightCode(editor.value, note.name)
+    → if HTML ext:  highlightHTML(code)
+    → if rules exist: tokenize(code, rules) → buildHTML(code, tokens)
+    → else: escapeHTML(code)
+  → highlightLayer.innerHTML = result
+```
+
+Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all regex matches, sorts by position, removes overlaps, and `buildHTML()` wraps matched ranges in `<span class="hl-*">` elements.
+
+### When Highlighting Runs
+
+- On every keystroke (30ms debounce)
+- On note switch (`renderEditor()` → `updateHighlight()`)
+- On switching from view/zen back to edit (`switchMdTab("edit")`)
+
+---
+
+## Keyboard Shortcuts
+
+### Editing
+
+| Shortcut | Action |
+| --- | --- |
+| Tab | Insert 2 spaces (no selection) or indent selected lines |
+| Shift+Tab | Dedent selected lines |
+| Alt+↑ / Alt+↓ | Move selected line(s) up/down |
+| Ctrl+Z | Undo |
+| Ctrl+Shift+Z | Redo |
+
+### Navigation & Actions
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+N | New note (Ctrl only, not Cmd — avoids new window) |
+| Ctrl+P / Ctrl+F | Open note search |
+| Ctrl+H | Open find & replace |
+| Ctrl+S | Sync to Google Drive (non-vim mode) |
+| Ctrl+Shift+D | Delete current note |
+| Ctrl+Shift+M | Toggle vim mode |
+| Escape | Close search / find-replace / sidebar |
+
+### Markdown View
+
+| Shortcut | Action |
+| --- | --- |
+| e | Switch from view/zen to edit tab |
+
+### Vim Mode
+
+When vim is enabled, all keys are intercepted by `vimHandleKeydown()` in normal/visual mode. In insert mode, standard shortcuts (Tab, Ctrl+Z, etc.) work normally. Vim-specific shortcuts:
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+D / Ctrl+U | Half-page scroll down/up |
+| Ctrl+R | Redo |
+| `:w` | Write buffer to storage |
+| `:wq` | Write and exit vim |
+| `:q!` | Discard buffer and exit vim |
+
+---
+
+## Vim Mode
+
+### How It Works
+
+Vim mode makes the textarea `readOnly`. All keystrokes go through `vimHandleKeydown()` which programmatically manipulates the textarea content and cursor position.
+
+```
+toggleVim()
+  → if dirty buffer: vimWriteBuffer()     auto-save on exit
+  → vimState.enabled = !vimState.enabled
+  → localStorage.setItem(VIM_KEY, ...)
+  → if enabling: editor.readOnly = true
+  → if disabling: editor.readOnly = false
+```
+
+### Buffer vs Saved Content
+
+In normal editing, `editor.value` and `note.content` are always in sync. In vim mode, they can diverge:
+
+| | `editor.value` (buffer) | `note.content` (saved) |
+| --- | --- | --- |
+| After typing | Updated by vim handler | Unchanged |
+| After `:w` | Unchanged | `= editor.value` |
+| After `:q!` | `= note.content` | Unchanged |
+
+### Swap Files
+
+Vim stores unsaved buffers in localStorage as swap files:
+
+```
+saveSwap(noteId, content)  → localStorage["notepad_swap_<id>"] = { content, timestamp }
+loadSwap(noteId)           → read and parse swap file
+deleteSwap(noteId)         → remove swap file
+```
+
+On page load, if a swap file exists with different content from the saved note:
+- **Vim enabled:** load swap into buffer, mark dirty
+- **Vim disabled:** apply swap to note, save, clean up
+
+---
+
+## Cross-Tab Sync
+
+### Tab Leadership
+
+Only the most recently focused tab is allowed to write to localStorage and sync to Google Drive. This prevents two tabs from overwriting each other's edits.
+
+```
+Tab A (editing)                    Tab B (opened)
+  │                                  │
+  │  claimLeadership() ◄─────────────┤  init() → claimLeadership()
+  │                                  │
+  │  storage event: TAB_LEADER_KEY   │
+  │  e.newValue !== tabId            │
+  │  → revokeLeadership()            │  isTabLeader = true
+  │  isTabLeader = false             │  (can save)
+  │  (stops saving)                  │
+  │                                  │
+  ├──── user returns ────►           │
+  │  focus event                     │
+  │  → reclaimLeadership()           │
+  │    → pullStateFromStorage()      │  storage event → revokeLeadership()
+  │    → claimLeadership()           │
+  │    → saveState()                 │
+```
+
+### What's Guarded
+
+These operations are no-ops when `isTabLeader === false`:
+
+- `saveState()` — won't write to localStorage
+- `scheduleSave()` — won't schedule a save
+- `scheduleDriveUpload()` — won't schedule Drive push
+- `driveSyncQuiet()` — won't pull from Drive
+- `drivePushQuiet()` — won't push to Drive
+- `scheduleTokenRefresh()` — won't refresh OAuth token
+
+### pullStateFromStorage()
+
+When a non-leader tab regains focus, it merges localStorage state with any in-memory edits:
+
+```
+pullStateFromStorage()
+  → read state from localStorage
+  → for each note in storage:
+      if local version has newer updatedAt → keep local
+      otherwise → use storage version
+  → keep any notes that exist locally but not in storage
+  → render()
+```
+
+### Settings Sync
+
+Wrap, vim, and sidebar width changes propagate to all tabs immediately via `storage` events, regardless of leadership. These are lightweight UI settings that don't conflict.
+
+---
+
+## Find & Replace
+
+### Match Computation
+
+```
+updateFindMatches()
+  → case-insensitive indexOf scan of editor.value
+  → stores array of { start, end } positions
+  → finds nearest match to cursor position
+  → calls selectFindMatch()
+```
+
+### Scrolling to Match
+
+```
+selectFindMatch(focusEditor)
+  → editor.setSelectionRange(start, end)
+  → editor.focus()                       ensure selection takes effect
+  → compute line number from match position
+  → scroll editor to center match in viewport
+  → sync gutter + highlight layer scroll
+  → if !focusEditor: return focus to find input
+```
+
+### Replace
+
+- **Replace current:** uses `document.execCommand("insertText")` to preserve undo history
+- **Replace all:** direct string replacement via `editor.value = result`
+- After replace: `updateFindMatches()` re-scans to update match list
