@@ -7188,6 +7188,13 @@
           return;
         }
 
+        // :mddemo — open markdown features demo
+        if (trimmed === "mddemo") {
+          if (vimState.bufferDirty) vimWriteBuffer();
+          openMdDemo();
+          return;
+        }
+
         // :view — open markdown preview
         if (trimmed === "view") {
           const note = getActiveNote();
@@ -8985,6 +8992,7 @@
         "- :fmt — format markdown",
         "- :view — markdown preview",
         "- :help — this page",
+        "- :mddemo — markdown features showcase",
         "- :%s/find/replace/g — find & replace",
       ].join("\n");
       const HELP_MOBILE = [
@@ -9013,6 +9021,104 @@
         "- Tap a file to open, tap again to rename",
         "- Long press to pin or delete",
       ].join("\n");
+
+      const MD_DEMO = [
+        "# The Lantern in the Woods",
+        "",
+        "Once upon a time, in a village at the edge of a **dark forest**, there lived a girl named *Elara*. She was known for two things: her ~~fear of the dark~~ courage, and her love of broken things.",
+        "",
+        "## The Discovery",
+        "",
+        "One autumn morning, Elara found a lantern half-buried in mud. It was dented, cracked, and missing its glass — but inside, a faint glow pulsed like a heartbeat.",
+        "",
+        "> \"Things that still glow,\" her grandmother always said, \"are never truly broken.\"",
+        "",
+        "She decided to fix it. Her supplies were simple:",
+        "",
+        "- One cracked lantern",
+        "- A shard of glass from the old chapel",
+        "- Thread spun from moonlight (or so she claimed)",
+        "  - Collected on the first frost",
+        "  - Stored in a tin box",
+        "",
+        "The steps were clear:",
+        "",
+        "1. Clean the rust",
+        "2. Fit the glass",
+        "3. Seal the cracks with beeswax",
+        "",
+        "### The Task List",
+        "",
+        "She kept track of her progress:",
+        "",
+        "- [x] Find the lantern",
+        "- [x] Gather supplies",
+        "- [ ] Repair the frame",
+        "- [ ] Enter the forest",
+        "",
+        "## The Journey",
+        "",
+        "With the lantern repaired, she entered the forest. The creatures she met were catalogued by the village elders long ago:",
+        "",
+        "| Creature   | Temperament | Weakness      |",
+        "| ---------- | ----------- | ------------- |",
+        "| Moss Fox   | Curious     | Honey cakes   |",
+        "| Thorn Owl  | Grumpy      | Compliments   |",
+        "| Root Troll  | Sleepy      | Lullabies     |",
+        "",
+        "---",
+        "",
+        "## The Heart of the Forest",
+        "",
+        "At the center of the woods stood an ancient terminal, covered in ivy. Elara wiped the screen and began to type.",
+        "",
+        "```typescript",
+        'const lantern = { glow: true, owner: "Elara" };',
+        "",
+        "function enterForest(brave: boolean): string {",
+        "  if (!brave) return \"Maybe tomorrow.\";",
+        "",
+        "  const creatures = [\"Moss Fox\", \"Thorn Owl\", \"Root Troll\"];",
+        "  for (const c of creatures) {",
+        "    console.log(`Elara befriended the ${c}.`);",
+        "  }",
+        "",
+        '  return "The forest remembered her name.";',
+        "}",
+        "",
+        "const ending = enterForest(lantern.glow);",
+        "console.log(ending);",
+        "```",
+        "",
+        "The terminal hummed. The trees parted. And somewhere deep in the code, a `console.log` whispered her name back to her.",
+        "",
+        "## Epilogue",
+        "",
+        "<details>",
+        "<summary>What happened next?</summary>",
+        "",
+        "She returned to the village carrying the lantern, now glowing brighter than before. The forest was no longer dark — it had only been waiting for someone to bring the light.",
+        "",
+        "***And so the girl who fixed broken things fixed the oldest thing of all — a forgotten story.***",
+        "",
+        "</details>",
+        "",
+        "---",
+        "",
+        "*Written in [note](https://jaggli.github.io/note/) — where all good tales begin.*",
+      ].join("\n");
+
+      async function openMdDemo() {
+        const existing = state.notes.find((n) => n.name === "Markdown Features.md");
+        if (existing) {
+          existing.content = MD_DEMO;
+          existing.updatedAt = Date.now();
+          switchNote(existing.id);
+          saveState();
+        } else {
+          await createNote("Markdown Features.md", MD_DEMO);
+        }
+      }
 
       async function openHelp() {
         const content = isMobile() ? HELP_MOBILE : HELP_DESKTOP;

@@ -247,6 +247,7 @@ When vim is enabled, all keys are intercepted by `vimHandleKeydown()` in normal/
 | `:wq`           | Write and exit vim          |
 | `:q!`           | Discard buffer and exit vim |
 | `:fmt`          | Format markdown             |
+| `:mddemo`       | Open markdown features demo |
 
 ---
 
