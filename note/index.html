@@ -8277,10 +8277,26 @@
           redo();
           return;
         }
-        // Ctrl+S: suppress browser save, force sync (not in vim — use :w)
+        // Ctrl+S: suppress browser save, autoformat markdown, force sync (not in vim — use :w)
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
-          if (!vimState.enabled && gdriveConnected) driveSync();
+          if (!vimState.enabled) {
+            const note = getActiveNote();
+            if (note && isMarkdownFile(note.name)) {
+              const pos = editor.selectionStart;
+              pushHistory(note.id, editor.value);
+              editor.value = formatMarkdown(editor.value);
+              note.content = editor.value;
+              note.updatedAt = Date.now();
+              editor.selectionStart = editor.selectionEnd = Math.min(pos, editor.value.length);
+              updateLineNumbers();
+              updateHighlight();
+              updateCursorPos();
+            }
+            saveState();
+            scheduleUrlUpdate();
+            if (gdriveConnected) driveSync();
+          }
           return;
         }
         // New note

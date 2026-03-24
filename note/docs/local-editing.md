@@ -223,7 +223,7 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 | Ctrl+N          | New note (Ctrl only, not Cmd — avoids new window) |
 | Ctrl+P / Ctrl+F | Open note search                                  |
 | Ctrl+H          | Open find & replace                               |
-| Ctrl+S          | Sync to Google Drive (non-vim mode)               |
+| Ctrl+S          | Format md + save + sync to Drive (non-vim mode)   |
 | Ctrl+Shift+D    | Delete current note                               |
 | Ctrl+Shift+F    | Format markdown (`.md` files only)                |
 | Ctrl+Shift+M    | Toggle vim mode                                   |
@@ -391,8 +391,9 @@ selectFindMatch(focusEditor)
 |---|---|
 | `:fmt` | Vim command bar |
 | `Ctrl+Shift+F` | Any mode (vim or normal) |
+| `Ctrl+S` | Non-vim mode — autoformats `.md` before saving |
 
-Only runs on `.md` files. Shows toast "format: markdown files only" otherwise.
+`:fmt` and `Ctrl+Shift+F` only run on `.md` files (toast shown otherwise). `Ctrl+S` silently skips formatting for non-markdown files and proceeds with save/sync.
 
 ### What Gets Formatted
 
