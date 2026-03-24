@@ -3828,6 +3828,210 @@
         return ext === "md" || ext === "markdown";
       }
 
+      // Markdown source formatter — normalizes structure without touching code blocks.
+      function formatMarkdown(text) {
+        const lines = text.split("\n");
+        const out = [];
+        let inCode = false;
+        let codeFence = "";
+        // First pass: normalize lines, track code blocks
+        for (let i = 0; i < lines.length; i++) {
+          const raw = lines[i];
+
+          // Code fence toggle
+          if (!inCode) {
+            const fm = raw.match(/^(`{3,})/);
+            if (fm) {
+              inCode = true;
+              codeFence = fm[1];
+              out.push({ type: "code", text: raw });
+              continue;
+            }
+          } else {
+            // Check for closing fence
+            if (raw.trimEnd() === codeFence) {
+              inCode = false;
+              codeFence = "";
+            }
+            out.push({ type: "code", text: raw });
+            continue;
+          }
+
+          // Details/summary tags — each tag gets its own line, content between is formatted normally
+          if (/^<\/?(?:details|summary)/i.test(raw.trim())) {
+            out.push({ type: "details-tag", text: raw.trim() });
+            continue;
+          }
+
+          const trimmed = raw.trimEnd();
+
+          // Blank line
+          if (/^\s*$/.test(trimmed)) {
+            out.push({ type: "blank", text: "" });
+            continue;
+          }
+
+          // Heading
+          const hm = trimmed.match(/^(#{1,6})[ \t]+(.+)$/);
+          if (hm) {
+            out.push({ type: "heading", text: hm[1] + " " + hm[2].trim() });
+            continue;
+          }
+
+          // Horizontal rule
+          if (/^[-*_]{3,}\s*$/.test(trimmed)) {
+            out.push({ type: "hr", text: "---" });
+            continue;
+          }
+
+          // Task list item
+          const tm = raw.match(/^(\s*)-\s+\[([ x])\]\s+(.*)/);
+          if (tm) {
+            const depth = Math.round(tm[1].length / 2);
+            const indent = "  ".repeat(depth);
+            const check = tm[2];
+            out.push({ type: "list", text: indent + "- [" + check + "] " + tm[3].trimEnd() });
+            continue;
+          }
+
+          // Unordered list item
+          const um = raw.match(/^(\s*)[-*+]\s+(.*)/);
+          if (um) {
+            const depth = Math.round(um[1].length / 2);
+            const indent = "  ".repeat(depth);
+            out.push({ type: "list", text: indent + "- " + um[2].trimEnd() });
+            continue;
+          }
+
+          // Ordered list item
+          const om = raw.match(/^(\s*)(\d+\.)\s+(.*)/);
+          if (om) {
+            const depth = Math.round(om[1].length / 2);
+            const indent = "  ".repeat(depth);
+            out.push({ type: "list", text: indent + om[2] + " " + om[3].trimEnd() });
+            continue;
+          }
+
+          // Blockquote
+          const bm = trimmed.match(/^>\s?(.*)/);
+          if (bm) {
+            out.push({ type: "blockquote", text: "> " + bm[1].trimEnd() });
+            continue;
+          }
+
+          // Table separator
+          if (/^\|[-| :]+\|$/.test(trimmed)) {
+            out.push({ type: "table-sep", text: trimmed });
+            continue;
+          }
+
+          // Table row
+          if (/^\|.+\|$/.test(trimmed)) {
+            out.push({ type: "table", text: trimmed });
+            continue;
+          }
+
+          // Paragraph / other
+          out.push({ type: "text", text: trimmed });
+        }
+
+        // Second pass: format tables (align columns)
+        for (let i = 0; i < out.length; i++) {
+          if (out[i].type !== "table" && out[i].type !== "table-sep") continue;
+          // Find table block
+          const start = i;
+          while (i < out.length && (out[i].type === "table" || out[i].type === "table-sep")) i++;
+          const end = i;
+          i--;
+
+          // Parse cells
+          const rows = [];
+          let sepIdx = -1;
+          for (let r = start; r < end; r++) {
+            const cells = out[r].text.split("|").slice(1, -1).map((c) => c.trim());
+            rows.push(cells);
+            if (out[r].type === "table-sep") sepIdx = r - start;
+          }
+
+          if (rows.length === 0) continue;
+
+          // Compute column widths
+          const colCount = Math.max(...rows.map((r) => r.length));
+          const widths = new Array(colCount).fill(3); // minimum 3 for ---
+          for (const row of rows) {
+            for (let c = 0; c < row.length; c++) {
+              if (row[c] !== undefined) widths[c] = Math.max(widths[c], row[c].length);
+            }
+          }
+
+          // Rebuild rows
+          for (let r = 0; r < rows.length; r++) {
+            const isSep = (start + r === start + sepIdx);
+            let line = "|";
+            for (let c = 0; c < colCount; c++) {
+              if (isSep) {
+                line += " " + "-".repeat(widths[c]) + " |";
+              } else {
+                const cell = (rows[r][c] || "").padEnd(widths[c]);
+                line += " " + cell + " |";
+              }
+            }
+            out[start + r].text = line;
+          }
+        }
+
+        // Third pass: spacing rules
+        const result = [];
+        const blockTypes = new Set(["heading", "hr", "code"]);
+
+        for (let i = 0; i < out.length; i++) {
+          const cur = out[i];
+          const prev = out[i - 1];
+          const isTableStart = (cur.type === "table" || cur.type === "table-sep") &&
+            (!prev || (prev.type !== "table" && prev.type !== "table-sep"));
+          const isListStart = cur.type === "list" &&
+            (!prev || prev.type !== "list");
+          const isCodeStart = cur.type === "code" &&
+            (!prev || prev.type !== "code");
+          const needsBlankBefore = blockTypes.has(cur.type) || isTableStart || isListStart || isCodeStart;
+
+          // Blank line before block elements (if not already blank or first line)
+          if (needsBlankBefore && result.length > 0 && result[result.length - 1] !== "") {
+            result.push("");
+          }
+
+          // Add the line
+          result.push(cur.text);
+
+          // Check if we need blank line after
+          const next = out[i + 1];
+          const isTableEnd = (cur.type === "table" || cur.type === "table-sep") &&
+            (!next || (next.type !== "table" && next.type !== "table-sep"));
+          const isListEnd = cur.type === "list" &&
+            (!next || next.type !== "list");
+          const isCodeEnd = cur.type === "code" &&
+            (!next || next.type !== "code");
+          const needsBlankAfter = blockTypes.has(cur.type) || isTableEnd || isListEnd || isCodeEnd;
+
+          if (needsBlankAfter && next && next.type !== "blank") {
+            result.push("");
+          }
+        }
+
+        // Collapse multiple blank lines
+        const final = [];
+        for (let i = 0; i < result.length; i++) {
+          if (result[i] === "" && final.length > 0 && final[final.length - 1] === "") {
+            continue; // skip consecutive blanks
+          }
+          final.push(result[i]);
+        }
+
+        // Trim trailing blank lines, ensure single trailing newline
+        while (final.length > 0 && final[final.length - 1] === "") final.pop();
+        return final.join("\n") + "\n";
+      }
+
       // Secure markdown-to-HTML renderer.
       // Strategy: escape ALL HTML first (so no raw tags survive),
       // then parse markdown syntax on the escaped text,
@@ -6996,6 +7200,26 @@
           return;
         }
 
+        // :fmt — format markdown
+        if (trimmed === "fmt") {
+          const note = getActiveNote();
+          if (note && isMarkdownFile(note.name)) {
+            const pos = editor.selectionStart;
+            pushHistory(note.id, editor.value);
+            editor.value = formatMarkdown(editor.value);
+            vimState.bufferDirty = true;
+            saveSwap(note.id, editor.value);
+            editor.selectionStart = editor.selectionEnd = Math.min(pos, editor.value.length);
+            updateLineNumbers();
+            updateHighlight();
+            updateCursorPos();
+            showToast("formatted");
+          } else {
+            vimShowError("format: markdown files only");
+          }
+          return;
+        }
+
         // :d — delete current line
         if (trimmed === "d") {
           const lineIdx = vimCursorLine();
@@ -8062,6 +8286,34 @@
           e.preventDefault();
           toggleVim();
         }
+        // Format markdown (Ctrl+Shift+F)
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "F") {
+          e.preventDefault();
+          const note = getActiveNote();
+          if (!note) return;
+          if (!isMarkdownFile(note.name)) {
+            showToast("format: markdown files only");
+            return;
+          }
+          const pos = editor.selectionStart;
+          pushHistory(note.id, editor.value);
+          const formatted = formatMarkdown(editor.value);
+          if (vimState.enabled) {
+            editor.value = formatted;
+            vimState.bufferDirty = true;
+            saveSwap(note.id, editor.value);
+          } else {
+            editor.value = formatted;
+            note.content = editor.value;
+            note.updatedAt = Date.now();
+            scheduleSave();
+          }
+          editor.selectionStart = editor.selectionEnd = Math.min(pos, editor.value.length);
+          updateLineNumbers();
+          updateHighlight();
+          updateCursorPos();
+          showToast("formatted");
+        }
       });
 
       // ═══════════════════════════════════════════════════
@@ -8645,6 +8897,7 @@
         "- Ctrl+P — search notes",
         "- Ctrl+H — find & replace",
         "- Ctrl+Shift+D — delete note",
+        "- Ctrl+Shift+F — format markdown",
         "- Tab / Shift+Tab — indent / dedent",
         "- Alt+↑ / Alt+↓ — move line up / down",
         "- e — switch from view to edit (in markdown preview)",
@@ -8729,6 +8982,7 @@
         "- :set wrap / :set nowrap / :set wrap!",
         "- :new — new note, :e name — open note",
         "- :d — delete line, :42 — jump to line",
+        "- :fmt — format markdown",
         "- :view — markdown preview",
         "- :help — this page",
         "- :%s/find/replace/g — find & replace",

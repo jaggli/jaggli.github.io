@@ -225,6 +225,7 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 | Ctrl+H          | Open find & replace                               |
 | Ctrl+S          | Sync to Google Drive (non-vim mode)               |
 | Ctrl+Shift+D    | Delete current note                               |
+| Ctrl+Shift+F    | Format markdown (`.md` files only)                |
 | Ctrl+Shift+M    | Toggle vim mode                                   |
 | Escape          | Close search / find-replace / sidebar             |
 
@@ -245,6 +246,7 @@ When vim is enabled, all keys are intercepted by `vimHandleKeydown()` in normal/
 | `:w`            | Write buffer to storage     |
 | `:wq`           | Write and exit vim          |
 | `:q!`           | Discard buffer and exit vim |
+| `:fmt`          | Format markdown             |
 
 ---
 
@@ -375,6 +377,46 @@ selectFindMatch(focusEditor)
 - **Replace current:** uses `document.execCommand("insertText")` to preserve undo history
 - **Replace all:** direct string replacement via `editor.value = result`
 - After replace: `updateFindMatches()` re-scans to update match list
+
+---
+
+## Markdown Formatter
+
+`formatMarkdown(text)` normalizes markdown source structure. It operates on raw text (not rendered HTML) and is line-based with state tracking for code blocks.
+
+### Trigger
+
+| Method | Context |
+|---|---|
+| `:fmt` | Vim command bar |
+| `Ctrl+Shift+F` | Any mode (vim or normal) |
+
+Only runs on `.md` files. Shows toast "format: markdown files only" otherwise.
+
+### What Gets Formatted
+
+| Construct | Rule |
+|---|---|
+| Headings | Single space after `#`, blank line before/after |
+| Lists (ul) | Normalize marker to `-`, 2-space indent multiples |
+| Lists (ol) | Preserve numbering, normalize indent |
+| Task lists | Normalize `- [ ]` / `- [x]` spacing |
+| Tables | Align columns to equal width, pad cells |
+| Blockquotes | Normalize to `> ` (single space) |
+| Horizontal rules | Normalize to `---` |
+| Blank lines | Collapse consecutive blanks to 1 |
+| Trailing whitespace | Stripped from all non-code lines |
+
+### What's NOT Touched
+
+- **Code blocks** — everything between `` ``` `` fences passes through unchanged (content and fences)
+- **`<details>`/`<summary>` tags** — each tag is placed on its own line; markdown content between them is formatted normally
+- **Inline formatting** — bold, italic, links, inline code left as-is
+
+### Undo Integration
+
+- `pushHistory()` is called before formatting so `Ctrl+Z` / `u` restores the original
+- In vim mode: sets `bufferDirty = true` and saves swap file
 
 ---
 
