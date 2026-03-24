@@ -3872,20 +3872,20 @@
           }
 
           // Heading
-          const hm = trimmed.match(/^(#{1,6})[ \t]+(.+)$/);
-          if (hm) {
+          const hm = trimmed.match(/^(#{1,6})[ \t]*(.*?)$/);
+          if (hm && hm[2]) {
             out.push({ type: "heading", text: hm[1] + " " + hm[2].trim() });
             continue;
           }
 
-          // Horizontal rule
-          if (/^[-*_]{3,}\s*$/.test(trimmed)) {
+          // Horizontal rule — 3+ of same char (-, *, _) with optional spaces between
+          if (/^([-*_])[\s]*\1[\s]*\1[\s*_-]*$/.test(trimmed)) {
             out.push({ type: "hr", text: "---" });
             continue;
           }
 
           // Task list item
-          const tm = raw.match(/^(\s*)-\s+\[([ x])\]\s+(.*)/);
+          const tm = raw.match(/^(\s*)-\s*\[([ x])\]\s*(.*)/);
           if (tm) {
             const depth = Math.round(tm[1].length / 2);
             const indent = "  ".repeat(depth);
@@ -3915,7 +3915,7 @@
           // Blockquote
           const bm = trimmed.match(/^>\s?(.*)/);
           if (bm) {
-            out.push({ type: "blockquote", text: "> " + bm[1].trimEnd() });
+            out.push({ type: "blockquote", text: "> " + bm[1].trim() });
             continue;
           }
 
@@ -3982,7 +3982,7 @@
 
         // Third pass: spacing rules
         const result = [];
-        const blockTypes = new Set(["heading", "hr", "code"]);
+        const blockTypes = new Set(["heading", "hr"]);
 
         for (let i = 0; i < out.length; i++) {
           const cur = out[i];
