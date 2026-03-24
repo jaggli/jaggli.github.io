@@ -96,7 +96,7 @@ Escape or clicking outside the modal defaults to "skip".
 
 ## URL Sharing
 
-Notes can be shared via URL using zlib compression in query parameters. The note content is embedded directly in the link (no server). Size limit is ~8KB.
+Notes can be shared via URL using zlib compression in the URL hash fragment. The note content is embedded directly in the link (no server). Size limit is ~60KB.
 
 When opening a shared URL:
 

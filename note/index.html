@@ -2629,7 +2629,34 @@
         return await new Response(stream).text();
       }
 
-      const URL_MAX_LENGTH = 8000;
+      function parseHashParams(hash) {
+        const str = (hash || "").replace(/^#/, "");
+        if (!str) return new Map();
+        const map = new Map();
+        for (const part of str.split("&")) {
+          const eq = part.indexOf("=");
+          if (eq === -1) {
+            map.set(decodeURIComponent(part), "");
+          } else {
+            map.set(
+              decodeURIComponent(part.slice(0, eq)),
+              decodeURIComponent(part.slice(eq + 1)),
+            );
+          }
+        }
+        return map;
+      }
+
+      function buildHash(map) {
+        const parts = [];
+        for (const [k, v] of map) {
+          if (v === "" || v == null) continue;
+          parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(v));
+        }
+        return parts.length ? "#" + parts.join("&") : "";
+      }
+
+      const URL_MAX_LENGTH = 60000;
 
       async function updateUrl() {
         if (zenModeActive && zenFromUrl && zenEphemeralNote) return;
@@ -2641,25 +2668,27 @@
         }
         try {
           const compressed = await compress(note.content);
-          const params = new URLSearchParams();
-          params.set("name", note.name);
-          if (zenModeActive) params.set("view", "zen");
-          else if (mdViewActive) params.set("view", "md");
-          params.set("note", compressed);
-          const full = location.pathname + "?" + params.toString();
+          const queryParams = new URLSearchParams();
+          if (zenModeActive) queryParams.set("view", "zen");
+          else if (mdViewActive) queryParams.set("view", "md");
+          const queryStr = queryParams.toString();
+          const query = queryStr ? "?" + queryStr : "";
+
+          const hashMap = parseHashParams(location.hash);
+          hashMap.set("name", note.name);
+          hashMap.set("note", compressed);
+          const full = location.pathname + query + buildHash(hashMap);
           if (full.length > URL_MAX_LENGTH) {
             // Too long — drop note content from URL, hide share
-            const shortParams = new URLSearchParams();
-            shortParams.set("name", note.name);
-            if (mdViewActive) shortParams.set("view", "md");
+            hashMap.delete("note");
             history.replaceState(
               null,
               "",
-              location.pathname + "?" + shortParams.toString() + location.hash,
+              location.pathname + query + buildHash(hashMap),
             );
             btnShare.style.display = "none";
           } else {
-            history.replaceState(null, "", full + location.hash);
+            history.replaceState(null, "", full);
             btnShare.style.display = "";
           }
         } catch {}
@@ -4349,7 +4378,14 @@
       async function zenShare() {
         closeZenMenu();
         try {
-          await navigator.clipboard.writeText(location.href.split("#")[0]);
+          const hashMap = parseHashParams(location.hash);
+          hashMap.delete("anchor");
+          const shareUrl =
+            location.origin +
+            location.pathname +
+            location.search +
+            buildHash(hashMap);
+          await navigator.clipboard.writeText(shareUrl);
           const label = document.getElementById("zenCopied");
           label.classList.add("visible");
           setTimeout(() => label.classList.remove("visible"), 2000);
@@ -4359,14 +4395,11 @@
       }
 
       function updateMdViewUrl() {
-        const params = new URLSearchParams(location.search);
-        if (zenModeActive) {
-          params.set("view", "zen");
-        } else if (mdViewActive) {
-          params.set("view", "md");
-        } else {
-          params.delete("view");
-        }
+        const params = new URLSearchParams();
+        if (zenModeActive) params.set("view", "zen");
+        else if (mdViewActive) params.set("view", "md");
+        const queryStr = params.toString();
+        const query = queryStr ? "?" + queryStr : "";
         const note = getActiveNote();
         history.replaceState(
           {
@@ -4374,22 +4407,26 @@
             view: zenModeActive ? "zen" : mdViewActive,
           },
           "",
-          location.pathname + "?" + params.toString() + location.hash,
+          location.pathname + query + location.hash,
         );
       }
 
       function checkMdViewParam() {
         const params = new URLSearchParams(location.search);
         const viewParam = params.get("view");
+        const hashMap = parseHashParams(location.hash);
+        const anchor = hashMap.get("anchor");
         if (viewParam === "zen") {
           if (
             zenEphemeralNote ||
             (getActiveNote() && isMarkdownFile(getActiveNote().name))
           ) {
             switchMdTab("zen");
-            if (location.hash) {
+            if (anchor) {
               requestAnimationFrame(() => {
-                const el = mdPreview.querySelector(location.hash);
+                const el = mdPreview.querySelector(
+                  "#" + CSS.escape(anchor),
+                );
                 if (el) el.scrollIntoView({ behavior: "smooth" });
               });
             }
@@ -4398,10 +4435,11 @@
           const note = getActiveNote();
           if (note && isMarkdownFile(note.name)) {
             switchMdTab("view");
-            // Scroll to anchor if present
-            if (location.hash) {
+            if (anchor) {
               requestAnimationFrame(() => {
-                const el = mdPreview.querySelector(location.hash);
+                const el = mdPreview.querySelector(
+                  "#" + CSS.escape(anchor),
+                );
                 if (el) el.scrollIntoView({ behavior: "smooth" });
               });
             }
@@ -4447,15 +4485,19 @@
         if (!anchor) return;
         e.preventDefault();
         const slug = anchor.getAttribute("href").slice(1);
-        const url = location.href.split("#")[0] + "#" + slug;
+        const hashMap = parseHashParams(location.hash);
+        hashMap.set("anchor", slug);
+        const newHash = buildHash(hashMap);
         history.replaceState(
           null,
           "",
-          location.pathname + location.search + "#" + slug,
+          location.pathname + location.search + newHash,
         );
         const heading = anchor.closest("h1,h2,h3,h4,h5,h6");
         if (heading) heading.scrollIntoView({ behavior: "smooth" });
-        navigator.clipboard.writeText(url).then(() => {
+        const fullUrl =
+          location.origin + location.pathname + location.search + newHash;
+        navigator.clipboard.writeText(fullUrl).then(() => {
           showMdToast("copied to clipboard");
         });
       });
@@ -4493,9 +4535,16 @@
         // Handle in-page anchor links
         if (/^#/.test(clean)) {
           e.preventDefault();
-          const el = mdPreview.querySelector(clean);
+          const slug = clean.slice(1);
+          const el = mdPreview.querySelector("#" + CSS.escape(slug));
           if (el) el.scrollIntoView({ behavior: "smooth" });
-          history.replaceState(null, "", clean);
+          const hashMap = parseHashParams(location.hash);
+          hashMap.set("anchor", slug);
+          history.replaceState(
+            null,
+            "",
+            location.pathname + location.search + buildHash(hashMap),
+          );
           return;
         }
         // Try to find a note matching the link
@@ -4531,6 +4580,16 @@
               e.state.view && isMarkdownFile(note.name),
               true,
             );
+            const hashMap = parseHashParams(location.hash);
+            const anchor = hashMap.get("anchor");
+            if (anchor) {
+              requestAnimationFrame(() => {
+                const el = mdPreview.querySelector(
+                  "#" + CSS.escape(anchor),
+                );
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              });
+            }
           }
         } else {
           // Fallback: try to load from URL params
@@ -7135,13 +7194,18 @@
         if (!note) return;
         try {
           const compressed = await compress(note.content);
-          const params = new URLSearchParams();
-          params.set("name", note.name);
-          if (zenModeActive) params.set("view", "zen");
-          else if (mdViewActive) params.set("view", "md");
-          params.set("note", compressed);
+          const queryParams = new URLSearchParams();
+          if (zenModeActive) queryParams.set("view", "zen");
+          else if (mdViewActive) queryParams.set("view", "md");
+          const queryStr = queryParams.toString();
+          const query = queryStr ? "?" + queryStr : "";
+
+          const hashMap = new Map();
+          hashMap.set("name", note.name);
+          hashMap.set("note", compressed);
+
           const url =
-            location.origin + location.pathname + "?" + params.toString();
+            location.origin + location.pathname + query + buildHash(hashMap);
           if (url.length > URL_MAX_LENGTH) {
             showModal("Note is too large to share via URL.", "ok", null);
             closeFileMenu();
@@ -7161,10 +7225,22 @@
       }
 
       async function loadFromUrl() {
-        const params = new URLSearchParams(location.search);
-        const noteData = params.get("note");
-        const name = params.get("name") || "shared note";
-        const viewParam = params.get("view");
+        const queryParams = new URLSearchParams(location.search);
+        const hashMap = parseHashParams(location.hash);
+        const viewParam = queryParams.get("view");
+
+        // New format: name/note in hash
+        let noteData = hashMap.get("note");
+        let name = hashMap.get("name") || "shared note";
+        let fromOldFormat = false;
+
+        // Backward compat: fall back to query params
+        if (!noteData) {
+          noteData = queryParams.get("note");
+          name = queryParams.get("name") || "shared note";
+          fromOldFormat = !!noteData;
+        }
+
         if (!noteData) return false;
         try {
           const content = await decompress(noteData);
@@ -7173,6 +7249,7 @@
           if (viewParam === "zen") {
             zenFromUrl = true;
             zenEphemeralNote = { name, content };
+            if (fromOldFormat) await updateUrl();
             return true;
           }
 
@@ -7181,6 +7258,7 @@
             if (existing.content === content) {
               state.activeId = existing.id;
               saveState();
+              if (fromOldFormat) await updateUrl();
               return true;
             }
             render();
@@ -7200,6 +7278,7 @@
           } else {
             createNote(name, content);
           }
+          if (fromOldFormat) await updateUrl();
           return true;
         } catch (err) {
           console.error("Failed to load shared note:", err);

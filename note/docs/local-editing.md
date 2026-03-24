@@ -131,14 +131,17 @@ decompress(b64)  → base64 → inflate-raw → string
 ### URL Format
 
 ```
-/note/?name=todo.md&note=<compressed>&view=md
+/note/?view=md#name=todo.md&note=<compressed>&anchor=heading-slug
 ```
 
-| Parameter | Required | Values         | Purpose                                          |
-| --------- | -------- | -------------- | ------------------------------------------------ |
-| `name`    | Yes      | Note filename  | Identifies the note                              |
-| `note`    | No       | Base64 deflate | Compressed content (dropped if URL > 8000 chars) |
-| `view`    | No       | `md`, `zen`    | Markdown preview or zen mode                     |
+Sensitive data (`name`, `note`) lives in the hash fragment, which is never sent to servers — keeping document content out of access logs.
+
+| Location | Parameter | Required | Values         | Purpose                                           |
+| -------- | --------- | -------- | -------------- | ------------------------------------------------- |
+| Query    | `view`    | No       | `md`, `zen`    | Markdown preview or zen mode                      |
+| Hash     | `name`    | Yes      | Note filename  | Identifies the note                               |
+| Hash     | `note`    | No       | Base64 deflate | Compressed content (dropped if URL > 60000 chars) |
+| Hash     | `anchor`  | No       | Heading slug   | Scroll target for heading anchors                 |
 
 ### Update Flow
 
@@ -146,7 +149,7 @@ decompress(b64)  → base64 → inflate-raw → string
 scheduleUrlUpdate()                      500ms debounce
   → updateUrl()
     → compress(note.content)             async
-    → if URL > URL_MAX_LENGTH (8000):
+    → if URL > URL_MAX_LENGTH (60000):
         drop "note" param, hide share button
     → history.replaceState(...)          no page reload
 ```
