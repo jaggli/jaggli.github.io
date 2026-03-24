@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser Limits Test Suite</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        padding: 24px;
+        background: #f5f5f5;
+        color: #1a1a1a;
+      }
+      h1 {
+        margin-bottom: 8px;
+      }
+      .subtitle {
+        color: #666;
+        margin-bottom: 24px;
+      }
+      .tests {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+      }
+      .test-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        min-width: 280px;
+        flex: 1;
+      }
+      .test-card h2 {
+        font-size: 16px;
+        margin-bottom: 4px;
+      }
+      .test-card p {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 12px;
+      }
+      .test-card button {
+        background: #2563eb;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .test-card button:hover {
+        background: #1d4ed8;
+      }
+      .test-card button:disabled {
+        background: #94a3b8;
+        cursor: not-allowed;
+      }
+      .result {
+        margin-top: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        min-height: 20px;
+      }
+      .result.success {
+        color: #16a34a;
+      }
+      .result.error {
+        color: #dc2626;
+      }
+      #log-container {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 8px;
+        padding: 16px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        font-size: 13px;
+        max-height: 500px;
+        overflow-y: auto;
+        line-height: 1.6;
+      }
+      #log-container:empty::before {
+        content: "Press a button above to start a test...";
+        color: #666;
+      }
+      .log-info {
+        color: #9cdcfe;
+      }
+      .log-step {
+        color: #d4d4d4;
+      }
+      .log-success {
+        color: #4ec9b0;
+        font-weight: 600;
+      }
+      .log-error {
+        color: #f44747;
+      }
+      .log-warn {
+        color: #dcdcaa;
+      }
+      .log-separator {
+        color: #444;
+      }
+      .clear-log {
+        background: none;
+        border: 1px solid #666;
+        color: #666;
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Browser Limits Test Suite</h1>
+    <p class="subtitle" id="browser-info"></p>
+
+    <div class="tests">
+      <div class="test-card">
+        <h2>Max URL Length</h2>
+        <p>
+          Tests how long a URL the browser can handle via window.location,
+          History API, and XMLHttpRequest.
+        </p>
+        <button onclick="testMaxUrlLength()" id="btn-url">Run Test</button>
+        <div class="result" id="result-url"></div>
+      </div>
+
+      <div class="test-card">
+        <h2>Max localStorage Capacity</h2>
+        <p>
+          Fills localStorage with increasing chunks until quota is exceeded.
+        </p>
+        <button onclick="testLocalStorageCapacity()" id="btn-ls">
+          Run Test
+        </button>
+        <div class="result" id="result-ls"></div>
+      </div>
+
+      <div class="test-card">
+        <h2>Max sessionStorage Capacity</h2>
+        <p>Same test as localStorage but for sessionStorage.</p>
+        <button onclick="testSessionStorageCapacity()" id="btn-ss">
+          Run Test
+        </button>
+        <div class="result" id="result-ss"></div>
+      </div>
+
+      <div class="test-card">
+        <h2>Max Single localStorage Value</h2>
+        <p>Tests the max size of a single key-value pair in localStorage.</p>
+        <button onclick="testSingleValueLimit()" id="btn-sv">Run Test</button>
+        <div class="result" id="result-sv"></div>
+      </div>
+    </div>
+
+    <button class="clear-log" onclick="clearLog()">Clear Log</button>
+    <div id="log-container"></div>
+
+    <script>
+      const logEl = document.getElementById("log-container");
+
+      document.getElementById("browser-info").textContent = navigator.userAgent;
+
+      function log(msg, type = "step") {
+        const line = document.createElement("div");
+        line.className = "log-" + type;
+        line.textContent = msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function logSeparator() {
+        log("─".repeat(60), "separator");
+      }
+
+      function clearLog() {
+        logEl.innerHTML = "";
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      }
+
+      function setResult(id, msg, success) {
+        const el = document.getElementById(id);
+        el.textContent = msg;
+        el.className = "result " + (success ? "success" : "error");
+      }
+
+      function setButtonState(id, disabled) {
+        document.getElementById(id).disabled = disabled;
+      }
+
+      // ─── Test 1: Max URL Length ───
+
+      async function testMaxUrlLength() {
+        setButtonState("btn-url", true);
+        logSeparator();
+        log("MAX URL LENGTH TEST", "info");
+        logSeparator();
+
+        const results = {};
+
+        // Test 1a: History API (pushState)
+        log("Testing History API (pushState)...", "info");
+        let historyMax = 0;
+        const baseUrl = window.location.origin + window.location.pathname;
+        // Start at 2K, increase by doubling then binary search
+        let low = 0,
+          high = 16 * 1024 * 1024; // 16MB upper bound
+        let step = 2048;
+
+        // Phase 1: exponential growth to find rough upper bound
+        let testLen = step;
+        while (testLen <= high) {
+          const query = "?" + "x".repeat(testLen);
+          try {
+            history.pushState(null, "", query);
+            history.replaceState(null, "", baseUrl);
+            historyMax = testLen;
+            log("  pushState OK at " + formatBytes(testLen), "step");
+            testLen *= 2;
+          } catch (e) {
+            log(
+              "  pushState FAILED at " +
+                formatBytes(testLen) +
+                ": " +
+                e.message,
+              "warn",
+            );
+            high = testLen;
+            break;
+          }
+        }
+
+        // Phase 2: binary search between historyMax and high
+        if (historyMax > 0 && high > historyMax) {
+          low = historyMax;
+          log(
+            "  Binary search between " +
+              formatBytes(low) +
+              " and " +
+              formatBytes(high) +
+              "...",
+            "step",
+          );
+          while (high - low > 1024) {
+            const mid = Math.floor((low + high) / 2);
+            const query = "?" + "x".repeat(mid);
+            try {
+              history.pushState(null, "", query);
+              history.replaceState(null, "", baseUrl);
+              low = mid;
+            } catch (e) {
+              high = mid;
+            }
+          }
+          historyMax = low;
+        }
+
+        history.replaceState(null, "", baseUrl);
+        results.historyApi = historyMax;
+        log(
+          "  History API max URL query length: " + formatBytes(historyMax),
+          "success",
+        );
+
+        // Test 1b: XMLHttpRequest (GET)
+        log("Testing XMLHttpRequest GET URL length...", "info");
+        let xhrMax = 0;
+        low = 0;
+        high = 100000; // 100K is a reasonable upper bound for URLs
+        testLen = 2048;
+
+        // Exponential growth
+        while (testLen <= high) {
+          const url = baseUrl + "?" + "x".repeat(testLen);
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", url, false); // synchronous for simplicity
+            xhr.send();
+            // If we get any response (even 404/414), the URL was accepted by the browser
+            xhrMax = testLen;
+            log(
+              "  XHR OK at " +
+                formatBytes(testLen) +
+                " (status: " +
+                xhr.status +
+                ")",
+              "step",
+            );
+            if (xhr.status === 414) {
+              log(
+                "  Server returned 414 URI Too Long — this is a server limit, not browser",
+                "warn",
+              );
+              break;
+            }
+            testLen *= 2;
+          } catch (e) {
+            log(
+              "  XHR FAILED at " + formatBytes(testLen) + ": " + e.message,
+              "warn",
+            );
+            high = testLen;
+            break;
+          }
+        }
+
+        // Binary search
+        if (xhrMax > 0 && high > xhrMax && xhrMax < 100000) {
+          low = xhrMax;
+          while (high - low > 1024) {
+            const mid = Math.floor((low + high) / 2);
+            const url = baseUrl + "?" + "x".repeat(mid);
+            try {
+              const xhr = new XMLHttpRequest();
+              xhr.open("GET", url, false);
+              xhr.send();
+              if (xhr.status === 414) {
+                high = mid;
+              } else {
+                low = mid;
+              }
+            } catch (e) {
+              high = mid;
+            }
+          }
+          xhrMax = low;
+        }
+
+        results.xhr = xhrMax;
+        log("  XHR max URL length: " + formatBytes(xhrMax), "success");
+
+        // Test 1c: Anchor tag href
+        log("Testing anchor element href length...", "info");
+        let anchorMax = 0;
+        testLen = 2048;
+        high = 16 * 1024 * 1024;
+
+        while (testLen <= high) {
+          try {
+            const a = document.createElement("a");
+            a.href = baseUrl + "?" + "x".repeat(testLen);
+            if (a.href.length >= testLen) {
+              anchorMax = testLen;
+              log("  Anchor href OK at " + formatBytes(testLen), "step");
+              testLen *= 2;
+            } else {
+              log("  Anchor href truncated at " + formatBytes(testLen), "warn");
+              high = testLen;
+              break;
+            }
+          } catch (e) {
+            log(
+              "  Anchor href FAILED at " +
+                formatBytes(testLen) +
+                ": " +
+                e.message,
+              "warn",
+            );
+            high = testLen;
+            break;
+          }
+        }
+
+        if (anchorMax > 0 && high > anchorMax) {
+          low = anchorMax;
+          while (high - low > 1024) {
+            const mid = Math.floor((low + high) / 2);
+            try {
+              const a = document.createElement("a");
+              a.href = baseUrl + "?" + "x".repeat(mid);
+              if (a.href.length >= mid) {
+                low = mid;
+              } else {
+                high = mid;
+              }
+            } catch (e) {
+              high = mid;
+            }
+          }
+          anchorMax = low;
+        }
+
+        results.anchor = anchorMax;
+        log("  Anchor href max: " + formatBytes(anchorMax), "success");
+
+        log("", "step");
+        log("URL LENGTH RESULTS SUMMARY:", "info");
+        log(
+          "  History API (pushState): " + formatBytes(results.historyApi),
+          "success",
+        );
+        log(
+          "  XMLHttpRequest GET:      " + formatBytes(results.xhr),
+          "success",
+        );
+        log(
+          "  Anchor href:             " + formatBytes(results.anchor),
+          "success",
+        );
+
+        setResult(
+          "result-url",
+          "pushState: " +
+            formatBytes(results.historyApi) +
+            " | XHR: " +
+            formatBytes(results.xhr) +
+            " | Anchor: " +
+            formatBytes(results.anchor),
+          true,
+        );
+        setButtonState("btn-url", false);
+      }
+
+      // ─── Test 2: localStorage Capacity ───
+
+      async function testLocalStorageCapacity() {
+        setButtonState("btn-ls", true);
+        logSeparator();
+        log("LOCALSTORAGE CAPACITY TEST", "info");
+        logSeparator();
+
+        const result = await testStorageCapacity(localStorage, "localStorage");
+
+        setResult(
+          "result-ls",
+          "Total capacity: " + formatBytes(result.totalBytes),
+          true,
+        );
+        setButtonState("btn-ls", false);
+      }
+
+      // ─── Test 3: sessionStorage Capacity ───
+
+      async function testSessionStorageCapacity() {
+        setButtonState("btn-ss", true);
+        logSeparator();
+        log("SESSIONSTORAGE CAPACITY TEST", "info");
+        logSeparator();
+
+        const result = await testStorageCapacity(
+          sessionStorage,
+          "sessionStorage",
+        );
+
+        setResult(
+          "result-ss",
+          "Total capacity: " + formatBytes(result.totalBytes),
+          true,
+        );
+        setButtonState("btn-ss", false);
+      }
+
+      async function testStorageCapacity(storage, name) {
+        // Save existing data
+        const backup = {};
+        for (let i = 0; i < storage.length; i++) {
+          const key = storage.key(i);
+          backup[key] = storage.getItem(key);
+        }
+
+        log(
+          "  Backed up " + Object.keys(backup).length + " existing entries",
+          "step",
+        );
+        storage.clear();
+
+        let totalStored = 0;
+        let chunkSize = 1024 * 1024; // Start with 1MB chunks
+        const minChunk = 1024; // Minimum 1KB
+        let iteration = 0;
+        const testKey = "__capacity_test_";
+
+        log("  Starting with chunk size: " + formatBytes(chunkSize), "step");
+
+        while (chunkSize >= minChunk) {
+          const chunk = "x".repeat(chunkSize);
+          try {
+            storage.setItem(testKey + iteration, chunk);
+            totalStored += chunkSize * 2; // JS strings are UTF-16 = 2 bytes per char
+            iteration++;
+
+            if (iteration % 5 === 0 || chunkSize >= 512 * 1024) {
+              log(
+                "  Written " +
+                  formatBytes(totalStored) +
+                  " (chunk: " +
+                  formatBytes(chunkSize) +
+                  ", entries: " +
+                  iteration +
+                  ")",
+                "step",
+              );
+            }
+          } catch (e) {
+            log(
+              "  Quota hit at chunk size " +
+                formatBytes(chunkSize) +
+                " — reducing chunk size",
+              "warn",
+            );
+            chunkSize = Math.floor(chunkSize / 2);
+          }
+
+          // Yield to UI every 50 iterations
+          if (iteration % 50 === 0) {
+            await new Promise((r) => setTimeout(r, 0));
+          }
+        }
+
+        // Final attempt with 1-char increments for precision
+        log("  Fine-tuning with single characters...", "step");
+        let fineKey = testKey + "fine";
+        let fineValue = "";
+        try {
+          while (true) {
+            fineValue += "x".repeat(512);
+            storage.setItem(fineKey, fineValue);
+            totalStored += 512 * 2;
+          }
+        } catch (e) {
+          // Expected
+        }
+
+        log("", "step");
+        log(name + " RESULT:", "info");
+        log("  Total capacity: ~" + formatBytes(totalStored), "success");
+        log("  Total entries used: " + storage.length, "step");
+
+        // Clean up and restore
+        storage.clear();
+        for (const [key, value] of Object.entries(backup)) {
+          try {
+            storage.setItem(key, value);
+          } catch (e) {
+            /* ignore */
+          }
+        }
+        log(
+          "  Restored " + Object.keys(backup).length + " original entries",
+          "step",
+        );
+
+        return { totalBytes: totalStored };
+      }
+
+      // ─── Test 4: Max Single Value ───
+
+      async function testSingleValueLimit() {
+        setButtonState("btn-sv", true);
+        logSeparator();
+        log("MAX SINGLE LOCALSTORAGE VALUE TEST", "info");
+        logSeparator();
+
+        const backup = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          backup[key] = localStorage.getItem(key);
+        }
+        localStorage.clear();
+
+        const testKey = "__single_value_test__";
+        let low = 0;
+        let high = 512 * 1024 * 1024; // 512M chars upper bound
+        let maxLen = 0;
+
+        // Exponential growth
+        let testLen = 1024 * 1024; // Start at 1M chars
+        log("  Phase 1: Finding upper bound (exponential growth)...", "info");
+
+        while (testLen <= high) {
+          try {
+            const value = "x".repeat(testLen);
+            localStorage.setItem(testKey, value);
+            localStorage.removeItem(testKey);
+            maxLen = testLen;
+            log(
+              "  OK at " +
+                formatBytes(testLen * 2) +
+                " (" +
+                testLen.toLocaleString() +
+                " chars)",
+              "step",
+            );
+            testLen *= 2;
+          } catch (e) {
+            log(
+              "  FAILED at " + formatBytes(testLen * 2) + ": " + e.message,
+              "warn",
+            );
+            high = testLen;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 0));
+        }
+
+        // Binary search
+        if (maxLen > 0) {
+          low = maxLen;
+          log(
+            "  Phase 2: Binary search between " +
+              formatBytes(low * 2) +
+              " and " +
+              formatBytes(high * 2) +
+              "...",
+            "info",
+          );
+
+          while (high - low > 1024) {
+            const mid = Math.floor((low + high) / 2);
+            try {
+              const value = "x".repeat(mid);
+              localStorage.setItem(testKey, value);
+              localStorage.removeItem(testKey);
+              low = mid;
+            } catch (e) {
+              high = mid;
+            }
+            await new Promise((r) => setTimeout(r, 0));
+          }
+          maxLen = low;
+        }
+
+        localStorage.removeItem(testKey);
+
+        // Restore
+        for (const [key, value] of Object.entries(backup)) {
+          try {
+            localStorage.setItem(key, value);
+          } catch (e) {
+            /* ignore */
+          }
+        }
+
+        const maxBytes = maxLen * 2;
+        log("", "step");
+        log("SINGLE VALUE RESULT:", "info");
+        log(
+          "  Max single value: " +
+            formatBytes(maxBytes) +
+            " (" +
+            maxLen.toLocaleString() +
+            " chars)",
+          "success",
+        );
+
+        setResult(
+          "result-sv",
+          "Max single value: " +
+            formatBytes(maxBytes) +
+            " (" +
+            maxLen.toLocaleString() +
+            " chars)",
+          true,
+        );
+        setButtonState("btn-sv", false);
+      }
+    </script>
+  </body>
+</html>
