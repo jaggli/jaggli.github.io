@@ -25,11 +25,11 @@ The ZIP is a valid archive that can be opened by any zip tool (Finder, Explorer,
 }
 ```
 
-| Field       | Type   | Description                         |
-| ----------- | ------ | ----------------------------------- |
-| `id`        | string | Unique note identifier (base36)     |
-| `name`      | string | Filename including extension        |
-| `updatedAt` | number | Last modification timestamp (ms)    |
+| Field       | Type   | Description                      |
+| ----------- | ------ | -------------------------------- |
+| `id`        | string | Unique note identifier (base36)  |
+| `name`      | string | Filename including extension     |
+| `updatedAt` | number | Last modification timestamp (ms) |
 
 **Privacy:** Only `id`, `name`, and `updatedAt` are exported. The following are intentionally excluded:
 
@@ -55,28 +55,28 @@ Detected by `.zip` extension or `application/zip` MIME type. The ZIP reader hand
 
 **With `.note.directory` (app export):**
 
-| Scenario | Behavior |
-| --- | --- |
-| Same ID + same or older `updatedAt` | Skip silently (local is current) |
-| Same ID + newer `updatedAt` | Auto-update local note |
-| Same filename, different ID | Show conflict modal |
-| New file (no match) | Create note with original ID and timestamp |
+| Scenario                            | Behavior                                   |
+| ----------------------------------- | ------------------------------------------ |
+| Same ID + same or older `updatedAt` | Skip silently (local is current)           |
+| Same ID + newer `updatedAt`         | Auto-update local note                     |
+| Same filename, different ID         | Show conflict modal                        |
+| New file (no match)                 | Create note with original ID and timestamp |
 
 **Without `.note.directory` (plain zip):**
 
-| Scenario | Behavior |
-| --- | --- |
-| Filename exists | Show conflict modal |
-| New file | Create note with new ID |
+| Scenario        | Behavior                |
+| --------------- | ----------------------- |
+| Filename exists | Show conflict modal     |
+| New file        | Create note with new ID |
 
 ### Individual text files
 
 Any file with a text MIME type or a recognized text extension (~80 extensions supported: `.js`, `.py`, `.md`, `.json`, `.yaml`, `.toml`, `.rs`, `.go`, etc.) can be dropped directly.
 
-| Scenario | Behavior |
-| --- | --- |
+| Scenario        | Behavior                      |
+| --------------- | ----------------------------- |
 | Filename exists | Modal: "update" or "new file" |
-| New file | Create note |
+| New file        | Create note                   |
 
 ---
 
@@ -84,11 +84,11 @@ Any file with a text MIME type or a recognized text extension (~80 extensions su
 
 When a ZIP import encounters a filename collision (different ID or no metadata), a three-option modal appears:
 
-| Option | Effect |
-| --- | --- |
-| **skip** | Don't import this file |
+| Option        | Effect                                                      |
+| ------------- | ----------------------------------------------------------- |
+| **skip**      | Don't import this file                                      |
 | **keep both** | Import with a numbered suffix (`todo1.md`, `todo2.md`, ...) |
-| **override** | Replace the existing note's content |
+| **override**  | Replace the existing note's content                         |
 
 Escape or clicking outside the modal defaults to "skip".
 
@@ -110,15 +110,15 @@ When opening a shared URL:
 
 ### ZIP reader hardening
 
-| Protection | Limit |
-| --- | --- |
-| Max entries per zip | 500 |
-| Max uncompressed size per entry | 10 MB |
-| Max total uncompressed size | 50 MB |
-| Path traversal (`../`) | Rejected |
+| Protection                        | Limit                         |
+| --------------------------------- | ----------------------------- |
+| Max entries per zip               | 500                           |
+| Max uncompressed size per entry   | 10 MB                         |
+| Max total uncompressed size       | 50 MB                         |
+| Path traversal (`../`)            | Rejected                      |
 | Directory components in filenames | Stripped (only basename kept) |
-| Unsupported compression methods | Silently skipped |
-| Malformed/truncated headers | Error modal shown |
+| Unsupported compression methods   | Silently skipped              |
+| Malformed/truncated headers       | Error modal shown             |
 
 ### Content validation
 

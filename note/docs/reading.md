@@ -12,7 +12,7 @@ All HTML entities are escaped first (`&`, `<`, `>`, `"`). This prevents raw HTML
 
 Transformations are applied in this sequence:
 
-```
+````
 1.  Fenced code blocks        ```lang ... ```       → <pre><code>...</code></pre>
 2.  Inline code               `code`                → <code>code</code>
 3.  Headings (H6→H1)          ## Title              → <h2 id="slug">...</h2>
@@ -26,7 +26,7 @@ Transformations are applied in this sequence:
 11. Italic                    *text* / _text_        → <em>text</em>
 12. Strikethrough             ~~text~~               → <del>text</del>
 13. Paragraphs                loose text             → <p>text</p>
-```
+````
 
 ### Step 3: Restore Placeholders
 
@@ -58,14 +58,14 @@ language hint → langAliases → langRules/htmlExts → highlightCode()
 
 `langAliases` normalizes common names:
 
-| Alias | Maps to |
-| --- | --- |
-| javascript | js |
-| typescript | ts |
-| python | py |
-| rust | rs |
-| bash, shell, zsh | sh |
-| yml | yaml |
+| Alias            | Maps to |
+| ---------------- | ------- |
+| javascript       | js      |
+| typescript       | ts      |
+| python           | py      |
+| rust             | rs      |
+| bash, shell, zsh | sh      |
+| yml              | yaml    |
 
 If highlighting rules exist for the language, `highlightCode(code, "file." + ext)` is called. Otherwise, the code is HTML-escaped and shown as plain text.
 
@@ -81,6 +81,7 @@ Each code block includes a copy-to-clipboard button:
 ```
 
 **Behavior:**
+
 1. Button is hidden by default (opacity: 0)
 2. Appears on `<pre>` hover (opacity: 1, top-right corner)
 3. Click copies `code.textContent` via `navigator.clipboard.writeText()`
@@ -105,6 +106,7 @@ Every heading gets a unique `id` attribute for anchor linking:
 ```
 
 Slug generation:
+
 1. Strip HTML tags and entities from heading text
 2. Convert to lowercase
 3. Remove non-word characters (except hyphens)
@@ -118,6 +120,7 @@ The `#` anchor link is hidden by default (positioned absolutely at `left: -24px`
 ### Anchor Click Behavior
 
 Clicking a heading anchor:
+
 1. Updates the URL hash via `history.replaceState()` (no page reload)
 2. Scrolls the heading into view with `scrollIntoView({ behavior: "smooth" })`
 3. Copies the full URL (with `#fragment`) to clipboard
@@ -126,6 +129,7 @@ Clicking a heading anchor:
 ### In-Page Anchor Navigation
 
 Links starting with `#` (e.g., `[see below](#section)`) are intercepted:
+
 1. Finds the target element in `mdPreview` by selector
 2. Smooth-scrolls to it
 3. Updates the URL hash
@@ -150,11 +154,11 @@ Task list items are detected during list parsing:
 
 ```html
 <li class="task-item checked" data-task="0">
-  <input type="checkbox" checked data-task="0">
+  <input type="checkbox" checked data-task="0" />
   <span>completed task</span>
 </li>
 <li class="task-item" data-task="1">
-  <input type="checkbox" data-task="1">
+  <input type="checkbox" data-task="1" />
   <span>pending task</span>
 </li>
 ```
@@ -187,6 +191,7 @@ click on checkbox or task-item li
 **Down:** Toggling a parent automatically checks/unchecks all nested subtasks (determined by indentation level).
 
 **Up:** After toggling, the system checks siblings at the same indent level under the parent:
+
 - If **all siblings** are now checked → parent is auto-checked
 - If **any sibling** is unchecked → parent is auto-unchecked
 - Cascading propagates recursively up the tree
@@ -218,6 +223,7 @@ The tab bar (`edit | view | zen`) is only visible for markdown files (`.md` exte
 ### Scroll Position Sync
 
 When switching between edit and view:
+
 - **Edit → View:** calculates cursor position as a ratio of total lines, scrolls preview to the corresponding position
 - **View → Edit:** remembers scroll ratio, scrolls editor to match
 
@@ -248,16 +254,16 @@ switchMdTab("zen")
 
 Zen mode strips all application chrome:
 
-| Element | View Mode | Zen Mode |
-| --- | --- | --- |
-| Sidebar | Visible | Hidden |
-| Sidebar resize | Visible | Hidden |
-| Status bar | Visible | Hidden |
-| Tab bar | Visible | Hidden |
-| Find & replace | Visible | Hidden |
-| Content width | Full width | max-width: 800px, centered |
-| Bottom padding | None | 40vh (scroll space via ::after) |
-| Menu | None | Floating === button (top-left) |
+| Element        | View Mode  | Zen Mode                        |
+| -------------- | ---------- | ------------------------------- |
+| Sidebar        | Visible    | Hidden                          |
+| Sidebar resize | Visible    | Hidden                          |
+| Status bar     | Visible    | Hidden                          |
+| Tab bar        | Visible    | Hidden                          |
+| Find & replace | Visible    | Hidden                          |
+| Content width  | Full width | max-width: 800px, centered      |
+| Bottom padding | None       | 40vh (scroll space via ::after) |
+| Menu           | None       | Floating === button (top-left)  |
 
 ### Zen Menu
 
@@ -284,6 +290,7 @@ zenEphemeralNote = { name, content }       stored in memory only
 ### Rendering
 
 When `zenModeActive && zenFromUrl && zenEphemeralNote`:
+
 - Preview renders from `zenEphemeralNote.content` instead of the active note
 - URL updates are skipped (no re-compression needed)
 - The note is not part of `state.notes`
@@ -346,14 +353,14 @@ The separator row (`| --- | --- |`) determines column count. Header cells use `<
 
 ### In View Mode
 
-| Key | Action |
-| --- | --- |
-| e | Switch to edit tab |
+| Key | Action             |
+| --- | ------------------ |
+| e   | Switch to edit tab |
 
 ### In Zen Mode
 
-| Key | Action |
-| --- | --- |
-| e | Exit zen mode (persists ephemeral note, switches to edit) |
+| Key | Action                                                    |
+| --- | --------------------------------------------------------- |
+| e   | Exit zen mode (persists ephemeral note, switches to edit) |
 
 Both shortcuts require: no modifier keys (Ctrl/Cmd/Alt), focus not in an input/textarea element.
