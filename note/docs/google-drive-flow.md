@@ -54,16 +54,19 @@ scheduleSave()                       300ms debounce
 
 ---
 
-## 3. Ctrl+S (non-vim mode)
+## 3. Ctrl+S
 
 **Trigger:** Ctrl/Cmd+S keydown.
 
-```
-if (!vimState.enabled && gdriveConnected)
-  → driveSync()                      full sync (same as first-time, minus auth if token valid)
-```
+| Context                        | Action                                             |
+| ------------------------------ | -------------------------------------------------- |
+| Edit mode, non-vim, `.md` file | Format markdown → save → update URL → `driveSync()`|
+| Edit mode, non-vim, other file | Save → update URL → `driveSync()`                  |
+| View tab (markdown preview)    | Save → update URL → `driveSync()` (no formatting)  |
+| Vim mode (any file)            | Nothing — suppresses browser save only. Use `:w`   |
+| Zen mode                       | Nothing — suppresses browser save only             |
 
-In vim mode: Ctrl+S only suppresses the browser save dialog. Use `:w` instead.
+`driveSync()` performs a full sync (same as first-time connection, minus auth if token is valid).
 
 ---
 
@@ -221,7 +224,7 @@ Every Drive API call goes through `gdriveFetch()` which:
 
 Init and tab resume only attempt `silentTokenRefresh()` (no popup). If silent refresh fails, the app stays in "sync failed" — it does **not** open an interactive auth popup in the background. This prevents a race where a background popup's `clearToken()` wipes a token that the user just obtained via Ctrl+S or the sync menu.
 
-Recovery from "sync failed" is always user-initiated: Ctrl+S (non-vim), sync menu → "reconnect", or `:w` (vim mode).
+Recovery from "sync failed" is always user-initiated: Ctrl+S (edit or view mode, non-vim), sync menu → "reconnect", or `:w` (vim mode).
 
 ---
 

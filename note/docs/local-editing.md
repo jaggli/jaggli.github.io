@@ -223,7 +223,7 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 | Ctrl+N          | New note (Ctrl only, not Cmd — avoids new window) |
 | Ctrl+P / Ctrl+F | Open note search                                  |
 | Ctrl+H          | Open find & replace                               |
-| Ctrl+S          | Format md + save + sync to Drive (non-vim mode)   |
+| Ctrl+S          | See [Ctrl+S behavior](#ctrls-behavior) below       |
 | Ctrl+Shift+D    | Delete current note                               |
 | Ctrl+Shift+F    | Format markdown (`.md` files only)                |
 | Ctrl+Shift+M    | Toggle vim mode                                   |
@@ -234,6 +234,20 @@ Each language defines rules as `[regex, cssClass]` pairs. `tokenize()` finds all
 | Shortcut | Action                           |
 | -------- | -------------------------------- |
 | e        | Switch from view/zen to edit tab |
+
+### Ctrl+S Behavior
+
+Ctrl/Cmd+S always suppresses the browser save dialog. Beyond that, behavior depends on context:
+
+| Context                        | Action                                        |
+| ------------------------------ | --------------------------------------------- |
+| Edit mode, non-vim, `.md` file | Format markdown → save → update URL → sync    |
+| Edit mode, non-vim, other file | Save → update URL → sync                      |
+| View tab (markdown preview)    | Save → update URL → sync (no formatting)      |
+| Vim mode (any file)            | Nothing (use `:w` to save)                    |
+| Zen mode                       | Nothing                                       |
+
+"Save" = `saveState()` (localStorage). "Sync" = `driveSync()` (only if connected to Google Drive). "Update URL" = `scheduleUrlUpdate()` (compress content into URL hash).
 
 ### Vim Mode
 
@@ -391,9 +405,9 @@ selectFindMatch(focusEditor)
 |---|---|
 | `:fmt` | Vim command bar |
 | `Ctrl+Shift+F` | Any mode (vim or normal) |
-| `Ctrl+S` | Non-vim mode — autoformats `.md` before saving |
+| `Ctrl+S` | Edit mode, non-vim, `.md` files only (see [Ctrl+S behavior](#ctrls-behavior)) |
 
-`:fmt` and `Ctrl+Shift+F` only run on `.md` files (toast shown otherwise). `Ctrl+S` silently skips formatting for non-markdown files and proceeds with save/sync.
+`:fmt` and `Ctrl+Shift+F` only run on `.md` files (toast shown otherwise). `Ctrl+S` silently skips formatting for non-markdown files and proceeds with save/sync. `Ctrl+S` does nothing in vim mode or zen mode.
 
 ### What Gets Formatted
 
