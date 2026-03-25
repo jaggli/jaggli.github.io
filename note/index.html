@@ -4093,13 +4093,18 @@
           yml: "yaml",
         };
 
-        // Fenced code blocks (``` ... ```)
+        // Fenced code blocks (``` ... ```) — stack-based parser to handle nested fences
         const codeBlocks = [];
-        text = text.replace(
-          /^(`{3,})(\S*)\n([\s\S]*?)^\1/gm,
-          (_, fence, lang, code) => {
+        {
+          const lines = text.split("\n");
+          const result = [];
+          const fenceStack = []; // stack of backtick strings for nesting
+          let lang = "";
+          let codeLines = [];
+
+          function flushCodeBlock() {
+            const code = codeLines.join("\n");
             const idx = codeBlocks.length;
-            // Unescape HTML entities to get raw code for highlighting
             const raw = code
               .replace(/&quot;/g, '"')
               .replace(/&gt;/g, ">")
@@ -4117,9 +4122,52 @@
                 highlighted +
                 "</code></pre>",
             );
-            return "\x00CB" + idx + "\x00";
-          },
-        );
+            result.push("\x00CB" + idx + "\x00");
+          }
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (fenceStack.length === 0) {
+              // Outside any code block
+              const m = line.match(/^(`{3,})(\S*)\s*$/);
+              if (m) {
+                fenceStack.push(m[1]);
+                lang = m[2];
+                codeLines = [];
+              } else {
+                result.push(line);
+              }
+            } else {
+              // Inside a code block — check for closing or nested opening
+              const plain = line.match(/^(`{3,})\s*$/);
+              if (plain && plain[1] === fenceStack[fenceStack.length - 1]) {
+                // Closing fence matches top of stack
+                fenceStack.pop();
+                if (fenceStack.length === 0) {
+                  // Outermost block closed — flush
+                  flushCodeBlock();
+                  lang = "";
+                  codeLines = [];
+                } else {
+                  // Inner block closed — keep as content of outer block
+                  codeLines.push(line);
+                }
+              } else {
+                // Check for nested opening fence (backticks + language tag)
+                const nested = line.match(/^(`{3,})(\S+)\s*$/);
+                if (nested) {
+                  fenceStack.push(nested[1]);
+                }
+                codeLines.push(line);
+              }
+            }
+          }
+          // Unclosed fence — flush remaining as a code block
+          if (fenceStack.length > 0) {
+            flushCodeBlock();
+          }
+          text = result.join("\n");
+        }
 
         // Inline code (must come before other inline formatting)
         const inlineCodes = [];
