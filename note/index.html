@@ -830,7 +830,7 @@
         background: var(--sidebar);
         padding: 12px 16px;
         border-radius: 4px;
-        overflow-x: auto;
+        overflow-x: hidden;
         margin: 0.8em 0;
         font-size: 0.85em;
         line-height: 1.5;
@@ -842,6 +842,32 @@
         padding: 0;
         border-radius: 0;
         font-size: inherit;
+        counter-reset: code-ln;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .md-preview .code-line {
+        display: flex;
+      }
+
+      .md-preview .code-line::before {
+        counter-increment: code-ln;
+        content: counter(code-ln);
+        flex-shrink: 0;
+        width: 2em;
+        margin-right: 1em;
+        text-align: right;
+        color: var(--gutter);
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .md-preview .code-ct {
+        flex: 1;
+        min-width: 0;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
       }
 
       .md-preview pre .code-copy-btn {
@@ -4117,9 +4143,36 @@
             } else {
               highlighted = escapeHtml(raw);
             }
+            // Split highlighted HTML at newlines, closing/re-opening spans
+            const hLines = [];
+            {
+              let cur = "";
+              const open = []; // stack of open <span> tags
+              for (let j = 0; j < highlighted.length; j++) {
+                if (highlighted[j] === "\n") {
+                  for (let k = open.length - 1; k >= 0; k--) cur += "</span>";
+                  hLines.push(cur);
+                  cur = "";
+                  for (const t of open) cur += t;
+                } else if (highlighted[j] === "<") {
+                  const end = highlighted.indexOf(">", j);
+                  const tag = highlighted.substring(j, end + 1);
+                  if (tag.startsWith("</")) open.pop();
+                  else open.push(tag);
+                  cur += tag;
+                  j = end;
+                } else {
+                  cur += highlighted[j];
+                }
+              }
+              hLines.push(cur);
+            }
+            const wrapped = hLines
+              .map((l) => '<span class="code-line"><span class="code-ct">' + (l || " ") + "</span></span>")
+              .join("");
             codeBlocks.push(
               '<pre><button class="code-copy-btn">copy</button><code>' +
-                highlighted +
+                wrapped +
                 "</code></pre>",
             );
             result.push("\x00CB" + idx + "\x00");
@@ -4906,8 +4959,12 @@
         const btn = e.target.closest(".code-copy-btn");
         if (!btn) return;
         e.preventDefault();
-        const code = btn.closest("pre").querySelector("code");
-        navigator.clipboard.writeText(code.textContent).then(() => {
+        const pre = btn.closest("pre");
+        const cts = pre.querySelectorAll(".code-ct");
+        const text = cts.length
+          ? Array.from(cts, (c) => c.textContent).join("\n")
+          : pre.querySelector("code")?.textContent || "";
+        navigator.clipboard.writeText(text).then(() => {
           showMdToast("copied to clipboard");
           btn.textContent = "copied";
           setTimeout(() => {
