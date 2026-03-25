@@ -2957,7 +2957,10 @@
         if (!note) return;
         const id = note.id;
         const content = editor.value;
-        historyTimeout = setTimeout(() => pushHistory(id, content), 400);
+        historyTimeout = setTimeout(() => {
+          pushHistory(id, content);
+          historyTimeout = null;
+        }, 400);
       }
 
       function refreshEditor() {
@@ -2981,6 +2984,11 @@
         const h = getHistory(note.id);
         if (!h.past.length) return;
         const oldContent = editor.value;
+        // Skip past entries identical to current state (snapshot duplicates)
+        while (h.past.length && h.past[h.past.length - 1].content === oldContent) {
+          h.past.pop();
+        }
+        if (!h.past.length) return;
         h.future.push({ content: oldContent });
         const entry = h.past.pop();
         editor.value = entry.content;
