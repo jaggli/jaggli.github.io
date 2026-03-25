@@ -8957,8 +8957,11 @@
           sortNotes();
           saveState();
 
-          // Settings: Google Drive is source of truth
-          if (remoteSettings) applyDriveSettings(remoteSettings);
+          // Settings: local settings are authoritative (per-device)
+          // Remote settings only apply on first connect (no local settings yet)
+          if (remoteSettings && !localStorage.getItem(VIM_KEY) && !localStorage.getItem(WRAP_KEY)) {
+            applyDriveSettings(remoteSettings);
+          }
 
           render();
 
@@ -9063,7 +9066,6 @@
             state.notes = merged;
             sortNotes();
             saveState();
-            if (remoteSettings) applyDriveSettings(remoteSettings);
             render();
           }
 
