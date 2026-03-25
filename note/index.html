@@ -3925,7 +3925,7 @@
           // Task list item
           const tm = raw.match(/^(\s*)-\s*\[([ x])\]\s*(.*)/);
           if (tm) {
-            const depth = Math.round(tm[1].length / 2);
+            const depth = Math.floor(tm[1].length / 2);
             const indent = "  ".repeat(depth);
             const check = tm[2];
             out.push({ type: "list", text: indent + "- [" + check + "] " + tm[3].trimEnd() });
@@ -3935,7 +3935,7 @@
           // Unordered list item
           const um = raw.match(/^(\s*)[-*+]\s+(.*)/);
           if (um) {
-            const depth = Math.round(um[1].length / 2);
+            const depth = Math.floor(um[1].length / 2);
             const indent = "  ".repeat(depth);
             out.push({ type: "list", text: indent + "- " + um[2].trimEnd() });
             continue;
@@ -3944,7 +3944,7 @@
           // Ordered list item
           const om = raw.match(/^(\s*)(\d+\.)\s+(.*)/);
           if (om) {
-            const depth = Math.round(om[1].length / 2);
+            const depth = Math.floor(om[1].length / 2);
             const indent = "  ".repeat(depth);
             out.push({ type: "list", text: indent + om[2] + " " + om[3].trimEnd() });
             continue;
@@ -4583,7 +4583,7 @@
               while ((m = re.exec(content)) !== null)
                 items.push({
                   idx: items.length,
-                  indent: m[1].length,
+                  indent: Math.floor(m[1].length / 2),
                   checked: m[3] === "x",
                 });
               return items;
