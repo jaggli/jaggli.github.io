@@ -2556,6 +2556,7 @@
         } catch {}
       }
 
+      let _vimPreClickPos = null; // saved cursor pos before mouse click
       let vimState = {
         enabled: false,
         mode: "normal",
@@ -5813,7 +5814,8 @@
         vimCursorEl.style.display = "block";
 
         const val = editor.value || "";
-        const pos = editor.selectionStart;
+        // Use saved pre-click position so mouse clicks don't move block cursor
+        const pos = _vimPreClickPos !== null ? _vimPreClickPos : editor.selectionStart;
         const before = val.substring(0, pos);
         const lines = before.split("\n");
         const lineIdx = lines.length - 1;
@@ -7527,6 +7529,13 @@
       function vimHandleKeydown(e) {
         if (!vimState.enabled) return;
 
+        // Restore cursor from before any mouse click so vim commands
+        // operate from the original position (mouse doesn't move cursor)
+        if (_vimPreClickPos !== null) {
+          editor.selectionStart = editor.selectionEnd = _vimPreClickPos;
+          _vimPreClickPos = null;
+        }
+
         // Don't intercept when a non-editor input is focused
         const active = document.activeElement;
         if (
@@ -8271,29 +8280,28 @@
       });
 
       // Track cursor position for line/col and current line highlight
-      // Track cursor position before mouse events so we can restore it in vim
-      let _vimPreClickPos = null;
+      // In vim normal/visual mode, mouse clicks create selections (for copy)
+      // but don't move the vim cursor — matching real vim terminal behavior.
       editor.addEventListener("mousedown", () => {
         if (vimState.enabled && vimState.mode !== "insert") {
           _vimPreClickPos = editor.selectionStart;
         }
       });
       editor.addEventListener("click", () => {
-        if (vimState.enabled && vimState.mode !== "insert" && _vimPreClickPos !== null) {
-          editor.selectionStart = editor.selectionEnd = _vimPreClickPos;
-          _vimPreClickPos = null;
+        if (_vimPreClickPos !== null) {
+          // Single click: restore cursor position immediately
+          if (editor.selectionStart === editor.selectionEnd) {
+            editor.selectionStart = editor.selectionEnd = _vimPreClickPos;
+          }
+          // Double-click (selection): keep selection visible, block cursor
+          // stays at _vimPreClickPos via vimUpdateBlockCursor
+        } else {
+          vimState.desiredCol = null;
         }
-        vimState.desiredCol = null;
         updateCursorPos();
       });
       editor.addEventListener("keyup", updateCursorPos);
-      editor.addEventListener("select", () => {
-        // In vim normal/visual mode, prevent mouse selection from moving cursor
-        if (vimState.enabled && vimState.mode !== "insert" && _vimPreClickPos !== null) {
-          editor.selectionStart = editor.selectionEnd = _vimPreClickPos;
-        }
-        updateCursorPos();
-      });
+      editor.addEventListener("select", updateCursorPos);
       editor.addEventListener("mouseup", scheduleOccurrenceUpdate);
 
       editor.addEventListener("keydown", vimHandleKeydown);
