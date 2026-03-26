@@ -10,22 +10,28 @@ The editor uses a **grid-based overlay** system. Three elements are stacked in t
 │  gutter  │  ─ opaque background, colored spans │ occur- │
 │          │  ─ pointer-events: none             │ rence  │
 │  (line   │                                     │ track  │
-│  numbers)│  textarea  (z-index: 1)             │ (z: 4) │
+│  numbers)│  occurrence-overlay (z-index: 0)    │ (z: 4) │
+│          │  ─ absolutely-positioned highlights │        │
+│          │  ─ pointer-events: none             │ 8px    │
+│          │  ─ transform-synced to scroll       │ wide   │
+│          │                                     │        │
+│          │  textarea  (z-index: 1)             │        │
 │          │  ─ transparent text & background    │        │
-│          │  ─ receives all input               │ 8px    │
-│          │  ─ caret-color: visible             │ wide   │
+│          │  ─ receives all input               │        │
+│          │  ─ caret-color: visible             │        │
 │          │  ─ ::selection visible (rgba blue)  │        │
 └──────────┴─────────────────────────────────────┴────────┘
 ```
 
-The user types in the textarea (transparent text), but sees syntax-highlighted text rendered in the `<pre>` layer behind it. The textarea's `::selection` pseudo-element shows through because the textarea is on top.
+The user types in the textarea (transparent text), but sees syntax-highlighted text rendered in the `<pre>` layer behind it. The occurrence overlay sits between the highlight layer and textarea, rendering in-text highlights for selected text occurrences. The textarea's `::selection` pseudo-element shows through because the textarea is on top.
 
-**Scroll sync:** The textarea's `scroll` event synchronizes all three elements:
+**Scroll sync:** The textarea's `scroll` event synchronizes all layers:
 
 ```
 editor.scroll → gutter.scrollTop = editor.scrollTop
               → highlightLayer.scrollTop = editor.scrollTop
               → highlightLayer.scrollLeft = editor.scrollLeft
+              → syncOccurrenceScroll()  (transform-based)
 ```
 
 ---
@@ -457,30 +463,52 @@ selectFindMatch(focusEditor)
 
 ---
 
-## Selection Occurrence Indicators
+## Selection Occurrence Highlights
 
-When the user selects text (2+ characters, non-whitespace) in either normal or vim visual mode, small markers appear on the right edge of the editor — aligned with the scrollbar — showing where all other occurrences of that text exist in the document.
+When the user selects text (2+ characters, non-whitespace) in either normal or vim visual mode, occurrences are highlighted in two ways:
+
+1. **In-text highlights** — subtle glowing outlines appear around each matching occurrence directly in the editor
+2. **Scrollbar markers** — small markers on the right edge of the editor show where all occurrences exist in the document
+
+The current selection itself is excluded from in-text highlights (only other occurrences are highlighted). At least 2 total occurrences must exist for any highlights to appear.
 
 ### How It Works
 
 ```
 updateOccurrenceMarkers()
   → read editor.selectionStart / selectionEnd
-  → if selection < 2 chars or whitespace-only → clear markers
-  → case-insensitive indexOf scan (same pattern as updateFindMatches)
-  → if < 2 occurrences → clear markers (no point highlighting just the selection)
-  → for each occurrence: compute line number, map to vertical position in track
-  → render markers as absolutely-positioned divs in occurrence-track
+  → if selection < 2 chars or whitespace-only → clear all
+  → if same query as last time → skip (cached)
+  → case-insensitive indexOf scan
+  → if < 2 occurrences → clear all
+  → build line-start index for fast line/col lookup (binary search)
+  → for each occurrence:
+      → compute line number via binary search on lineStarts
+      → scrollbar marker: map line to vertical position in track
+      → in-text highlight (skip current selection):
+          compute column from lineStarts, position absolutely using
+          charWidth × col (x) and lineHeight × line (y)
+  → render into occurrenceTrack and occurrenceOverlay
 ```
+
+### Character Width Measurement
+
+`getOccurrenceCharWidth()` measures a single character width by inserting a hidden `<span>` with the editor's font and measuring its `getBoundingClientRect().width`. The result is cached for the session.
 
 ### DOM Structure
 
-The occurrence track is a sibling of `.editor-area` inside `.editor-wrap`, positioned absolutely on the right edge:
+The occurrence overlay is a child of `.editor-area`, stacked in the same grid cell as the highlight layer and textarea. It uses CSS `transform` to stay in sync with editor scroll position. The occurrence track is a sibling positioned on the right edge:
 
 ```html
 <div class="editor-wrap">
   <div class="gutter">...</div>
-  <div class="editor-area">...</div>
+  <div class="editor-area">
+    <pre class="highlight-layer">...</pre>
+    <div class="occurrence-overlay" id="occurrenceOverlay">
+      <div class="occurrence-highlight" style="top:31px;left:48px;width:56px;height:19px"></div>
+    </div>
+    <textarea class="editor">...</textarea>
+  </div>
   <div class="occurrence-track" id="occurrenceTrack">
     <div class="occurrence-marker" style="top:42px"></div>
     <div class="occurrence-marker" style="top:185px"></div>
@@ -488,13 +516,31 @@ The occurrence track is a sibling of `.editor-area` inside `.editor-wrap`, posit
 </div>
 ```
 
+### Scroll Sync
+
+`syncOccurrenceScroll()` applies a CSS `transform: translate(-scrollLeft, -scrollTop)` to the overlay, keeping in-text highlights aligned as the user scrolls. Called from the editor's `scroll` event handler alongside gutter and highlight layer sync.
+
+### Clearing
+
+`clearOccurrenceHighlights()` immediately empties both the overlay and track, resets `lastOccurrenceQuery`, and cancels any pending debounced update. Called on:
+
+- **`mousedown`** — clears instantly when the user clicks (before a new selection is made)
+- **Cursor movement keys** — arrow keys, Home, End, PageUp, PageDown clear highlights immediately via a `keydown` listener
+- **`renderEditor()`** — clears on note switch
+- **`input`** — clears overlay and resets cache so markers recalculate after content changes
+
 ### Event Triggers
 
-- **`updateCursorPos()`** → `scheduleOccurrenceUpdate()` (debounced 150ms) — fires on `keyup`, `select`, `click`
+- **`updateCursorPos()`** → `scheduleOccurrenceUpdate()` (debounced 30ms) — fires on `keyup`, `select`, `click`
 - **`mouseup`** → `scheduleOccurrenceUpdate()` — catches drag selections
-- **`input`** → resets `lastOccurrenceQuery` cache so markers recalculate after content changes
-- **`renderEditor()`** → clears markers on note switch
 
 ### Caching
 
-`lastOccurrenceQuery` stores the last selected text. If the selection hasn't changed, the scan is skipped. Reset on content changes (`input` event) and note switches (`renderEditor`).
+`lastOccurrenceQuery` stores the last selected text. If the selection hasn't changed, the scan is skipped. Reset on content changes (`input` event), cursor movement, mousedown, and note switches (`renderEditor`).
+
+### Styling
+
+| Element              | Style                                                    |
+| -------------------- | -------------------------------------------------------- |
+| `.occurrence-marker` | 8px wide, 3px tall, `var(--blue)` at 0.7 opacity        |
+| `.occurrence-highlight` | `box-shadow: 0 0 0 1px rgba(208,225,253,0.35)`, subtle blue background at 0.15 opacity, 2px border-radius |
