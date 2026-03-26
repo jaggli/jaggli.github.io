@@ -1698,11 +1698,25 @@
       .occurrence-marker {
         position: absolute;
         right: 1px;
-        width: 6px;
+        width: 8px;
         height: 3px;
         background: var(--blue);
-        opacity: 0.6;
+        opacity: 0.7;
         border-radius: 1px;
+      }
+
+      .occurrence-overlay {
+        position: relative;
+        pointer-events: none;
+        z-index: 0;
+        will-change: transform;
+      }
+
+      .occurrence-highlight {
+        position: absolute;
+        box-shadow: 0 0 0 1px rgba(208, 225, 253, 0.35);
+        background: rgba(208, 225, 253, 0.15);
+        border-radius: 2px;
       }
 
       /* Mobile files button (hidden on desktop) */
@@ -1995,6 +2009,7 @@
               id="highlightLayer"
               aria-hidden="true"
             ></pre>
+            <div class="occurrence-overlay" id="occurrenceOverlay" aria-hidden="true"></div>
             <textarea
               class="editor"
               id="editor"
@@ -3539,8 +3554,25 @@
 
       /* Selection occurrence markers */
       const occurrenceTrack = document.getElementById("occurrenceTrack");
+      const occurrenceOverlay = document.getElementById("occurrenceOverlay");
       let occurrenceTimeout = null;
+
+      function syncOccurrenceScroll() {
+        occurrenceOverlay.style.transform = "translate(" + (-editor.scrollLeft) + "px," + (-editor.scrollTop) + "px)";
+      }
       let lastOccurrenceQuery = "";
+      let occurrenceCharWidth = null;
+
+      function getOccurrenceCharWidth() {
+        if (occurrenceCharWidth) return occurrenceCharWidth;
+        const span = document.createElement("span");
+        span.style.cssText = "position:absolute;visibility:hidden;font-family:" + getComputedStyle(editor).fontFamily + ";font-size:14px;white-space:pre;";
+        span.textContent = "x";
+        document.body.appendChild(span);
+        occurrenceCharWidth = span.getBoundingClientRect().width;
+        document.body.removeChild(span);
+        return occurrenceCharWidth;
+      }
 
       function updateOccurrenceMarkers() {
         const start = editor.selectionStart;
@@ -3552,6 +3584,7 @@
         if (!selected || selected.length < 2 || /^\s+$/.test(selected)) {
           if (lastOccurrenceQuery !== "") {
             occurrenceTrack.innerHTML = "";
+            occurrenceOverlay.innerHTML = "";
             lastOccurrenceQuery = "";
           }
           return;
@@ -3573,31 +3606,72 @@
 
         if (positions.length < 2) {
           occurrenceTrack.innerHTML = "";
+          occurrenceOverlay.innerHTML = "";
           return;
         }
 
-        // Count total lines
-        const totalLines = text.split("\n").length;
+        // Build line-start index for fast line/col lookup
+        const lineStarts = [0];
+        for (let j = 0; j < text.length; j++) {
+          if (text.charCodeAt(j) === 10) lineStarts.push(j + 1);
+        }
+        const totalLines = lineStarts.length;
         const trackHeight = occurrenceTrack.clientHeight;
         if (totalLines === 0 || trackHeight === 0) {
           occurrenceTrack.innerHTML = "";
+          occurrenceOverlay.innerHTML = "";
           return;
         }
 
-        // Build markers
-        let html = "";
-        for (let i = 0; i < positions.length; i++) {
-          const before = text.substring(0, positions[i]);
-          const line = before.split("\n").length - 1;
-          const top = Math.round((line / totalLines) * trackHeight);
-          html += '<div class="occurrence-marker" style="top:' + top + 'px"></div>';
+        const charW = getOccurrenceCharWidth();
+        const lineH = 21; // 14px * 1.5 line-height
+        const padTop = 10; // padding-top of editor-area > *
+        const padLeft = 16; // padding-left of editor-area > *
+        const selLen = selected.length;
+
+        // Binary search for line number from char position
+        function lineOf(pos) {
+          let lo = 0, hi = lineStarts.length - 1;
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if (lineStarts[mid] <= pos) lo = mid; else hi = mid - 1;
+          }
+          return lo;
         }
-        occurrenceTrack.innerHTML = html;
+
+        // Build track markers and in-text highlights
+        let trackHtml = "";
+        let overlayHtml = "";
+        for (let i = 0; i < positions.length; i++) {
+          const line = lineOf(positions[i]);
+
+          // Track marker
+          const top = Math.round((line / totalLines) * trackHeight);
+          trackHtml += '<div class="occurrence-marker" style="top:' + top + 'px"></div>';
+
+          // In-text highlight (skip the current selection itself)
+          if (positions[i] !== start) {
+            const col = positions[i] - lineStarts[line];
+            const x = padLeft + col * charW;
+            const y = padTop + line * lineH;
+            const w = selLen * charW;
+            overlayHtml += '<div class="occurrence-highlight" style="top:' + (y + 1) + 'px;left:' + x + 'px;width:' + w + 'px;height:' + (lineH - 2) + 'px"></div>';
+          }
+        }
+        occurrenceTrack.innerHTML = trackHtml;
+        occurrenceOverlay.innerHTML = overlayHtml;
       }
 
       function scheduleOccurrenceUpdate() {
         clearTimeout(occurrenceTimeout);
-        occurrenceTimeout = setTimeout(updateOccurrenceMarkers, 150);
+        occurrenceTimeout = setTimeout(updateOccurrenceMarkers, 30);
+      }
+
+      function clearOccurrenceHighlights() {
+        occurrenceOverlay.innerHTML = "";
+        occurrenceTrack.innerHTML = "";
+        lastOccurrenceQuery = "";
+        clearTimeout(occurrenceTimeout);
       }
 
       let cursorSaveTimeout = null;
@@ -3648,6 +3722,7 @@
 
       function renderEditor() {
         occurrenceTrack.innerHTML = "";
+        occurrenceOverlay.innerHTML = "";
         lastOccurrenceQuery = "";
         const note = getActiveNote();
         if (note) {
@@ -4828,6 +4903,7 @@
           editor.scrollTop = Math.round(scrollRatio * editorScrollMax);
           gutter.scrollTop = editor.scrollTop;
           highlightLayer.scrollTop = editor.scrollTop;
+          syncOccurrenceScroll();
           updateCursorPos();
           updateLineNumbers();
         }
@@ -4987,6 +5063,7 @@
         gutter.scrollTop = 0;
         highlightLayer.scrollTop = 0;
         highlightLayer.scrollLeft = 0;
+        syncOccurrenceScroll();
       }
 
       // Toast helper for markdown preview
@@ -5287,6 +5364,7 @@
           gutter.scrollTop = editor.scrollTop;
           highlightLayer.scrollTop = editor.scrollTop;
           highlightLayer.scrollLeft = editor.scrollLeft;
+          syncOccurrenceScroll();
         });
         // Reset vim state
         if (vimState.enabled) {
@@ -5683,6 +5761,7 @@
         editor.scrollTop = Math.max(0, targetScroll);
         gutter.scrollTop = editor.scrollTop;
         highlightLayer.scrollTop = editor.scrollTop;
+        syncOccurrenceScroll();
         if (!focusEditor) findInput.focus();
         findReplaceCount.textContent =
           findMatchIdx + 1 + " of " + findMatches.length;
@@ -8347,6 +8426,7 @@
 
       editor.addEventListener("input", () => {
         lastOccurrenceQuery = "";
+        occurrenceOverlay.innerHTML = "";
         const note = getActiveNote();
         if (!note) return;
         // In vim mode, skip automatic history — vim commands handle their own undo
@@ -8381,6 +8461,7 @@
         gutter.scrollTop = editor.scrollTop;
         highlightLayer.scrollTop = editor.scrollTop;
         highlightLayer.scrollLeft = editor.scrollLeft;
+        syncOccurrenceScroll();
         vimUpdateBlockCursor();
       });
 
@@ -8388,6 +8469,7 @@
       // In vim normal/visual mode, mouse clicks create selections (for copy)
       // but don't move the vim cursor — matching real vim terminal behavior.
       editor.addEventListener("mousedown", () => {
+        clearOccurrenceHighlights();
         if (vimState.enabled && vimState.mode !== "insert") {
           _vimPreClickPos = editor.selectionStart;
         }
@@ -8408,6 +8490,11 @@
       editor.addEventListener("keyup", updateCursorPos);
       editor.addEventListener("select", updateCursorPos);
       editor.addEventListener("mouseup", scheduleOccurrenceUpdate);
+      editor.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Home" || e.key === "End" || e.key === "PageUp" || e.key === "PageDown") {
+          clearOccurrenceHighlights();
+        }
+      });
 
       editor.addEventListener("keydown", vimHandleKeydown);
 
@@ -9564,6 +9651,7 @@
             gutter.scrollTop = editor.scrollTop;
             highlightLayer.scrollTop = editor.scrollTop;
             highlightLayer.scrollLeft = editor.scrollLeft;
+            syncOccurrenceScroll();
           });
         }
 
