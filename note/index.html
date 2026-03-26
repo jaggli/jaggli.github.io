@@ -672,14 +672,14 @@
       .zen-mode .md-preview.visible {
         display: flex;
         justify-content: center;
-        padding: 0;
+        padding: 36px 0 0;
         width: 100%;
       }
 
       .zen-mode .md-preview .zen-wrap {
         max-width: 800px;
         width: 100%;
-        padding: 32px 24px;
+        padding: 16px 24px;
       }
 
       .zen-mode .md-preview .zen-wrap::after {
@@ -688,18 +688,55 @@
         height: 40vh;
       }
 
-      .zen-menu-container {
+      .zen-bar {
         position: fixed;
-        top: 12px;
-        left: 12px;
+        top: 0;
+        left: 0;
+        right: 0;
         z-index: 1000;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-family: var(--font);
+        font-size: 13px;
+        color: var(--subtext);
+      }
+      .zen-bar-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .zen-bar-label {
+        white-space: nowrap;
+      }
+      .zen-bar-mobile {
+        display: none;
+      }
+      .zen-bar-dot {
+        opacity: 0.5;
+      }
+      .zen-bar-filename {
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .zen-bar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
       }
 
       .zen-menu-btn {
         padding: 4px 10px;
-        border: 1px solid var(--border);
+        border: none;
         border-radius: 4px;
-        background: var(--bg);
+        background: none;
         color: var(--text);
         cursor: pointer;
         font-family: var(--font);
@@ -707,7 +744,6 @@
         opacity: 0.4;
         transition: opacity 0.2s;
       }
-
       .zen-menu-btn:hover {
         opacity: 1;
       }
@@ -716,20 +752,18 @@
         display: none;
         position: absolute;
         top: 100%;
-        left: 0;
+        right: 0;
         margin-top: 4px;
         background: var(--sidebar);
         border: 1px solid var(--border);
         border-radius: 4px;
         overflow: hidden;
-        min-width: 100px;
+        min-width: 120px;
       }
-
       .zen-menu.visible {
         display: flex;
         flex-direction: column;
       }
-
       .zen-menu button {
         background: none;
         border: none;
@@ -740,22 +774,32 @@
         cursor: pointer;
         text-align: left;
       }
-
       .zen-menu button:hover {
         background: var(--active);
+      }
+      .zen-menu-hint {
+        color: var(--subtext);
+        font-size: 12px;
       }
 
       .zen-copied {
         font-family: var(--font);
         font-size: 13px;
         color: var(--subtext);
-        margin-left: 8px;
         opacity: 0;
         transition: opacity 0.2s;
       }
-
       .zen-copied.visible {
         opacity: 1;
+      }
+
+      @media (max-width: 600px) {
+        .zen-bar-desktop {
+          display: none;
+        }
+        .zen-bar-mobile {
+          display: inline;
+        }
       }
 
       .md-preview h1,
@@ -1962,16 +2006,29 @@
           </div>
           <div class="occurrence-track" id="occurrenceTrack"></div>
           <div class="md-preview" id="mdPreview"></div>
-          <div
-            class="zen-menu-container"
-            id="zenMenuContainer"
-            style="display: none"
-          >
-            <button class="zen-menu-btn" onclick="toggleZenMenu()">===</button>
-            <span class="zen-copied" id="zenCopied">copied to clipboard</span>
-            <div class="zen-menu" id="zenMenu">
-              <button onclick="zenShare()">share</button>
-              <button onclick="exitZenMode()">edit</button>
+          <div class="zen-bar" id="zenBar" style="display: none">
+            <div class="zen-bar-left">
+              <span class="zen-bar-label zen-bar-desktop"
+                >note editor - zen mode</span
+              >
+              <span class="zen-bar-label zen-bar-mobile">note</span>
+              <span class="zen-bar-dot">&middot;</span>
+              <span class="zen-bar-filename" id="zenBarFilename"></span>
+            </div>
+            <div class="zen-bar-right">
+              <span class="zen-copied" id="zenCopied"
+                >copied to clipboard</span
+              >
+              <button class="zen-menu-btn" onclick="toggleZenMenu()"
+                >===</button
+              >
+              <div class="zen-menu" id="zenMenu">
+                <button onclick="exitZenMode()">
+                  edit
+                  <span class="zen-menu-hint">[Esc]</span>
+                </button>
+                <button onclick="zenShare()">share</button>
+              </div>
             </div>
           </div>
           <div class="md-toast" id="mdToast"></div>
@@ -4561,7 +4618,7 @@
           .classList.toggle("active", tab === "zen");
 
         const appEl = document.querySelector(".app");
-        const zenMenuContainer = document.getElementById("zenMenuContainer");
+        const zenBar = document.getElementById("zenBar");
         const btnReplace = document.getElementById("btnReplace");
 
         // Task checkbox handler shared by view and zen
@@ -4675,9 +4732,14 @@
           editorArea.style.display = "none";
           emptyState.style.display = "none";
           mdPreview.classList.add("visible");
-          // Hide all chrome
+          // Hide all chrome, show zen bar
           appEl.classList.add("zen-mode");
-          zenMenuContainer.style.display = "";
+          const zenName =
+            (zenFromUrl && zenEphemeralNote
+              ? zenEphemeralNote.name
+              : getActiveNote()?.name) || "untitled";
+          document.getElementById("zenBarFilename").textContent = zenName;
+          zenBar.style.display = "";
         } else if (tab === "view") {
           const note = getActiveNote();
           if (note) {
@@ -4701,7 +4763,7 @@
           cursorPos.style.display = "none";
           btnVim.style.display = "none";
           appEl.classList.remove("zen-mode");
-          zenMenuContainer.style.display = "none";
+          zenBar.style.display = "none";
           // Scroll preview so cursor area is centered
           requestAnimationFrame(() => {
             const scrollMax = mdPreview.scrollHeight - mdPreview.clientHeight;
@@ -4730,7 +4792,7 @@
           cursorPos.style.display = "";
           btnVim.style.display = "";
           appEl.classList.remove("zen-mode");
-          zenMenuContainer.style.display = "none";
+          zenBar.style.display = "none";
           // Sync editor with in-memory content (e.g. after checkbox toggle)
           const activeNote = getActiveNote();
           if (activeNote) editor.value = activeNote.content;
@@ -4834,7 +4896,7 @@
       }
 
       document.addEventListener("click", (e) => {
-        if (zenModeActive && !e.target.closest(".zen-menu-container")) {
+        if (zenModeActive && !e.target.closest(".zen-bar-right")) {
           closeZenMenu();
         }
       });
