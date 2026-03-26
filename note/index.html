@@ -3623,11 +3623,12 @@
           return;
         }
 
-        const charW = getOccurrenceCharWidth();
-        const lineH = 21; // 14px * 1.5 line-height
-        const padTop = 10; // padding-top of editor-area > *
-        const padLeft = 16; // padding-left of editor-area > *
+        const cs = window.getComputedStyle(editor);
+        const lineH = parseFloat(cs.lineHeight) || 21;
+        const padTop = parseFloat(cs.paddingTop) || 10;
+        const padLeft = parseFloat(cs.paddingLeft) || 16;
         const selLen = selected.length;
+        const wrapOn = editorArea.classList.contains("wrap");
 
         // Binary search for line number from char position
         function lineOf(pos) {
@@ -3637,6 +3638,87 @@
             if (lineStarts[mid] <= pos) lo = mid; else hi = mid - 1;
           }
           return lo;
+        }
+
+        // Precompute wrapped line heights and y-offsets if wrap is on
+        const allLines = text.split("\n");
+        let lineYOffsets = null;
+        let contentWidth = 0;
+        if (wrapOn) {
+          contentWidth =
+            editor.clientWidth -
+            parseFloat(cs.paddingLeft) -
+            parseFloat(cs.paddingRight);
+          _wrapMeasure.style.font = cs.font;
+          _wrapMeasure.style.letterSpacing = cs.letterSpacing;
+          _wrapMeasure.style.tabSize = cs.tabSize;
+          _wrapMeasure.style.lineHeight = cs.lineHeight;
+          _wrapMeasure.style.width = contentWidth + "px";
+          document.body.appendChild(_wrapMeasure);
+
+          lineYOffsets = new Float64Array(allLines.length);
+          let yAcc = 0;
+          for (let i = 0; i < allLines.length; i++) {
+            lineYOffsets[i] = yAcc;
+            _wrapMeasure.textContent = allLines[i] || " ";
+            yAcc += _wrapMeasure.offsetHeight;
+          }
+        }
+
+        // Measure x/y for a position within a line, accounting for wrapping
+        function measurePos(lineIdx, col) {
+          if (!wrapOn) {
+            // Fast path: use cached char width
+            const charW = getOccurrenceCharWidth();
+            return { x: padLeft + col * charW, y: padTop + lineIdx * lineH };
+          }
+          const lineText = allLines[lineIdx];
+          const textBefore = lineText.substring(0, col);
+          _wrapMeasure.style.width = contentWidth + "px";
+          _wrapMeasure.style.whiteSpace = "pre-wrap";
+          _wrapMeasure.textContent = textBefore || " ";
+          const hBefore = _wrapMeasure.offsetHeight;
+          const yBase = lineYOffsets[lineIdx] + hBefore - lineH;
+
+          // Find where the last visual row starts
+          let rowStart = 0;
+          if (hBefore > lineH) {
+            let lo = 0, hi = col;
+            while (lo < hi) {
+              const mid = (lo + hi) >>> 1;
+              _wrapMeasure.textContent = textBefore.substring(0, mid + 1) || " ";
+              if (_wrapMeasure.offsetHeight >= hBefore) hi = mid;
+              else lo = mid + 1;
+            }
+            rowStart = lo;
+          }
+          // Measure width of text from rowStart to col
+          const rowText = lineText.substring(rowStart, col);
+          _wrapMeasure.style.width = "max-content";
+          _wrapMeasure.style.whiteSpace = "pre";
+          _wrapMeasure.textContent = rowText;
+          const xOffset = _wrapMeasure.offsetWidth;
+          _wrapMeasure.style.width = contentWidth + "px";
+          _wrapMeasure.style.whiteSpace = "pre-wrap";
+
+          return { x: parseFloat(cs.paddingLeft) + xOffset, y: padTop + yBase };
+        }
+
+        // Measure width of the selected text in context
+        function measureWidth(lineIdx, col, len) {
+          if (!wrapOn) return getOccurrenceCharWidth() * len;
+          const lineText = allLines[lineIdx];
+          const textWith = lineText.substring(0, col + len);
+          const textWithout = lineText.substring(0, col);
+          _wrapMeasure.style.width = "max-content";
+          _wrapMeasure.style.whiteSpace = "pre";
+          _wrapMeasure.textContent = textWith;
+          const wWith = _wrapMeasure.offsetWidth;
+          _wrapMeasure.textContent = textWithout || " ";
+          const wWithout = textWithout ? _wrapMeasure.offsetWidth : 0;
+          _wrapMeasure.style.width = contentWidth + "px";
+          _wrapMeasure.style.whiteSpace = "pre-wrap";
+          return wWith - wWithout;
         }
 
         // Build track markers and in-text highlights
@@ -3652,12 +3734,14 @@
           // In-text highlight (skip the current selection itself)
           if (positions[i] !== start) {
             const col = positions[i] - lineStarts[line];
-            const x = padLeft + col * charW;
-            const y = padTop + line * lineH;
-            const w = selLen * charW;
-            overlayHtml += '<div class="occurrence-highlight" style="top:' + (y + 1) + 'px;left:' + x + 'px;width:' + w + 'px;height:' + (lineH - 2) + 'px"></div>';
+            const pos = measurePos(line, col);
+            const w = measureWidth(line, col, selLen);
+            overlayHtml += '<div class="occurrence-highlight" style="top:' + (pos.y + 1) + 'px;left:' + pos.x + 'px;width:' + w + 'px;height:' + (lineH - 2) + 'px"></div>';
           }
         }
+
+        if (wrapOn) document.body.removeChild(_wrapMeasure);
+
         occurrenceTrack.innerHTML = trackHtml;
         occurrenceOverlay.innerHTML = overlayHtml;
       }
