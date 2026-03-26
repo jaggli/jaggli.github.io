@@ -3673,7 +3673,7 @@
                 const rect = rects[r];
                 const x = rect.left - layerRect.left + scrollLeft;
                 const y = rect.top - layerRect.top + scrollTop;
-                overlayHtml += '<div class="occurrence-highlight" style="top:' + y + 'px;left:' + x + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px"></div>';
+                overlayHtml += '<div class="occurrence-highlight" style="top:' + y + 'px;left:' + x + 'px;width:' + rect.width + 'px;height:' + (rect.height + 1) + 'px"></div>';
               }
             }
           }
