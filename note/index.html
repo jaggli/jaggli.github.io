@@ -3653,9 +3653,6 @@
         const layerRect = highlightLayer.getBoundingClientRect();
         const scrollLeft = highlightLayer.scrollLeft;
         const scrollTop = highlightLayer.scrollTop;
-        const cs = window.getComputedStyle(editor);
-        const lineH = parseFloat(cs.lineHeight) || 21;
-
         let trackHtml = "";
         let overlayHtml = "";
         const range = document.createRange();
@@ -3676,7 +3673,7 @@
                 const rect = rects[r];
                 const x = rect.left - layerRect.left + scrollLeft;
                 const y = rect.top - layerRect.top + scrollTop;
-                overlayHtml += '<div class="occurrence-highlight" style="top:' + (y + 1) + 'px;left:' + x + 'px;width:' + rect.width + 'px;height:' + (lineH - 2) + 'px"></div>';
+                overlayHtml += '<div class="occurrence-highlight" style="top:' + y + 'px;left:' + x + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px"></div>';
               }
             }
           }
