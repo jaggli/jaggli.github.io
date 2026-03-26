@@ -710,14 +710,11 @@
         gap: 8px;
         min-width: 0;
       }
-      .zen-bar-label {
-        white-space: nowrap;
-      }
-      .zen-bar-mobile {
-        display: none;
-      }
-      .zen-bar-dot {
-        opacity: 0.5;
+      .zen-bar-logo {
+        width: 18px;
+        height: 18px;
+        border-radius: 3px;
+        flex-shrink: 0;
       }
       .zen-bar-filename {
         color: var(--text);
@@ -793,14 +790,6 @@
         opacity: 1;
       }
 
-      @media (max-width: 600px) {
-        .zen-bar-desktop {
-          display: none;
-        }
-        .zen-bar-mobile {
-          display: inline;
-        }
-      }
 
       .md-preview h1,
       .md-preview h2,
@@ -2023,11 +2012,7 @@
           <div class="md-preview" id="mdPreview"></div>
           <div class="zen-bar" id="zenBar" style="display: none">
             <div class="zen-bar-left">
-              <span class="zen-bar-label zen-bar-desktop"
-                >note editor - zen mode</span
-              >
-              <span class="zen-bar-label zen-bar-mobile">note</span>
-              <span class="zen-bar-dot">&middot;</span>
+              <img class="zen-bar-logo" src="img/favicon-32x32.png" alt="note" />
               <span class="zen-bar-filename" id="zenBarFilename"></span>
             </div>
             <div class="zen-bar-right">
