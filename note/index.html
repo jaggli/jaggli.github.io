@@ -6332,8 +6332,15 @@
             return vimFirstNonBlank(lineIdx);
           case "gg":
             return 0;
-          case "G":
-            return vimLineStart(lines.length - 1);
+          case "G": {
+            // count > 0 means explicit count given: go to that line (1-indexed)
+            // count === 0 means no count: go to last line
+            const targetLine =
+              count > 0
+                ? Math.min(count - 1, lines.length - 1)
+                : lines.length - 1;
+            return vimLineStart(targetLine);
+          }
           case "{": {
             let li = lineIdx;
             for (let i = 0; i < c; i++) {
@@ -6376,11 +6383,14 @@
         const lineIdx = vimCursorLine();
         const lines = vimGetLines();
         const cnt = parseInt(vimState.count) || 1;
+        const hasExplicitCount = vimState.count !== "";
         const pending = vimState.pending;
 
-        // Accumulate count digits
+        // Accumulate count digits (also when operator is pending, e.g. d5G)
+        const isOperatorPending =
+          pending === "d" || pending === "c" || pending === "y";
         if (
-          (key >= "1" && key <= "9" && !pending) ||
+          ((key >= "1" && key <= "9") && (!pending || isOperatorPending)) ||
           (key >= "0" && key <= "9" && vimState.count)
         ) {
           vimState.count += key;
@@ -6418,9 +6428,27 @@
               vimState.pending = pending + "g";
               return;
             }
-            const target = vimMotion(key === "G" ? "G" : key, cnt);
+            const target = vimMotion(
+              key === "G" ? "G" : key,
+              key === "G" ? (hasExplicitCount ? cnt : 0) : cnt,
+            );
             start = Math.min(pos, target);
             end = Math.max(pos, target);
+            // G is a linewise motion
+            if (key === "G") {
+              linewise = true;
+              const targetLineIdx =
+                editor.value.substring(0, target).split("\n").length - 1;
+              const minLine = Math.min(lineIdx, targetLineIdx);
+              const maxLine = Math.max(lineIdx, targetLineIdx);
+              if (maxLine < lines.length - 1) {
+                start = vimLineStart(minLine);
+                end = vimLineStart(maxLine + 1);
+              } else {
+                start = minLine > 0 ? vimLineEnd(minLine - 1) : 0;
+                end = vimLineEnd(maxLine);
+              }
+            }
           } else if (key === "f" || key === "F" || key === "t" || key === "T") {
             // Wait for the character
             vimState.pending = pending + key;
@@ -6541,19 +6569,26 @@
           return;
         }
 
-        // Handle dg → dgg
+        // Handle dg → dgg (linewise, like G)
         if (pending === "dg" || pending === "cg" || pending === "yg") {
           if (key === "g") {
             const op = pending[0];
-            const target = 0;
-            const start = Math.min(pos, target);
-            const end = Math.max(pos, target);
-            if (op === "d") vimDeleteRange(start, end);
-            else if (op === "y") {
-              vimYankRange(start, end);
+            // gg is linewise: delete from line 0 to current line (inclusive)
+            const start = 0;
+            const end =
+              lineIdx < lines.length - 1
+                ? vimLineStart(lineIdx + 1)
+                : vimLineEnd(lineIdx);
+            if (op === "d") {
+              vimDeleteRange(start, end, true);
+              vimSetCursor(
+                vimFirstNonBlank(Math.min(0, vimGetLines().length - 1)),
+              );
+            } else if (op === "y") {
+              vimYankRange(start, end, true);
               vimSetCursor(start);
             } else if (op === "c") {
-              vimDeleteRange(start, end);
+              vimDeleteRange(start, end, true);
               vimSetMode("insert");
             }
           }
@@ -6672,7 +6707,7 @@
           return;
         }
         if (key === "G") {
-          vimSetCursor(vimMotion("G", cnt));
+          vimSetCursor(vimMotion("G", hasExplicitCount ? cnt : 0));
           updateCursorPos();
           return;
         }
@@ -7123,6 +7158,7 @@
             ? editor.selectionStart
             : editor.selectionEnd;
         const cnt = parseInt(vimState.count) || 1;
+        const hasExplicitCount = vimState.count !== "";
 
         // Count accumulation
         if (
@@ -7142,7 +7178,11 @@
           key === "}"
         ) {
           const motionKey = key === "G" ? "G" : key;
-          let newHead = vimMotion(motionKey, cnt);
+          // Position cursor at head so vimMotion calculates from the right spot
+          editor.selectionStart = editor.selectionEnd = head;
+          const motionCount =
+            key === "G" ? (hasExplicitCount ? cnt : 0) : cnt;
+          let newHead = vimMotion(motionKey, motionCount);
           if (vimState.visualLine) {
             // In visual line mode, track head line directly
             const anchorLineIdx =
@@ -7154,7 +7194,10 @@
                 vimGetLines().length - 1,
               );
             else if (key === "k") newHeadLine = Math.max(newHeadLine - cnt, 0);
-            else if (key === "G") newHeadLine = vimGetLines().length - 1;
+            else if (key === "G")
+              newHeadLine = hasExplicitCount
+                ? Math.min(cnt - 1, vimGetLines().length - 1)
+                : vimGetLines().length - 1;
             else if (key === "{" || key === "}") {
               const targetPos = vimMotion(motionKey, cnt);
               newHeadLine =
