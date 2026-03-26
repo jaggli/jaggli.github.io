@@ -9416,30 +9416,32 @@
       ].join("\n");
 
       async function openMdDemo() {
-        const existing = state.notes.find((n) => n.name === "Markdown Features.md");
+        const existing = state.notes.find((n) => n.name === "markdown-features.md");
         if (existing) {
           existing.content = MD_DEMO;
           existing.updatedAt = Date.now();
           switchNote(existing.id);
           saveState();
         } else {
-          await createNote("Markdown Features.md", MD_DEMO);
+          await createNote("markdown-features.md", MD_DEMO);
         }
       }
 
       async function openHelp() {
-        const content = isMobile() ? HELP_MOBILE : HELP_DESKTOP;
-        const existing = state.notes.find((n) => n.name === "help.md");
+        const mobile = isMobile();
+        const content = mobile ? HELP_MOBILE : HELP_DESKTOP;
+        const name = mobile ? "help-mobile.md" : "help.md";
+        const existing = state.notes.find((n) => n.name === name);
         if (existing) {
           existing.content = content;
           existing.updatedAt = Date.now();
           switchNote(existing.id);
           saveState();
         } else {
-          await createNote("help.md", content);
+          await createNote(name, content);
         }
         // Enable word wrap on mobile so help reads nicely
-        if (isMobile() && !editorArea.classList.contains("wrap")) {
+        if (mobile && !editorArea.classList.contains("wrap")) {
           toggleWrap();
         }
       }
@@ -9477,7 +9479,10 @@
         }
         const loaded = await loadFromUrl();
         if (!loaded && state.notes.length === 0 && isFirstVisit) {
-          createNote("help.md", isMobile() ? HELP_MOBILE : HELP_DESKTOP);
+          createNote(
+            isMobile() ? "help-mobile.md" : "help.md",
+            isMobile() ? HELP_MOBILE : HELP_DESKTOP,
+          );
         }
         render();
         checkMdViewParam();
