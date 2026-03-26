@@ -5887,6 +5887,7 @@
         if (wrapOn) {
           editorArea.classList.add("wrap");
           btnWrap.classList.add("active");
+          requestAnimationFrame(syncScrollbarGap);
         }
       }
 
@@ -5894,12 +5895,29 @@
         const isWrap = editorArea.classList.toggle("wrap");
         btnWrap.classList.toggle("active", isWrap);
         localStorage.setItem(WRAP_KEY, isWrap ? "true" : "false");
+        if (isWrap) {
+          syncScrollbarGap();
+        } else {
+          highlightLayer.style.paddingRight = "";
+          _lastScrollbarW = 0;
+        }
         updateLineNumbers();
+      }
+
+      // Compensate highlight layer padding for textarea scrollbar width
+      let _lastScrollbarW = 0;
+      function syncScrollbarGap() {
+        const scrollbarW = editor.offsetWidth - editor.clientWidth;
+        if (scrollbarW !== _lastScrollbarW) {
+          _lastScrollbarW = scrollbarW;
+          highlightLayer.style.paddingRight = (16 + scrollbarW) + "px";
+        }
       }
 
       // Re-measure wrapped line heights when editor resizes
       new ResizeObserver(() => {
         if (editorArea.classList.contains("wrap")) {
+          syncScrollbarGap();
           updateLineNumbers();
         }
       }).observe(editor);
@@ -8377,6 +8395,12 @@
           const isWrap = e.newValue === "true";
           editorArea.classList.toggle("wrap", isWrap);
           btnWrap.classList.toggle("active", isWrap);
+          if (isWrap) {
+            requestAnimationFrame(syncScrollbarGap);
+          } else {
+            highlightLayer.style.paddingRight = "";
+            _lastScrollbarW = 0;
+          }
         }
         if (e.key === VIM_KEY && e.newValue) {
           const isVim = e.newValue === "true";
@@ -8461,6 +8485,7 @@
         gutter.scrollTop = editor.scrollTop;
         highlightLayer.scrollTop = editor.scrollTop;
         highlightLayer.scrollLeft = editor.scrollLeft;
+        if (editorArea.classList.contains("wrap")) syncScrollbarGap();
         syncOccurrenceScroll();
         vimUpdateBlockCursor();
       });
@@ -8990,6 +9015,12 @@
           const wrapOn = settings.wrap === "true";
           editorArea.classList.toggle("wrap", wrapOn);
           btnWrap.classList.toggle("active", wrapOn);
+          if (wrapOn) {
+            requestAnimationFrame(syncScrollbarGap);
+          } else {
+            highlightLayer.style.paddingRight = "";
+            _lastScrollbarW = 0;
+          }
           updateLineNumbers();
         }
         if (settings.vim !== null && settings.vim !== undefined) {
