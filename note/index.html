@@ -1642,6 +1642,81 @@
         border-color: var(--blue);
       }
 
+      /* Migration modal */
+      .migrate-overlay {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 300;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .migrate-modal {
+        background: var(--sidebar);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 28px 32px;
+        max-width: 420px;
+        width: 90%;
+      }
+
+      .migrate-modal h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0 0 12px 0;
+      }
+
+      .migrate-modal p {
+        font-size: 14px;
+        color: var(--subtext);
+        margin: 0 0 20px 0;
+        line-height: 1.5;
+      }
+
+      .migrate-modal a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      .migrate-modal a:hover {
+        text-decoration: underline;
+      }
+
+      .migrate-modal h2 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0 0 10px 0;
+      }
+
+      .migrate-modal ol {
+        font-size: 14px;
+        color: var(--subtext);
+        margin: 0 0 20px 0;
+        padding-left: 20px;
+        line-height: 1.8;
+      }
+
+      .migrate-download-btn {
+        display: inline-block;
+        background: var(--blue);
+        color: var(--sidebar);
+        font-family: var(--font);
+        font-size: 14px;
+        font-weight: 600;
+        padding: 8px 18px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .migrate-download-btn:hover {
+        opacity: 0.85;
+      }
+
       /* Drop overlay */
       .drop-overlay {
         display: none;
@@ -2244,6 +2319,21 @@
             delete
           </button>
         </div>
+      </div>
+    </div>
+
+    <div class="migrate-overlay" id="migrateOverlay">
+      <div class="migrate-modal">
+        <h1>App moved</h1>
+        <p>This app moved to a new home: <a href="https://note.directory" target="_blank">https://note.directory</a></p>
+        <h2>Migration is easy</h2>
+        <ol>
+          <li><button class="migrate-download-btn" id="migrateDownloadBtn">Download everything</button></li>
+          <li>Drop the zip into the new <a href="https://note.directory" target="_blank">location</a></li>
+          <li>Re-auth to Google Drive</li>
+        </ol>
+        <p><em>No need to unpack the zip, all settings and documents will be preserved.</em></p>
+        <button class="modal-btn" id="migrateDoneBtn">Done</button>
       </div>
     </div>
 
@@ -9715,6 +9805,14 @@
       }
 
       init();
+
+      // Migration modal — download button
+      document.getElementById("migrateDownloadBtn").addEventListener("click", () => {
+        downloadAll();
+      });
+      document.getElementById("migrateDoneBtn").addEventListener("click", () => {
+        document.getElementById("migrateOverlay").style.display = "none";
+      });
 
       // Re-sync when tab becomes visible again (handles backgrounded timers)
       let lastSyncCheck = 0;
