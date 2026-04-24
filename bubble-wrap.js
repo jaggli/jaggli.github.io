@@ -1,5 +1,6 @@
 (async () => {
-  function paintScene(w, h) {
+  // Static layer: background gradient + stars, painted once per resize
+  function buildStatic(w, h) {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d');
@@ -26,10 +27,160 @@
       ctx.arc(sx * w, sy * h, sr, 0, Math.PI * 2);
       ctx.fill();
     }
+    return canvas;
+  }
+
+  let staticLayer;
+  const sceneCanvas = document.createElement('canvas');
+  const sceneCtx = sceneCanvas.getContext('2d');
+
+  // Tesla-coil lightning bolts: each click spawns one that arcs from the pointer to the sun
+  const bolts = [];
+
+  function jaggedSegments(x1, y1, x2, y2, segments, maxOffset) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const pts = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const px = x1 + dx * t;
+      const py = y1 + dy * t;
+      const falloff = Math.sin(t * Math.PI); // 0 at ends, 1 mid
+      const off = (Math.random() - 0.5) * 2 * maxOffset * falloff;
+      pts.push([px + nx * off, py + ny * off]);
+    }
+    return pts;
+  }
+
+  function rebuildBoltPaths(b) {
+    const mainPath = jaggedSegments(b.startX, b.startY, b.endX, b.endY, 16, 35);
+    const forks = [];
+    const forkCount = 3 + Math.floor(Math.random() * 4);
+    const baseAngle = Math.atan2(b.endY - b.startY, b.endX - b.startX);
+    for (let i = 0; i < forkCount; i++) {
+      const tOnMain = 0.2 + Math.random() * 0.6;
+      const idx = Math.min(mainPath.length - 1, Math.floor(tOnMain * mainPath.length));
+      const [fx, fy] = mainPath[idx];
+      const a = baseAngle + (Math.random() - 0.5) * 1.8;
+      const fl = 40 + Math.random() * 90;
+      const ex = fx + Math.cos(a) * fl;
+      const ey = fy + Math.sin(a) * fl;
+      forks.push(jaggedSegments(fx, fy, ex, ey, 5, 18));
+    }
+    b.paths = { mainPath, forks };
+    b.lastRebuild = performance.now();
+  }
+
+  function spawnBolt(x, y, live = false) {
+    const w = sceneCanvas.width, h = sceneCanvas.height;
+    const b = {
+      startX: x, startY: y,
+      endX: w / 2, endY: h * 0.70,
+      bornAt: performance.now(),
+      life: 380 + Math.random() * 140,
+      paths: null,
+      lastRebuild: 0,
+      live,
+    };
+    rebuildBoltPaths(b);
+    bolts.push(b);
+    return b;
+  }
+
+  function addPolyline(ctx, pts) {
+    pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+  }
+
+  function drawBolts(ctx, nowMs) {
+    for (let i = bolts.length - 1; i >= 0; i--) {
+      const b = bolts[i];
+      const age = nowMs - b.bornAt;
+      if (!b.live && age > b.life) { bolts.splice(i, 1); continue; }
+      // Live bolts track current screen center (handles resize mid-hold)
+      if (b.live) {
+        b.endX = sceneCanvas.width / 2;
+        b.endY = sceneCanvas.height * 0.70;
+      }
+      // Re-jitter every ~45ms for that crackling flicker
+      if (nowMs - b.lastRebuild > 45) rebuildBoltPaths(b);
+
+      // Live = sustained full-strength strobe. Released = decay from now.
+      let envelope;
+      if (b.live) {
+        envelope = 0.85 + 0.15 * Math.random();
+      } else {
+        const lifeT = age / b.life;
+        envelope = Math.pow(1 - lifeT, 1.6) * (0.7 + 0.3 * Math.random());
+      }
+      const alpha = Math.max(0, envelope);
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Outer blue haze
+      ctx.shadowColor = `rgba(120, 180, 255, ${alpha * 0.9})`;
+      ctx.shadowBlur = 28;
+      ctx.strokeStyle = `rgba(180, 210, 255, ${alpha * 0.55})`;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      addPolyline(ctx, b.paths.mainPath);
+      for (const f of b.paths.forks) addPolyline(ctx, f);
+      ctx.stroke();
+
+      // Mid cyan glow
+      ctx.shadowColor = `rgba(200, 230, 255, ${alpha})`;
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = `rgba(230, 240, 255, ${alpha * 0.8})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      addPolyline(ctx, b.paths.mainPath);
+      for (const f of b.paths.forks) addPolyline(ctx, f);
+      ctx.stroke();
+
+      // White-hot core
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      addPolyline(ctx, b.paths.mainPath);
+      for (const f of b.paths.forks) addPolyline(ctx, f);
+      ctx.stroke();
+
+      // Impact flash at the sun end
+      const flashR = 60 * envelope;
+      const grd = ctx.createRadialGradient(b.endX, b.endY, 0, b.endX, b.endY, flashR);
+      grd.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.9})`);
+      grd.addColorStop(0.4, `rgba(200, 220, 255, ${alpha * 0.4})`);
+      grd.addColorStop(1, 'rgba(150, 180, 255, 0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(b.endX, b.endY, flashR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  function resizeScene(w, h) {
+    staticLayer = buildStatic(w, h);
+    sceneCanvas.width = w;
+    sceneCanvas.height = h;
+  }
+
+  // Dynamic layer: grid ripple, sun glow pulse, horizon shimmer, text flicker
+  function paintScene(time) {
+    const w = sceneCanvas.width;
+    const h = sceneCanvas.height;
+    const ctx = sceneCtx;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(staticLayer, 0, 0);
 
     const gridHorizonY = h * 0.68;
     const horizonY = h * 0.70;
 
+    // Grid with multi-wave ripples across both axes
     ctx.save();
     const gridTop = gridHorizonY;
     const gridBottom = h;
@@ -37,66 +188,111 @@
     const vanishX = w / 2;
     ctx.strokeStyle = 'rgba(255, 0, 200, 0.35)';
     ctx.lineWidth = 1;
+
+    // Rippled coordinate warp — two crossing wave fields shift each sample point
+    const warp = (x, y) => {
+      const tr = Math.max(0, Math.min(1, (y - gridTop) / gridH));
+      const amp = 1 + 4 * tr; // stronger near viewer, still visible near horizon
+      const dx = Math.sin(y * 0.03 + time * 1.4) * amp + Math.sin(y * 0.08 - time * 0.9) * amp * 0.5;
+      const dy = Math.sin(x * 0.012 + time * 1.8) * amp + Math.cos(x * 0.025 + time * 1.1) * amp * 0.4;
+      return [x + dx, y + dy];
+    };
+
     const rows = 12;
     for (let i = 1; i <= rows; i++) {
-      const t = i / rows;
-      const y = gridTop + (1 - Math.pow(1 - t, 2.2)) * gridH;
+      const tr = i / rows;
+      const baseY = gridTop + (1 - Math.pow(1 - tr, 2.2)) * gridH;
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
+      for (let x = 0; x <= w; x += 8) {
+        const [wx, wy] = warp(x, baseY);
+        if (x === 0) ctx.moveTo(wx, wy);
+        else ctx.lineTo(wx, wy);
+      }
       ctx.stroke();
     }
     const cols = 24;
     for (let i = -cols; i <= cols; i++) {
       const xBottom = vanishX + (i / cols) * w * 1.6;
       ctx.beginPath();
-      ctx.moveTo(xBottom, gridBottom);
-      ctx.lineTo(vanishX, gridTop);
+      const steps = 18;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = xBottom + (vanishX - xBottom) * t;
+        const y = gridBottom + (gridTop - gridBottom) * t;
+        const [wx, wy] = warp(x, y);
+        if (s === 0) ctx.moveTo(wx, wy);
+        else ctx.lineTo(wx, wy);
+      }
       ctx.stroke();
     }
     ctx.restore();
 
-    const sunW = Math.min(300, w * 0.5);
-    const sunH = Math.min(150, w * 0.25);
+    // Sun — size pulse, color shift, large glow breathing
+    const sunPulse = 0.5 + 0.5 * Math.sin(time * 1.1);
+    const sunPulse2 = 0.5 + 0.5 * Math.sin(time * 1.9 + 1.3);
+    const sunPulse3 = 0.5 + 0.5 * Math.sin(time * 0.5 + 2.1);
+    const sizeMod = 1 + 0.08 * Math.sin(time * 0.7); // 8% size breathing
+    const sunW = Math.min(300, w * 0.5) * sizeMod;
+    const sunH = Math.min(150, w * 0.25) * sizeMod;
     const sunLeft = w / 2 - sunW / 2;
     const sunTop = horizonY - sunH;
 
     ctx.save();
-    ctx.shadowColor = 'rgba(255, 0, 128, 0.5)';
-    ctx.shadowBlur = 60;
+    const glowR = Math.floor(200 + 55 * sunPulse3);
+    const glowG = Math.floor(30 * sunPulse2);
+    const glowB = Math.floor(140 + 60 * sunPulse);
+    ctx.shadowColor = `rgba(${glowR}, ${glowG}, ${glowB}, ${0.4 + 0.4 * sunPulse})`;
+    ctx.shadowBlur = 50 + 70 * sunPulse;
     ctx.beginPath();
     ctx.ellipse(w / 2, horizonY, sunW / 2, sunH, 0, Math.PI, 2 * Math.PI);
     ctx.closePath();
     const sunGrad = ctx.createLinearGradient(0, sunTop, 0, horizonY);
-    sunGrad.addColorStop(0, '#ff6ec7');
-    sunGrad.addColorStop(0.5, '#ff0080');
-    sunGrad.addColorStop(1, '#ff4500');
+    const topR = 255;
+    const topG = Math.floor(100 + 80 * sunPulse2);
+    const topB = Math.floor(180 + 50 * sunPulse3);
+    sunGrad.addColorStop(0, `rgb(${topR}, ${topG}, ${topB})`);
+    const midR = Math.floor(230 + 25 * sunPulse);
+    sunGrad.addColorStop(0.5, `rgb(${midR}, 0, ${Math.floor(100 + 50 * sunPulse2)})`);
+    const botR = Math.floor(255);
+    const botG = Math.floor(40 + 40 * sunPulse3);
+    sunGrad.addColorStop(1, `rgb(${botR}, ${botG}, 0)`);
     ctx.fillStyle = sunGrad;
     ctx.fill();
     ctx.restore();
 
+    // Sun stripes — wavier drift for heat shimmer
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(w / 2, horizonY, sunW / 2, sunH, 0, Math.PI, 2 * Math.PI);
     ctx.clip();
     ctx.fillStyle = '#0a0a1a';
-    for (let y = horizonY - 4; y > sunTop; y -= 12) {
-      ctx.fillRect(sunLeft, y, sunW, 4);
+    const stripeDrift = Math.sin(time * 0.9) * 4 + Math.sin(time * 2.3) * 1.5;
+    for (let y = horizonY - 4 + stripeDrift; y > sunTop - 8; y -= 12) {
+      const thicknessMod = 3 + Math.sin(time * 1.5 + y * 0.05) * 1.2;
+      ctx.fillRect(sunLeft, y, sunW, thicknessMod);
     }
     ctx.restore();
 
+    // Horizon bar with intensity shimmer
     ctx.save();
+    const barShimmer = 0.45 + 0.2 * Math.sin(time * 2.1);
     const horizonGrad = ctx.createLinearGradient(0, 0, w, 0);
     horizonGrad.addColorStop(0, 'rgba(255,0,200,0)');
     horizonGrad.addColorStop(0.3, '#ff00c8');
     horizonGrad.addColorStop(0.5, '#00fff2');
     horizonGrad.addColorStop(0.7, '#ff00c8');
     horizonGrad.addColorStop(1, 'rgba(255,0,200,0)');
-    ctx.shadowColor = 'rgba(255,0,200,0.6)';
-    ctx.shadowBlur = 40;
+    ctx.shadowColor = `rgba(255,0,200,${barShimmer})`;
+    ctx.shadowBlur = 30 + 15 * Math.sin(time * 1.3);
     ctx.fillStyle = horizonGrad;
     ctx.fillRect(0, horizonY - 3, w, 6);
     ctx.restore();
+
+    // Neon text with flicker: modulate glow intensity + rare dim frames
+    const noise = Math.sin(time * 17.3) * 0.5 + Math.sin(time * 7.1 + 1.2) * 0.3 + Math.sin(time * 31.7) * 0.2;
+    const intensity = Math.max(0.55, 0.9 + noise * 0.12);
+    const glowScale = intensity;
+    const textAlpha = intensity;
 
     const fontSize = Math.max(40, Math.min(128, w * 0.1));
     ctx.font = `700 ${fontSize}px 'Courier New', Courier, monospace`;
@@ -110,22 +306,28 @@
     ];
     const totalW = parts.reduce((s, p) => s + ctx.measureText(p.text).width, 0);
     let x = w / 2 - totalW / 2;
+    ctx.save();
+    ctx.globalAlpha = textAlpha;
     for (const p of parts) {
       ctx.fillStyle = p.color;
       ctx.shadowColor = p.glow;
       for (const blur of [10, 21, 42, 82, 102]) {
-        ctx.shadowBlur = blur;
+        ctx.shadowBlur = blur * glowScale;
         ctx.fillText(p.text, x, textY);
       }
       ctx.shadowBlur = 0;
       ctx.fillText(p.text, x, textY);
       x += ctx.measureText(p.text).width;
     }
+    ctx.restore();
 
-    return canvas;
+    drawBolts(ctx, time * 1000);
+
+    return sceneCanvas;
   }
 
-  const shot = paintScene(innerWidth, innerHeight);
+  resizeScene(innerWidth, innerHeight);
+  const shot = paintScene(0);
 
   const c = document.createElement('canvas');
   c.width = innerWidth; c.height = innerHeight;
@@ -478,9 +680,7 @@ void main(){
   window.addEventListener('resize', () => {
     c.width = innerWidth;
     c.height = innerHeight;
-    const fresh = paintScene(innerWidth, innerHeight);
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fresh);
+    resizeScene(innerWidth, innerHeight);
     gl.uniform2f(resLoc, innerWidth, innerHeight);
   });
 
@@ -494,6 +694,25 @@ void main(){
     mousePxY = e.clientY;
   };
   c.addEventListener('mousemove', onMove);
+
+  let liveBolt = null;
+  c.addEventListener('pointerdown', (e) => {
+    liveBolt = spawnBolt(e.clientX, e.clientY, true);
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove', (e) => {
+    if (!liveBolt) return;
+    liveBolt.startX = e.clientX;
+    liveBolt.startY = e.clientY;
+  });
+  const releaseBolt = () => {
+    if (!liveBolt) return;
+    liveBolt.live = false;
+    liveBolt.bornAt = performance.now(); // start the decay from "now"
+    liveBolt = null;
+  };
+  c.addEventListener('pointerup', releaseBolt);
+  c.addEventListener('pointercancel', releaseBolt);
 
   // Accumulate offset over time based on mouse direction + distance
   let ox = 0, oy = 0;
@@ -518,9 +737,13 @@ void main(){
   }
 
   function frame(nowMs) {
+    const ms = nowMs || performance.now();
     ox += mouseX * speed;
     oy += mouseY * speed;
-    updateRotation(nowMs || performance.now());
+    updateRotation(ms);
+    paintScene(ms / 1000);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sceneCanvas);
     gl.uniform2f(offsetLoc, ox, oy);
     gl.uniform2f(mouseLoc, mousePxX, mousePxY);
     gl.uniform1f(angleLoc, angle);
