@@ -435,7 +435,7 @@
 
   const c = document.createElement('canvas');
   c.width = innerWidth; c.height = innerHeight;
-  Object.assign(c.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', zIndex: '999999' });
+  Object.assign(c.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', zIndex: '999999', touchAction: 'none', userSelect: 'none' });
 
   // Beach chiptune ambient
   const actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -922,28 +922,30 @@ void main(){
     gl.uniform2f(resLoc, innerWidth, innerHeight);
   });
 
-  // Track mouse position
+  // Track pointer position (works for mouse, touch, pen)
   let mouseX = 0, mouseY = 0;
   let mousePxX = innerWidth / 2, mousePxY = innerHeight / 2;
-  const onMove = (e) => {
-    mouseX = e.clientX - innerWidth / 2;
-    mouseY = e.clientY - innerHeight / 2;
-    mousePxX = e.clientX;
-    mousePxY = e.clientY;
-  };
-  c.addEventListener('mousemove', onMove);
 
   let liveBolt = null;
   c.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     if (actx.state !== 'running') actx.resume();
+    mousePxX = e.clientX; mousePxY = e.clientY;
+    mouseX = e.clientX - innerWidth / 2;
+    mouseY = e.clientY - innerHeight / 2;
     liveBolt = spawnBolt(e.clientX, e.clientY, true);
-    c.setPointerCapture(e.pointerId);
+    try { c.setPointerCapture(e.pointerId); } catch (_) {}
     startCrackle();
   });
   c.addEventListener('pointermove', (e) => {
-    if (!liveBolt) return;
-    liveBolt.startX = e.clientX;
-    liveBolt.startY = e.clientY;
+    e.preventDefault();
+    mousePxX = e.clientX; mousePxY = e.clientY;
+    mouseX = e.clientX - innerWidth / 2;
+    mouseY = e.clientY - innerHeight / 2;
+    if (liveBolt) {
+      liveBolt.startX = e.clientX;
+      liveBolt.startY = e.clientY;
+    }
   });
   const releaseBolt = () => {
     if (!liveBolt) return;
@@ -956,6 +958,7 @@ void main(){
   };
   c.addEventListener('pointerup', releaseBolt);
   c.addEventListener('pointercancel', releaseBolt);
+  c.addEventListener('pointerleave', releaseBolt);
 
   // Accumulate offset over time based on mouse direction + distance
   let ox = 0, oy = 0;
