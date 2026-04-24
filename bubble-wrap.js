@@ -36,6 +36,29 @@
 
   // Tesla-coil lightning bolts: each click spawns one that arcs from the pointer to the sun
   const bolts = [];
+  const sparks = [];
+  let prevPaintMs = 0;
+  let sunHitAt = -9999; // timestamp of last boom impact on the sun
+  const SUN_HIT_DURATION = 750;
+
+  function triggerSunHit() {
+    sunHitAt = performance.now();
+    // Radial burst of sparks from the sun center
+    const w = sceneCanvas.width, h = sceneCanvas.height;
+    const cx = w / 2, cy = h * 0.70;
+    for (let i = 0; i < 70; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 180 + Math.random() * 380;
+      sparks.push({
+        x: cx, y: cy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 80,
+        bornAt: sunHitAt,
+        life: 450 + Math.random() * 600,
+        hue: Math.random() < 0.8 ? 'cool' : 'warm',
+      });
+    }
+  }
 
   function jaggedSegments(x1, y1, x2, y2, segments, maxOffset) {
     const dx = x2 - x1, dy = y2 - y1;
@@ -92,7 +115,53 @@
     pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
   }
 
+  function spawnSparksFromBolt(b, intensity, nowMs) {
+    const count = Math.floor(intensity * 4 + Math.random() * 2);
+    if (count <= 0) return;
+    const paths = [b.paths.mainPath, ...b.paths.forks];
+    for (let i = 0; i < count; i++) {
+      const path = paths[Math.floor(Math.random() * paths.length)];
+      const idx = Math.floor(Math.random() * path.length);
+      const [px, py] = path[idx];
+      const a = Math.random() * Math.PI * 2;
+      const sp = 60 + Math.random() * 180; // px/sec
+      sparks.push({
+        x: px, y: py,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 40, // slight upward bias at spawn
+        bornAt: nowMs,
+        life: 180 + Math.random() * 320,
+        hue: Math.random() < 0.7 ? 'cool' : 'warm',
+      });
+    }
+  }
+
+  function updateAndDrawSparks(ctx, nowMs, dt) {
+    ctx.save();
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      const age = nowMs - s.bornAt;
+      if (age > s.life) { sparks.splice(i, 1); continue; }
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.vy += 320 * dt; // gravity so sparks arc downward after the burst
+      s.vx *= 0.985;   // air drag
+      const t = age / s.life;
+      const alpha = Math.pow(1 - t, 1.5);
+      const glowCol = s.hue === 'warm' ? 'rgba(255, 220, 160,' : 'rgba(180, 220, 255,';
+      ctx.shadowColor = `${glowCol} ${alpha})`;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 0.8 + alpha * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawBolts(ctx, nowMs) {
+    const dt = prevPaintMs ? Math.min(0.05, (nowMs - prevPaintMs) / 1000) : 0.016;
+    prevPaintMs = nowMs;
     for (let i = bolts.length - 1; i >= 0; i--) {
       const b = bolts[i];
       const age = nowMs - b.bornAt;
@@ -160,7 +229,10 @@
       ctx.fill();
 
       ctx.restore();
+
+      spawnSparksFromBolt(b, envelope, nowMs);
     }
+    updateAndDrawSparks(ctx, nowMs, dt);
   }
 
   function resizeScene(w, h) {
@@ -231,34 +303,63 @@
     const sunPulse = 0.5 + 0.5 * Math.sin(time * 1.1);
     const sunPulse2 = 0.5 + 0.5 * Math.sin(time * 1.9 + 1.3);
     const sunPulse3 = 0.5 + 0.5 * Math.sin(time * 0.5 + 2.1);
-    const sizeMod = 1 + 0.08 * Math.sin(time * 0.7); // 8% size breathing
+    // Sun-hit impact: 0..1, decays over SUN_HIT_DURATION, slow-ish curve so it lingers visually
+    const hitAge = performance.now() - sunHitAt;
+    const hitRaw = Math.max(0, 1 - hitAge / SUN_HIT_DURATION);
+    const hit = Math.pow(hitRaw, 0.6);
+    const sizeMod = 1 + 0.08 * Math.sin(time * 0.7) + 0.18 * hit; // pump up on impact
     const sunW = Math.min(300, w * 0.5) * sizeMod;
     const sunH = Math.min(150, w * 0.25) * sizeMod;
     const sunLeft = w / 2 - sunW / 2;
     const sunTop = horizonY - sunH;
 
+    const lerp = (a, b, t) => a + (b - a) * t;
+
     ctx.save();
-    const glowR = Math.floor(200 + 55 * sunPulse3);
-    const glowG = Math.floor(30 * sunPulse2);
-    const glowB = Math.floor(140 + 60 * sunPulse);
-    ctx.shadowColor = `rgba(${glowR}, ${glowG}, ${glowB}, ${0.4 + 0.4 * sunPulse})`;
-    ctx.shadowBlur = 50 + 70 * sunPulse;
+    // Glow shifts toward bright cyan-white on impact
+    const glowR = Math.floor(lerp(200 + 55 * sunPulse3, 230, hit));
+    const glowG = Math.floor(lerp(30 * sunPulse2, 245, hit));
+    const glowB = Math.floor(lerp(140 + 60 * sunPulse, 255, hit));
+    const glowA = lerp(0.4 + 0.4 * sunPulse, 0.95, hit);
+    ctx.shadowColor = `rgba(${glowR}, ${glowG}, ${glowB}, ${glowA})`;
+    ctx.shadowBlur = (50 + 70 * sunPulse) + 90 * hit;
     ctx.beginPath();
     ctx.ellipse(w / 2, horizonY, sunW / 2, sunH, 0, Math.PI, 2 * Math.PI);
     ctx.closePath();
     const sunGrad = ctx.createLinearGradient(0, sunTop, 0, horizonY);
-    const topR = 255;
-    const topG = Math.floor(100 + 80 * sunPulse2);
-    const topB = Math.floor(180 + 50 * sunPulse3);
+    // Electric override: top blends to white, middle to cyan, bottom to deep blue
+    const topR = Math.floor(lerp(255, 235, hit));
+    const topG = Math.floor(lerp(100 + 80 * sunPulse2, 250, hit));
+    const topB = Math.floor(lerp(180 + 50 * sunPulse3, 255, hit));
     sunGrad.addColorStop(0, `rgb(${topR}, ${topG}, ${topB})`);
-    const midR = Math.floor(230 + 25 * sunPulse);
-    sunGrad.addColorStop(0.5, `rgb(${midR}, 0, ${Math.floor(100 + 50 * sunPulse2)})`);
-    const botR = Math.floor(255);
-    const botG = Math.floor(40 + 40 * sunPulse3);
-    sunGrad.addColorStop(1, `rgb(${botR}, ${botG}, 0)`);
+    const midR = Math.floor(lerp(230 + 25 * sunPulse, 150, hit));
+    const midG = Math.floor(lerp(0, 220, hit));
+    const midB = Math.floor(lerp(100 + 50 * sunPulse2, 255, hit));
+    sunGrad.addColorStop(0.5, `rgb(${midR}, ${midG}, ${midB})`);
+    const botR = Math.floor(lerp(255, 60, hit));
+    const botG = Math.floor(lerp(40 + 40 * sunPulse3, 140, hit));
+    const botB = Math.floor(lerp(0, 230, hit));
+    sunGrad.addColorStop(1, `rgb(${botR}, ${botG}, ${botB})`);
     ctx.fillStyle = sunGrad;
     ctx.fill();
     ctx.restore();
+
+    // Extra impact flash overlay: bright additive halo centered on the sun
+    if (hit > 0.01) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const flashR = Math.max(sunW, sunH) * (1.4 + 0.6 * hit);
+      const grd = ctx.createRadialGradient(w / 2, horizonY, 0, w / 2, horizonY, flashR);
+      grd.addColorStop(0, `rgba(255, 255, 255, ${0.6 * hit})`);
+      grd.addColorStop(0.3, `rgba(180, 230, 255, ${0.4 * hit})`);
+      grd.addColorStop(0.7, `rgba(100, 180, 255, ${0.15 * hit})`);
+      grd.addColorStop(1, 'rgba(60, 120, 255, 0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(w / 2, horizonY, flashR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Sun stripes — wavier drift for heat shimmer
     ctx.save();
@@ -290,7 +391,10 @@
 
     // Neon text with flicker: modulate glow intensity + rare dim frames
     const noise = Math.sin(time * 17.3) * 0.5 + Math.sin(time * 7.1 + 1.2) * 0.3 + Math.sin(time * 31.7) * 0.2;
-    const intensity = Math.max(0.55, 0.9 + noise * 0.12);
+    const baseIntensity = Math.max(0.55, 0.9 + noise * 0.12);
+    // Dim the text while the sun is flashing so it appears outshone
+    const dim = 1 - 0.75 * hit;
+    const intensity = baseIntensity * dim;
     const glowScale = intensity;
     const textAlpha = intensity;
 
@@ -336,15 +440,20 @@
   // Beach chiptune ambient
   const actx = new (window.AudioContext || window.webkitAudioContext)();
   const masterGain = actx.createGain();
-  masterGain.gain.value = 0.12;
+  masterGain.gain.value = 0.18;
   masterGain.connect(actx.destination);
+
+  // Music bus — everything musical routes through this so we can duck it during booms
+  const musicBus = actx.createGain();
+  musicBus.gain.value = 1.0;
+  musicBus.connect(masterGain);
 
   // Warm filter — like sun-baked speakers
   const filter = actx.createBiquadFilter();
   filter.type = 'lowpass';
   filter.frequency.value = 1800;
   filter.Q.value = 1;
-  filter.connect(masterGain);
+  filter.connect(musicBus);
 
   // Lush delay for that dreamy feel
   const delay = actx.createDelay();
@@ -357,7 +466,7 @@
   delay.connect(delayFilter);
   delayFilter.connect(fb);
   fb.connect(delay);
-  delay.connect(masterGain);
+  delay.connect(musicBus);
 
   function playNote(freq, startTime, duration, type = 'triangle', vol = 0.25) {
     const osc = actx.createOscillator();
@@ -385,7 +494,7 @@
     env.gain.linearRampToValueAtTime(0.28, time + 0.005);
     env.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
     osc.connect(env);
-    env.connect(masterGain);
+    env.connect(musicBus);
     osc.start(time);
     osc.stop(time + 0.3);
   }
@@ -407,9 +516,120 @@
     env.gain.exponentialRampToValueAtTime(0.001, time + decay);
     src.connect(hp);
     hp.connect(env);
-    env.connect(masterGain);
+    env.connect(musicBus);
     src.start(time);
     src.stop(time + decay + 0.03);
+  }
+
+  let cracklerOn = false;
+  function crackleTick() {
+    if (!cracklerOn) return;
+    const now = actx.currentTime;
+    const dur = 0.02 + Math.random() * 0.05;
+    const bufSize = Math.max(2, Math.floor(actx.sampleRate * dur));
+    const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    const src = actx.createBufferSource();
+    src.buffer = buf;
+    const hp = actx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 2200 + Math.random() * 3500;
+    const bp = actx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 3000 + Math.random() * 2500;
+    bp.Q.value = 1 + Math.random() * 3;
+    const env = actx.createGain();
+    const vol = 0.06 + Math.random() * 0.12;
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(vol, now + 0.001);
+    env.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(hp);
+    hp.connect(bp);
+    bp.connect(env);
+    env.connect(masterGain);
+    src.start(now);
+    src.stop(now + dur + 0.02);
+    setTimeout(crackleTick, 12 + Math.random() * 50);
+  }
+  function startCrackle() {
+    if (cracklerOn) return;
+    cracklerOn = true;
+    crackleTick();
+  }
+  function stopCrackle() { cracklerOn = false; }
+
+  function playBoom(time) {
+    // Initial transient — sharp click so the hit has a front edge
+    const clickBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.012), actx.sampleRate);
+    const cd = clickBuf.getChannelData(0);
+    for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * (1 - i / cd.length);
+    const clickSrc = actx.createBufferSource();
+    clickSrc.buffer = clickBuf;
+    const clickEnv = actx.createGain();
+    clickEnv.gain.setValueAtTime(1.4, time);
+    clickEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.025);
+    clickSrc.connect(clickEnv);
+    clickEnv.connect(masterGain);
+    clickSrc.start(time);
+    clickSrc.stop(time + 0.04);
+
+    // Main sub sweep — longer and louder
+    const osc = actx.createOscillator();
+    const env = actx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(240, time);
+    osc.frequency.exponentialRampToValueAtTime(28, time + 0.6);
+    env.gain.setValueAtTime(0, time);
+    env.gain.linearRampToValueAtTime(2.2, time + 0.006);
+    env.gain.exponentialRampToValueAtTime(0.001, time + 1.3);
+    osc.connect(env);
+    env.connect(masterGain);
+    osc.start(time);
+    osc.stop(time + 1.4);
+
+    // Midrange thump for body
+    const osc2 = actx.createOscillator();
+    const env2 = actx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(120, time);
+    osc2.frequency.exponentialRampToValueAtTime(50, time + 0.25);
+    env2.gain.setValueAtTime(0, time);
+    env2.gain.linearRampToValueAtTime(1.1, time + 0.008);
+    env2.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+    osc2.connect(env2);
+    env2.connect(masterGain);
+    osc2.start(time);
+    osc2.stop(time + 0.55);
+
+    // Lowpassed noise rumble — long tail
+    const bufSize = Math.floor(actx.sampleRate * 1.2);
+    const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    const src = actx.createBufferSource();
+    src.buffer = buf;
+    const lp = actx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(600, time);
+    lp.frequency.exponentialRampToValueAtTime(120, time + 1.0);
+    const rumEnv = actx.createGain();
+    rumEnv.gain.setValueAtTime(0, time);
+    rumEnv.gain.linearRampToValueAtTime(1.3, time + 0.008);
+    rumEnv.gain.exponentialRampToValueAtTime(0.001, time + 1.2);
+    src.connect(lp);
+    lp.connect(rumEnv);
+    rumEnv.connect(masterGain);
+    src.start(time);
+    src.stop(time + 1.3);
+
+    // Duck the music: drop hard for 50ms, stay dimmed ~0.8s, then ride back up over 2s
+    const mg = musicBus.gain;
+    mg.cancelScheduledValues(time);
+    mg.setValueAtTime(mg.value, time);
+    mg.linearRampToValueAtTime(0.08, time + 0.04);
+    mg.linearRampToValueAtTime(0.3, time + 0.9);
+    mg.linearRampToValueAtTime(1.0, time + 2.8);
   }
 
   function playClap(time, vol) {
@@ -432,7 +652,7 @@
       env.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
       src.connect(bp);
       bp.connect(env);
-      env.connect(masterGain);
+      env.connect(musicBus);
       src.start(t);
       src.stop(t + 0.15);
     }
@@ -464,7 +684,7 @@
     bp.Q.value = 0.5;
     noise.connect(bp);
     bp.connect(waveGain);
-    waveGain.connect(masterGain);
+    waveGain.connect(musicBus);
     noise.start();
     lfo.start();
   }
@@ -568,6 +788,8 @@ uniform vec2 res;
 uniform vec2 offset;
 uniform vec2 mouse;
 uniform float angle;
+uniform vec2 flashPos;
+uniform float flashIntensity;
 
 void main(){
   float gridR=40.0; // fixed grid spacing (accommodates largest bubbles)
@@ -621,6 +843,18 @@ void main(){
     vec3 lightDir=normalize(vec3(toSunRot, 0.5));
     float highlight=pow(max(dot(normal, lightDir),0.0),16.0)*0.6;
 
+    // Flash reflection: second specular + rim tint toward the bolt source
+    float flashSpec=0.0;
+    vec3 flashRim=vec3(0.0);
+    if(flashIntensity>0.0){
+      vec2 toFlash=normalize(flashPos-centerScreen);
+      vec2 toFlashRot=vec2(ca*toFlash.x - sa*toFlash.y, sa*toFlash.x + ca*toFlash.y);
+      vec3 flashDir=normalize(vec3(toFlashRot, 0.4));
+      flashSpec=pow(max(dot(normal, flashDir), 0.0), 10.0) * flashIntensity * 1.4;
+      float rim=max(dot(normal, flashDir), 0.0);
+      flashRim=vec3(0.4, 0.6, 1.0) * rim * flashIntensity * 0.25;
+    }
+
     float edge=smoothstep(r,r*0.7,dist);
 
     vec3 col=texture2D(tex,newUV).rgb;
@@ -638,6 +872,8 @@ void main(){
     col=mix(col, rainbow, 0.08*film);
 
     col+=highlight;
+    col+=vec3(0.7, 0.85, 1.0)*flashSpec;
+    col+=flashRim;
     col*=0.9+0.1*edge;
 
     gl_FragColor=vec4(col,1.0);
@@ -676,6 +912,8 @@ void main(){
   const offsetLoc = gl.getUniformLocation(prog, 'offset');
   const mouseLoc = gl.getUniformLocation(prog, 'mouse');
   const angleLoc = gl.getUniformLocation(prog, 'angle');
+  const flashPosLoc = gl.getUniformLocation(prog, 'flashPos');
+  const flashIntLoc = gl.getUniformLocation(prog, 'flashIntensity');
 
   window.addEventListener('resize', () => {
     c.width = innerWidth;
@@ -697,8 +935,10 @@ void main(){
 
   let liveBolt = null;
   c.addEventListener('pointerdown', (e) => {
+    if (actx.state !== 'running') actx.resume();
     liveBolt = spawnBolt(e.clientX, e.clientY, true);
     c.setPointerCapture(e.pointerId);
+    startCrackle();
   });
   c.addEventListener('pointermove', (e) => {
     if (!liveBolt) return;
@@ -710,6 +950,9 @@ void main(){
     liveBolt.live = false;
     liveBolt.bornAt = performance.now(); // start the decay from "now"
     liveBolt = null;
+    stopCrackle();
+    playBoom(actx.currentTime);
+    triggerSunHit();
   };
   c.addEventListener('pointerup', releaseBolt);
   c.addEventListener('pointercancel', releaseBolt);
@@ -736,6 +979,22 @@ void main(){
     angle += angVel;
   }
 
+  function computeFlash(nowMs) {
+    let bestI = 0, bestX = 0, bestY = 0;
+    for (const b of bolts) {
+      let i;
+      if (b.live) {
+        i = 0.9;
+      } else {
+        const lifeT = (nowMs - b.bornAt) / b.life;
+        i = Math.pow(Math.max(0, 1 - lifeT), 1.6);
+      }
+      if (i > bestI) { bestI = i; bestX = b.startX; bestY = b.startY; }
+    }
+    // Light strobe so the reflection crackles with the bolt
+    return [bestX, bestY, bestI * (0.8 + 0.2 * Math.random())];
+  }
+
   function frame(nowMs) {
     const ms = nowMs || performance.now();
     ox += mouseX * speed;
@@ -744,6 +1003,9 @@ void main(){
     paintScene(ms / 1000);
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sceneCanvas);
+    const [fx, fy, fi] = computeFlash(ms);
+    gl.uniform2f(flashPosLoc, fx, fy);
+    gl.uniform1f(flashIntLoc, fi);
     gl.uniform2f(offsetLoc, ox, oy);
     gl.uniform2f(mouseLoc, mousePxX, mousePxY);
     gl.uniform1f(angleLoc, angle);
