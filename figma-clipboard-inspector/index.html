@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Figma Clipboard Inspector</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <h1>figma clipboard inspector</h1>
+  <span class="bar-note">fig-kiwi container · embedded schema</span>
+</header>
+
+<main>
+  <section id="dropzone" class="paste" aria-label="Paste target">
+    <textarea id="pastefield" rows="3" spellcheck="false"
+      placeholder="Copy a node in Figma, then paste here."
+      aria-label="Paste Figma clipboard contents here"></textarea>
+    <div class="paste-alt">
+      <label class="linkish">
+        <input type="file" id="filepicker" accept=".html,.txt" hidden>
+        open a saved .html dump
+      </label>
+      <span class="sep">·</span>
+      <button type="button" class="linkish" id="toggle-raw" aria-expanded="false">paste a bare base64 blob</button>
+      <span class="sep">·</span>
+      <button type="button" class="linkish" id="reset">reset</button>
+    </div>
+    <div id="rawwrap" class="rawwrap" hidden>
+      <textarea id="rawfield" rows="3" spellcheck="false"
+        placeholder="base64 of the (figma) blob" aria-label="Base64 figma blob"></textarea>
+      <button type="button" id="rawgo">decode blob</button>
+    </div>
+  </section>
+
+  <p id="status" class="status" role="status"></p>
+
+  <section id="flavors" class="panel" hidden>
+    <h2>clipboard flavors</h2>
+    <ul id="flavorlist" class="flavors"></ul>
+  </section>
+
+  <section id="errorpanel" class="panel error" hidden>
+    <h2>failed at <span id="errstage"></span></h2>
+    <p id="errmsg" class="errmsg"></p>
+    <pre id="errhex" class="hex" hidden></pre>
+  </section>
+
+  <section id="warnpanel" class="panel warn" hidden>
+    <h2>warnings</h2>
+    <ul id="warnlist"></ul>
+  </section>
+
+  <section id="statspanel" class="panel" hidden>
+    <h2>pipeline <span id="versionchip" class="chip"></span></h2>
+    <div id="statsstrip" class="strip"></div>
+    <div id="chunktable"></div>
+  </section>
+
+  <section id="metapanel" class="panel" hidden>
+    <h2>metadata <span id="metaenc" class="chip"></span></h2>
+    <div id="metabody"></div>
+  </section>
+
+  <section id="treepanel" class="panel" hidden>
+    <h2>decoded message <span id="roottype" class="chip"></span> <span id="kindchip" class="chip kind"></span>
+      <button type="button" class="ghost" id="expandall">expand all</button>
+      <button type="button" class="ghost" id="collapseall">collapse</button>
+      <button type="button" class="ghost" id="exportjson">export json</button>
+    </h2>
+    <ul id="kindroots" class="kindroots" hidden></ul>
+    <div id="sizegate" class="gate" hidden>
+      <p id="sizegatetext"></p>
+      <button type="button" id="renderanyway">render anyway</button>
+    </div>
+    <div id="tree" class="tree"></div>
+  </section>
+
+  <section id="schemapanel" class="panel" hidden>
+    <details>
+      <summary>schema <span id="schemacount" class="chip"></span></summary>
+      <div class="schema-types" id="schematypes"></div>
+      <details class="nested">
+        <summary>full schema text</summary>
+        <pre id="schematext" class="hex"></pre>
+      </details>
+    </details>
+  </section>
+</main>
+
+<script src="pipeline.js"></script>
+<script src="app.js" type="module"></script>
+</body>
+</html>
